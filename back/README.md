@@ -62,3 +62,13 @@ Para validar apenas tipos da API:
 ```bash
 npm run build --workspace=@inova/api
 ```
+
+## Importar amostras de materiais
+
+Com uma pasta extraída que contenha `materiais.json` e as imagens correspondentes:
+
+```bash
+npm run catalog:import-images --workspace=@inova/api -- /caminho/materiais-inova
+```
+
+O importador associa imagens por nome, preserva IDs e preços dos materiais existentes e cria itens pendentes de revisão quando não houver cadastro correspondente. Imagens sem identificação e novos materiais sem preço ficam inativos até revisão na Administração.

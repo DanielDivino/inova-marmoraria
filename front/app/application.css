@@ -145,6 +145,7 @@ button:not(:disabled) { cursor: pointer; }
 .project-selection-grid .picker-heading b { display: block; margin: 0; font: 600 16px/1.2 Georgia, serif; color: var(--ink); }
 .project-selection-grid .picker-heading small { display: block; margin: 0; font: 11px/1.4 Arial, Helvetica, sans-serif; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .project-selection-grid .picker-selection { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.project-selection-grid .picker-selection .material-thumbnail { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 7px; object-fit: cover; }
 .project-selection-grid .picker-selection strong { display: block; min-width: 0; font: 600 12px/1.4 Arial, Helvetica, sans-serif; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .picker-chevron { flex: 0 0 16px; color: #9a8058; }
 .project-selection-grid > details[open] { border-color: #c3a36d; }
@@ -155,6 +156,7 @@ button:not(:disabled) { cursor: pointer; }
 .material-picker-panel { width: max(100%, 300px); max-width: calc(200% + 12px); overscroll-behavior: contain; }
 .material-picker-panel .material { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; }
 .material-picker-panel .stone { width: 36px; height: 36px; }
+.material-picker-panel .material-thumbnail { object-fit: cover; }
 .material-picker-panel .material-price { font-size: 11px; }
 .quote-value-row { grid-template-columns: minmax(0, 1fr) minmax(100px, 130px) minmax(90px, 115px); gap: 12px; align-items: center; font-size: 12px; }
 .quote-value-row > * { min-width: 0; overflow-wrap: anywhere; }

@@ -4,6 +4,7 @@ dist/
 coverage/
 *.tsbuildinfo
 *.log
+*.zip
 
 # Next.js e relatórios automatizados
 front/.next/
