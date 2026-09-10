@@ -1,0 +1,341 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum BillingUnit {
+  SQUARE_METER
+  LINEAR_METER
+  UNIT
+  FIXED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum ExecutionStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  REWORK
+}
+
+enum CalculationMode {
+  DIMENSIONS
+  MANUAL_M2
+}
+
+enum ComponentType {
+  TOP
+  SKIRT
+  BACKSPLASH
+  SIDE_LEFT
+  SIDE_RIGHT
+  SILL
+  STEP
+  OTHER
+}
+
+enum ComponentOrientation {
+  HORIZONTAL
+  VERTICAL
+}
+
+enum ComponentShape {
+  RECTANGLE
+}
+
+enum EdgeSide {
+  FRONT
+  BACK
+  LEFT
+  RIGHT
+  CUSTOM
+}
+
+enum CutoutType {
+  SINK
+  COOKTOP
+  FAUCET_HOLE
+  GENERIC_HOLE
+  OTHER
+}
+
+model User {
+  id                   String     @id @default(cuid())
+  name                 String
+  email                String     @unique
+  passwordHash         String
+  role                 Role       @default(ADMIN)
+  isActive             Boolean    @default(true)
+  maxDiscountPercent   Decimal    @default(0) @db.Decimal(5, 2)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  createdQuotes        Quote[]    @relation("QuoteCreator")
+  auditLogs            AuditLog[]
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String   @unique
+  email       String?
+  document    String?
+  address     String?
+  neighborhood String?
+  city        String?
+  postalCode  String?
+  complement  String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  quotes      Quote[]
+  @@index([name])
+}
+
+model Material {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  category    String
+  description String?
+  billingUnit BillingUnit
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  images      MaterialImage[]
+  prices      MaterialPrice[]
+  quoteItems  QuoteItem[]
+  @@index([name, isActive])
+}
+
+model MaterialImage {
+  id         String   @id @default(cuid())
+  materialId String
+  url        String
+  alt        String?
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+}
+
+model MaterialPrice {
+  id         String   @id @default(cuid())
+  materialId String
+  amount     Decimal  @db.Decimal(12, 2)
+  validFrom  DateTime @default(now())
+  validTo    DateTime?
+  createdAt  DateTime @default(now())
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  @@index([materialId, validFrom])
+}
+
+model ProductType {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  description String?
+  imageUrl   String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  quoteItems QuoteItem[]
+}
+
+model Service {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  category    String          @default("Geral")
+  billingUnit BillingUnit
+  currentPrice Decimal        @db.Decimal(12, 2)
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  quoteItems  QuoteItemService[]
+}
+
+model Quote {
+  id              String      @id @default(cuid())
+  parentQuoteId   String?
+  parentQuote     Quote? @relation("QuoteComplements", fields: [parentQuoteId], references: [id], onDelete: Restrict)
+  complements    Quote[] @relation("QuoteComplements")
+  number          String      @unique
+  customerId      String
+  customerNameSnapshot String @default("")
+  customerPhoneSnapshot String? 
+  workAddressSnapshot String?
+  createdById     String
+  status          QuoteStatus @default(DRAFT)
+  executionStatus ExecutionStatus @default(NOT_STARTED)
+  approvedAt      DateTime?
+  completedAt     DateTime?
+  startedAt       DateTime?
+  estimatedBusinessDays Int?
+  dueDate         DateTime?
+  validUntil      DateTime?
+  discountAmount  Decimal     @default(0) @db.Decimal(12, 2)
+  grossTotal      Decimal     @default(0) @db.Decimal(12, 2)
+  netTotal        Decimal     @default(0) @db.Decimal(12, 2)
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  customer        Customer    @relation(fields: [customerId], references: [id])
+  createdBy       User        @relation("QuoteCreator", fields: [createdById], references: [id])
+  items           QuoteItem[]
+  @@index([customerId, status, createdAt])
+  @@index([status, dueDate])
+  @@index([parentQuoteId])
+}
+
+model QuoteSequence {
+  year          Int      @id
+  lastNumber    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model QuoteItem {
+  id                    String      @id @default(cuid())
+  quoteId               String
+  projectName           String?
+  environment           String?
+  productTypeId         String
+  materialId            String
+  materialNameSnapshot  String
+  billingUnitSnapshot   BillingUnit
+  unitPriceSnapshot     Decimal     @db.Decimal(12, 2)
+  lengthMm              Int?
+  widthMm               Int?
+  quantity              Int         @default(1)
+  calculationMode       CalculationMode @default(MANUAL_M2)
+  manualJustification   String?
+  drawingSchemaVersion  Int?
+  drawingData           Json?
+  billedQuantity        Decimal     @db.Decimal(12, 4)
+  materialSubtotal      Decimal     @db.Decimal(12, 2)
+  servicesSubtotal      Decimal     @default(0) @db.Decimal(12, 2)
+  total                 Decimal     @db.Decimal(12, 2)
+  quote                 Quote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productType           ProductType @relation(fields: [productTypeId], references: [id])
+  material              Material    @relation(fields: [materialId], references: [id])
+  services              QuoteItemService[]
+  components            QuoteItemComponent[]
+  cutouts               QuoteItemCutout[]
+}
+
+model QuoteItemComponent {
+  id              String               @id @default(cuid())
+  quoteItemId     String
+  label           String
+  componentType   ComponentType
+  orientation     ComponentOrientation
+  shape           ComponentShape       @default(RECTANGLE)
+  lengthMm        Int
+  widthMm         Int
+  quantity        Int                  @default(1)
+  billableArea    Decimal              @db.Decimal(12, 4)
+  subtotal        Decimal              @db.Decimal(12, 2)
+  calculatedTotal Decimal              @default(0) @db.Decimal(12, 2)
+  appliedTotal    Decimal              @default(0) @db.Decimal(12, 2)
+  hasManualPriceOverride Boolean        @default(false)
+  sortOrder       Int                  @default(0)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  quoteItem       QuoteItem            @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+  edges           QuoteItemComponentEdge[]
+  cutouts         QuoteItemCutout[]
+  @@index([quoteItemId, sortOrder])
+}
+
+model QuoteItemComponentEdge {
+  id                    String               @id @default(cuid())
+  componentId           String
+  side                  EdgeSide
+  customLabel           String?
+  lengthMm              Int
+  heightMm              Int?
+  serviceId             String
+  serviceNameSnapshot   String
+  billingUnitSnapshot   BillingUnit          @default(LINEAR_METER)
+  unitPriceSnapshot     Decimal              @db.Decimal(12, 2)
+  billedQuantity        Decimal              @db.Decimal(12, 4)
+  subtotal              Decimal              @db.Decimal(12, 2)
+  calculatedSubtotal    Decimal              @default(0) @db.Decimal(12, 2)
+  appliedSubtotal       Decimal              @default(0) @db.Decimal(12, 2)
+  hasManualPriceOverride Boolean             @default(false)
+  sortOrder             Int                  @default(0)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  component             QuoteItemComponent   @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  @@index([componentId, sortOrder])
+}
+
+model QuoteItemCutout {
+  id              String               @id @default(cuid())
+  quoteItemId     String
+  componentId     String?
+  cutoutType      CutoutType
+  label           String?
+  lengthMm        Int?
+  widthMm         Int?
+  diameterMm      Int?
+  positionX       Int?
+  positionY       Int?
+  quantity        Int                  @default(1)
+  serviceId       String?
+  serviceNameSnapshot String?
+  billingUnitSnapshot BillingUnit?
+  unitPriceSnapshot Decimal? @db.Decimal(12, 2)
+  billedQuantity Decimal? @db.Decimal(12, 4)
+  calculatedSubtotal Decimal  @default(0) @db.Decimal(12, 2)
+  appliedSubtotal   Decimal  @default(0) @db.Decimal(12, 2)
+  hasManualPriceOverride Boolean @default(false)
+  sortOrder       Int                  @default(0)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  quoteItem       QuoteItem            @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+  component       QuoteItemComponent?  @relation(fields: [componentId], references: [id], onDelete: SetNull)
+  @@index([quoteItemId, sortOrder])
+}
+
+model QuoteItemService {
+  id                String    @id @default(cuid())
+  quoteItemId       String
+  serviceId         String
+  serviceNameSnapshot String
+  billingUnitSnapshot BillingUnit
+  unitPriceSnapshot Decimal   @db.Decimal(12, 2)
+  billedQuantity    Decimal   @db.Decimal(12, 4)
+  subtotal          Decimal   @db.Decimal(12, 2)
+  calculatedSubtotal Decimal  @default(0) @db.Decimal(12, 2)
+  appliedSubtotal    Decimal  @default(0) @db.Decimal(12, 2)
+  hasManualPriceOverride Boolean @default(false)
+  quoteItem         QuoteItem @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+  service           Service   @relation(fields: [serviceId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  entityType String
+  entityId   String
+  action     String
+  previous   Json?
+  current    Json?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+  @@index([entityType, entityId, createdAt])
+}
