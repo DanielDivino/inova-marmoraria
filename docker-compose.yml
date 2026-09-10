@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: inova-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: inova
+      POSTGRES_USER: inova
+      POSTGRES_PASSWORD: inova_local
+    ports:
+      - "5434:5432"
+    volumes:
+      - inova_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  inova_postgres_data:

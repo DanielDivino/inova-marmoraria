@@ -1,0 +1,29 @@
+# Dependências e artefatos de build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+
+# Next.js e relatórios automatizados
+front/.next/
+front/.next-*/
+.test-artifacts/
+playwright-report/
+test-results/
+
+# Configurações e dados locais
+.env
+.env.local
+.env.*.local
+!.env.example
+back/uploads/*
+!back/uploads/.gitkeep
+
+# Arquivos do sistema/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

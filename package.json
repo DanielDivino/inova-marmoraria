@@ -1,0 +1,29 @@
+{
+  "name": "inova-marmoraria",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "front",
+    "back",
+    "packages/*"
+  ],
+  "scripts": {
+    "test:quote-persistence": "npm run build --workspace=@inova/domain && tsx back/scripts/verify-quote-edit.ts",
+    "dev:web": "npm run build --workspace=@inova/domain && npm run dev --workspace=@inova/web",
+    "dev:api": "npm run build --workspace=@inova/domain && npm run dev --workspace=@inova/api",
+    "build": "npm run db:generate && npm run build --workspace=@inova/domain && npm run build --workspaces --if-present",
+    "test": "vitest run packages/domain/src front/lib back/src/modules/auth/auth.routes.test.ts back/src/modules/quotes/quote.status.test.ts back/src/modules/quotes/quote.schema.test.ts",
+    "db:generate": "npm run prisma:generate --workspace=@inova/api",
+    "db:migrate": "npm run prisma:migrate --workspace=@inova/api",
+    "db:seed": "npm run prisma:seed --workspace=@inova/api",
+    "test:integration": "node tests/run-isolated.mjs integration",
+    "test:e2e": "node tests/run-isolated.mjs e2e",
+    "test:all": "npm test && node tests/run-isolated.mjs all"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}
