@@ -91,6 +91,8 @@ button:not(:disabled) { cursor: pointer; }
 .header-account strong { font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 .header-account small { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .header-account button { padding: 7px 12px; min-height: 34px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); background: transparent; font-size: 12px; }
+.showcase-header-request { display: inline-flex; align-items: center; gap: 12px; min-height: 36px; padding: 9px 15px; border: 1px solid #e2d8ca; border-radius: 999px; background: #fffaf2; color: #4b4033; font: 600 11px Arial, sans-serif; text-decoration: none; white-space: nowrap; }
+.showcase-header-request:hover { background: #fff; border-color: #c7ae82; }
 .notification-bell {
   position: relative; flex: 0 0 38px; width: 38px; height: 38px; padding: 0;
   display: grid; place-items: center; color: #a08866; background: #f4eee5; border: 1px solid #e9dfd1; border-radius: 12px;
@@ -334,8 +336,6 @@ button:not(:disabled) { cursor: pointer; }
 .showcase-material-card small { overflow: hidden; color: #8b7d6d; font: 10px/1.2 Arial, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
 .showcase-material-card em { position: absolute; top: 14px; left: 14px; padding: 3px 6px; border-radius: 4px; background: #f8eacb; color: #795318; font: 8px Arial, sans-serif; font-style: normal; }
 .showcase-empty { padding: 35px 0; color: #766d60; text-align: center; }
-.showcase-request-button { position: fixed; z-index: 10; top: 17px; right: 28px; padding: 12px 18px; background: #fffaf2e6; color: #2b251b; box-shadow: 0 5px 18px #20140b20; }
-.showcase-request-button:hover { background: #fff; }
 @media (max-width: 1050px) {
   .showcase-featured { width: min(460px, 48%); grid-template-columns: 105px minmax(0, 1fr); }
   .showcase-featured > img { width: 105px; height: 105px; }
@@ -357,7 +357,7 @@ button:not(:disabled) { cursor: pointer; }
   .showcase-toolbar { align-items: stretch; flex-direction: column; }
   .showcase-search { width: 100%; }
   .showcase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .showcase-request-button { top: 12px; right: 16px; padding: 9px 12px; font-size: 10px; }
+  .showcase-header-request { order: 3; flex-basis: 100%; justify-content: center; }
 }
 @media (max-width: 430px) {
   .showcase-featured { grid-template-columns: 82px minmax(0, 1fr); gap: 12px; padding: 14px; }

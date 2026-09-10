@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { api } from '../../lib/api';
 
 type MaterialImage = { id: string; url: string; alt?: string | null; isPrimary: boolean };
@@ -59,6 +58,5 @@ export default function MostruarioPage() {
       <div className="showcase-collection-strip" aria-label="Materiais em destaque"><div className="showcase-strip-heading"><strong>Nossa Coleção</strong><small>{materials.length} MATERIAIS COM AMOSTRA</small></div><div className="showcase-strip-items">{materials.map((material) => <button type="button" className={material.id === selected?.id ? 'selected' : ''} key={material.id} onClick={() => setSelectedId(material.id)}><img src={imageSrc(material)} alt="" /><span>{material.name}</span></button>)}</div></div>
     </section>
     <section id="colecao" className="showcase-catalog"><div className="showcase-catalog-heading"><div><span className="showcase-eyebrow">NOSSA COLEÇÃO</span><h2>Escolha sua pedra</h2><p>Explore nossa seleção de granitos, mármores e superfícies especiais.<br />Clique em um material para visualizar os detalhes.</p></div><span className="showcase-side-note">BELEZA NATURAL<br />EM CADA DETALHE</span></div><div className="showcase-toolbar"><div className="showcase-filters">{filters.map((option) => <button type="button" className={filter === option ? 'selected' : ''} key={option} onClick={() => setFilter(option)}>{option} <small>({count(option)})</small></button>)}</div><label className="showcase-search"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar um material..." /></label></div>{error && <p className="form-error" role="alert">{error}</p>}{loading && <p className="showcase-empty">Carregando materiais…</p>}{!loading && !error && <div className="showcase-grid">{visibleMaterials.map((material) => <button type="button" className={`showcase-material-card ${material.id === selected?.id ? 'selected' : ''}`} key={material.id} onClick={() => { setSelectedId(material.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><img src={imageSrc(material)} alt={material.name} /><span><strong>{material.name}</strong><b>♡</b></span><small>{material.category}</small>{!material.isActive && <em>A confirmar</em>}</button>)}</div>}{!loading && !error && !visibleMaterials.length && <p className="showcase-empty">Nenhum material encontrado para esta busca.</p>}</section>
-    <Link className="showcase-request-button" href="/">Solicitar orçamento <span>→</span></Link>
   </main>;
 }
