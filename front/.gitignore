@@ -1,0 +1,14 @@
+# Build e cache do Next.js
+.next/
+.next-*/
+out/
+
+# Arquivos de ambiente exclusivamente do frontend
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Cobertura e logs
+coverage/
+*.log

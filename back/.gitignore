@@ -1,0 +1,11 @@
+# Variáveis de ambiente locais
+.env
+.env.local
+
+# Arquivos enviados por usuários: não versionar dados de produção
+uploads/*
+!uploads/.gitkeep
+
+# Saídas de ferramentas
+coverage/
+*.log
