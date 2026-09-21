@@ -76,7 +76,7 @@ try {
     const web = launch(process.execPath, ['../node_modules/next/dist/bin/next', 'dev', '--port', String(webPort), '--hostname', '127.0.0.1'], { cwd: resolve('front'), env: { ...env, NODE_ENV: 'development', API_URL: `http://127.0.0.1:${apiPort}`, NEXT_PUBLIC_API_URL: '/api', INOVA_TEST_DIST_DIR: '.next-e2e' }, stdio: ['ignore', 'pipe', 'pipe'] });
     web.stdout.pipe(webLog); web.stderr.pipe(webLog);
     await waitFor(`http://127.0.0.1:${webPort}/login`, web);
-    await run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', '--config', 'tests/playwright.config.ts'], { env: { ...env, INOVA_E2E_URL: `http://127.0.0.1:${webPort}` } });
+    await run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', '--config', 'tests/playwright.config.ts', ...process.argv.slice(3)], { env: { ...env, INOVA_E2E_URL: `http://127.0.0.1:${webPort}` } });
   }
 } catch (error) { console.error(error instanceof Error ? error.message : 'Falha nos testes isolados.'); process.exitCode = 1; }
 finally { await cleanup(); }
