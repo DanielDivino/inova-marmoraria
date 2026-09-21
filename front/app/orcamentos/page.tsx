@@ -15,7 +15,7 @@ type Quote = QuoteProgress & {
 };
 type QuotePage = { data: Quote[]; meta: { pages: number; total: number }; counts?: Record<string, number> };
 type Worker = { id: string; name: string; workColor: string };
-const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+import { formatarMoeda } from '../../utilitarios/formatadores';
 const date = (value: string | Date) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
 export default function QuotesPage() {
@@ -87,7 +87,7 @@ export default function QuotesPage() {
           {quote.dueDate && <small>Entrega: {date(quote.dueDate)}</small>}
           <small>Prazo: {DEADLINE_LABELS[deadline]}</small>
           {worker && <small className="quote-worker"><i style={{ backgroundColor: worker.worker.workColor }} />{worker.worker.name}</small>}
-        </div><b>{money.format(quote.netTotal)}</b>
+        </div><b>{formatarMoeda(quote.netTotal)}</b>
       </Link><DesenhosSalvos quoteId={quote.id} /><div className="detail-actions"><Link className="secondary-button" href={`/orcamentos/${quote.id}`}>Ver detalhes</Link>{podeEditarOrcamento(quote) && <Link className="secondary-button" href={`/orcamentos/${quote.id}/editar`}>Editar orçamento</Link>}<Link className="text-button" href={`/?parent=${quote.id}`}>+ Vincular complemento</Link></div></article>;
     })}</div>
     {!loading && !error && !quotes.length && <p className="empty">Nenhum registro encontrado.</p>}

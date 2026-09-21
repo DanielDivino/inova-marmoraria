@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 
 export type ComponentMaterial = { id: string; name: string; category: string; billingUnit: 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED'; currentPrice: number; images?: { url: string; isPrimary: boolean }[] };
-const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+import { formatarMoeda } from '../../utilitarios/formatadores';
 const unit = { SQUARE_METER: 'm²', LINEAR_METER: 'm', UNIT: 'un', FIXED: 'fixo' };
 export const componentMaterialImage = (material?: Pick<ComponentMaterial, 'images'>) => material?.images?.find(image => image.isPrimary)?.url ?? material?.images?.[0]?.url;
 export const materialImageSrc = (url?: string) => !url ? undefined : url.startsWith('/api/') ? url : url.startsWith('/') ? `/api${url}` : url;
@@ -21,7 +21,7 @@ export function SeletorMaterialComponente({ materials, selected, onSelect }: { m
     </summary>
     <div className="material-picker-panel"><input aria-label="Buscar material" className="material-search-inline" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar material" />
       {shown.map(material => <button type="button" className={`material ${selected?.id === material.id ? 'selected' : ''}`} key={material.id} onClick={event => { onSelect(material.id); event.currentTarget.closest('details')?.removeAttribute('open'); }}>
-        {materialImageSrc(componentMaterialImage(material)) && <img className="stone material-sample-image material-thumbnail" src={materialImageSrc(componentMaterialImage(material))} alt="" />}<span className="material-name"><strong>{material.name}</strong><small>{material.category}</small></span><span className="material-price">{money.format(material.currentPrice)}<small>/{unit[material.billingUnit]}</small></span>
+        {materialImageSrc(componentMaterialImage(material)) && <img className="stone material-sample-image material-thumbnail" src={materialImageSrc(componentMaterialImage(material))} alt="" />}<span className="material-name"><strong>{material.name}</strong><small>{material.category}</small></span><span className="material-price">{formatarMoeda(material.currentPrice)}<small>/{unit[material.billingUnit]}</small></span>
       </button>)}{!shown.length && <p className="customer-help">Nenhum material encontrado.</p>}
     </div>
   </details></div>;

@@ -5,7 +5,7 @@ import { TituloEtapaProjeto } from './ProjectStageHeading';
 type Service = { id: string; name: string; category: string; billingUnit: 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED'; currentPrice: number };
 type Props = { mode?: 'all' | 'cutouts' | 'services' | 'unassigned'; componentIndex?: number; calculateCutout?: (cutout: DraftCutout) => number; cutouts: DraftCutout[]; components: DraftComponent[]; services: Service[]; serviceIds: string[]; serviceQuantities: DraftItem['serviceQuantities']; serviceAppliedValues: DraftItem['serviceAppliedValues']; onChange: (patch: Pick<DraftItem, 'cutouts' | 'serviceIds' | 'serviceQuantities' | 'serviceAppliedValues'>) => void };
 const numeric = (value?: string) => Number((value ?? '').replace(',', '.')) || 0;
-const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+import { formatarMoeda } from '../../utilitarios/formatadores';
 const unitLabel = (service: Service) => service.billingUnit === 'SQUARE_METER' ? 'por m²' : service.billingUnit === 'UNIT' ? 'por unidade' : 'valor fixo';
 
 export function ComplementosOrcamento({ mode = 'all', componentIndex, calculateCutout, cutouts, components, services, serviceIds, serviceQuantities, serviceAppliedValues, onChange }: Props) {
@@ -55,7 +55,7 @@ export function ComplementosOrcamento({ mode = 'all', componentIndex, calculateC
   const renderService = (service: Service) => {
     const selected = serviceIds.includes(service.id);
     return <div className={'compact-option ' + (selected ? 'selected' : '')} key={service.id}>
-      <button type="button" className="service-main" onClick={() => toggleService(service.id)}><span><strong>{service.name}</strong><small>{service.category} · {money.format(service.currentPrice)} · {unitLabel(service)}</small></span><b>{selected ? '✓' : '+'}</b></button>
+      <button type="button" className="service-main" onClick={() => toggleService(service.id)}><span><strong>{service.name}</strong><small>{service.category} · {formatarMoeda(service.currentPrice)} · {unitLabel(service)}</small></span><b>{selected ? '✓' : '+'}</b></button>
       {selected && service.billingUnit === 'UNIT' && <input inputMode="decimal" aria-label={'Quantidade — ' + service.name} placeholder="Quantidade" value={serviceQuantities[service.id] ?? '1'} onChange={(event) => onChange({ cutouts, serviceIds, serviceQuantities: { ...serviceQuantities, [service.id]: event.target.value }, serviceAppliedValues })} />}
     </div>;
   };
@@ -82,7 +82,7 @@ export function ComplementosOrcamento({ mode = 'all', componentIndex, calculateC
           <label>Quantidade<input aria-label="Quantidade de recortes ou furos" type="number" min="1" value={cutout.quantity} onChange={(event) => patchCutout(index, { quantity: Math.max(1, Number(event.target.value)) })} /></label>
           <details className="cutout-position"><summary>Posição {cutout.positionXCm || cutout.positionYCm ? 'personalizada' : 'centralizada'}</summary><div><label>Centro a partir do Esquerdo (cm)<input inputMode="decimal" value={cutout.positionXCm ?? ''} onChange={(event) => patchCutout(index, { positionXCm: event.target.value })} placeholder="Posição X (cm)" /></label>
           <label>Centro a partir do Superior (cm)<input inputMode="decimal" value={cutout.positionYCm ?? ''} onChange={(event) => patchCutout(index, { positionYCm: event.target.value })} placeholder="Posição Y (cm)" /></label></div></details>
-          {cutout.serviceId && <><small>Valor calculado: {money.format(calculated)}</small><small>Valor final: {money.format(cutout.appliedTotal === undefined ? calculated : Number(cutout.appliedTotal.includes(',') ? cutout.appliedTotal.replace(/\./g, '').replace(',', '.') : cutout.appliedTotal) || 0)}</small></>}
+          {cutout.serviceId && <><small>Valor calculado: {formatarMoeda(calculated)}</small><small>Valor final: {formatarMoeda(cutout.appliedTotal === undefined ? calculated : Number(cutout.appliedTotal.includes(',') ? cutout.appliedTotal.replace(/\./g, '').replace(',', '.') : cutout.appliedTotal) || 0)}</small></>}
           <button type="button" onClick={() => onChange({ cutouts: cutouts.filter((_, current) => current !== index), serviceIds, serviceQuantities, serviceAppliedValues })}>Remover</button>
         </div>;
       })}
