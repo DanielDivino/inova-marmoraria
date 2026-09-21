@@ -73,4 +73,6 @@ npm run catalog:import-images --workspace=@inova/api -- /caminho/materiais-inova
 
 O importador associa imagens por nome, preserva IDs e preços dos materiais existentes e cria itens pendentes de revisão quando não houver cadastro correspondente. Imagens sem identificação e novos materiais sem preço ficam inativos até revisão na Administração.
 
+Um conjunto adicional de amostras fixas fica em `scripts/seed-assets/` e é associado automaticamente na mesma execução, sem precisar de pasta externa.
+
 As rotas mantêm seus caminhos HTTP. `src/modulos/orcamentos/serializacao.ts` normaliza valores decimais do Prisma para o contrato da interface. Conversões de itens salvos e regras financeiras são compartilhadas em `packages/domain/src/`.

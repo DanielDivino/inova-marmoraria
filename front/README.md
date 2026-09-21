@@ -23,11 +23,12 @@ A aplicação abre em <http://localhost:3001>. As chamadas para `/api` são enca
 ## Estrutura relevante
 
 ```text
-app/                         páginas, layout e estilos globais
-componentes/                  componentes reutilizáveis e construtor de orçamento
-componentes/orcamento/    componentes, complementos e desenho técnico 2D
-utilitarios/                         cliente HTTP, rascunho local e formatação
-public/                      logo e imagens públicas
+app/                        páginas, layout e estilos globais
+componentes/                componentes reutilizáveis e visualizador de ambientes
+componentes/orcamento/      editor compartilhado, complementos e desenho técnico 2D
+componentes/desenhos/       editor técnico 2D (peças, recortes, cotas)
+utilitarios/                cliente HTTP, rascunho local, formatação e auxiliares
+public/                     logo, imagens do mostruário e ativos públicos
 ```
 
 ## Verificação
