@@ -12,7 +12,7 @@ type MaterialFilter = 'ALL' | 'WHITE' | 'BLACK' | 'GRANITE' | 'MARBLE' | 'ULTRAC
 type PhotoFilter = 'ALL' | 'WITH_IMAGE' | 'WITHOUT_IMAGE';
 type PriceFilter = 'ALL' | 'WITH_PRICE' | 'WITHOUT_PRICE';
 
-const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+import { formatarMoeda } from '../../utilitarios/formatadores';
 const unitLabel: Record<BillingUnit, string> = { SQUARE_METER: 'm²', LINEAR_METER: 'Metro linear', UNIT: 'Unidade', FIXED: 'Valor fixo' };
 const empty = { name: '', category: '', billingUnit: 'SQUARE_METER' as BillingUnit, price: '', isActive: true };
 const materialFilters: { id: MaterialFilter; label: string }[] = [
@@ -190,11 +190,11 @@ export default function AdministrationPage() {
     {tab === 'materials' ? <div className="material-admin-grid">
       {(rows as Material[]).map(material => <article className="material-admin-card" key={material.id}>
         <img className="material-sample-image" src={imageSrc(material)} alt={material.name} />
-        <div className="material-admin-copy"><strong>{material.name}</strong><small>{material.category} · {unitLabel[material.billingUnit]}</small><b>{money.format(material.currentPrice)} / {material.billingUnit === 'SQUARE_METER' ? 'm²' : unitLabel[material.billingUnit]}</b><button className="text-button" type="button" onClick={() => edit(material)}>Editar material</button></div>
+        <div className="material-admin-copy"><strong>{material.name}</strong><small>{material.category} · {unitLabel[material.billingUnit]}</small><b>{formatarMoeda(material.currentPrice)} / {material.billingUnit === 'SQUARE_METER' ? 'm²' : unitLabel[material.billingUnit]}</b><button className="text-button" type="button" onClick={() => edit(material)}>Editar material</button></div>
       </article>)}
       {!rows.length && <p className="catalog-empty">Nenhum material encontrado para este filtro.</p>}
     </div> : <div className="admin-rows">
-      {(rows as Service[]).map(service => <article key={service.id}><div><strong>{service.name}</strong><small>{service.category} · {unitLabel[service.billingUnit]} · {service.isActive ? 'Ativo' : 'Inativo'}</small></div><b>{money.format(service.currentPrice)}</b><button className="text-button" type="button" onClick={() => edit(service)}>Editar</button></article>)}
+      {(rows as Service[]).map(service => <article key={service.id}><div><strong>{service.name}</strong><small>{service.category} · {unitLabel[service.billingUnit]} · {service.isActive ? 'Ativo' : 'Inativo'}</small></div><b>{formatarMoeda(service.currentPrice)}</b><button className="text-button" type="button" onClick={() => edit(service)}>Editar</button></article>)}
       {!rows.length && <p className="catalog-empty">Nenhum serviço encontrado.</p>}
     </div>}
 
@@ -217,7 +217,7 @@ export default function AdministrationPage() {
         <header><div><span className="catalog-eyebrow">CATÁLOGO</span><h2>Arquivados</h2></div><button type="button" aria-label="Fechar" onClick={() => setArchiveOpen(false)}>×</button></header>
         <p className="catalog-archive-help">Materiais inativos não aparecem em orçamentos nem no mostruário.</p>
         <div className="catalog-archive-list">
-          {archivedMaterials.map((material) => <article key={material.id}><img className="material-sample-image" src={imageSrc(material)} alt="" /><div><strong>{material.name}</strong><small>{material.category} · {money.format(material.currentPrice)} / {material.billingUnit === 'SQUARE_METER' ? 'm²' : unitLabel[material.billingUnit]}</small></div><button type="button" className="secondary-button" disabled={restoringId === material.id} onClick={() => void restoreMaterial(material)}>{restoringId === material.id ? 'Desarquivando…' : 'Desarquivar'}</button></article>)}
+          {archivedMaterials.map((material) => <article key={material.id}><img className="material-sample-image" src={imageSrc(material)} alt="" /><div><strong>{material.name}</strong><small>{material.category} · {formatarMoeda(material.currentPrice)} / {material.billingUnit === 'SQUARE_METER' ? 'm²' : unitLabel[material.billingUnit]}</small></div><button type="button" className="secondary-button" disabled={restoringId === material.id} onClick={() => void restoreMaterial(material)}>{restoringId === material.id ? 'Desarquivando…' : 'Desarquivar'}</button></article>)}
           {!archivedMaterials.length && <p className="catalog-empty">Nenhum material arquivado.</p>}
         </div>
       </section>

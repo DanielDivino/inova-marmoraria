@@ -16,7 +16,7 @@ type Props = { item: DraftItem; materials: ComponentMaterial[]; material?: Compo
   value: (component: DraftComponent) => number; calculateCutout: (cutout: DraftCutout) => number;
   onCreateService?: (input: { name: string; billingUnit: Service['billingUnit']; currentPrice: number }) => Promise<Service>;
 };
-const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+import { formatarMoeda } from '../../utilitarios/formatadores';
 const sides: Exclude<EdgeSide, 'CUSTOM'>[] = ['BACK', 'FRONT', 'LEFT', 'RIGHT'];
 
 function MeterInput({ value, onChange, label, onKeyDown, id }: { value: string; onChange: (value: string) => void; label: string; onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void; id: string }) {
@@ -102,7 +102,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
           <td><MeterInput id={`quick-${component.id}-width`} label={`Largura da peça ${index + 1} (m)`} value={component.widthCm} onChange={widthCm => update(component.id, { widthCm })} onKeyDown={event => enter(event, index, 'width')} /></td>
           <td><input id={`quick-${component.id}-quantity`} aria-label={`Quantidade da peça ${index + 1}`} type="number" min="1" step="1" value={component.quantity || ''} onChange={event => update(component.id, { quantity: Number(event.target.value) })} onKeyDown={event => enter(event, index, 'quantity')} /></td>
           <td className="quick-number">{area(component).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</td>
-          <td className="quick-number"><strong>{money.format(value(component))}</strong>{component.appliedTotal !== undefined && <small>Valor ajustado</small>}</td>
+          <td className="quick-number"><strong>{formatarMoeda(value(component))}</strong>{component.appliedTotal !== undefined && <small>Valor ajustado</small>}</td>
           <td><div className="quick-row-actions"><button type="button" aria-expanded={expanded === component.id} onClick={() => setExpanded(expanded === component.id ? null : component.id)}>Detalhar</button><button type="button" aria-label={`Remover peça ${index + 1}`} onClick={() => remove(index)}>×</button></div></td>
         </tr>
         {expanded === component.id && <tr><td colSpan={7}><div className="quick-services">
@@ -113,7 +113,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
           </div>)}</div>
           <button type="button" onClick={() => onChange({ cutouts: [...item.cutouts, { id: crypto.randomUUID(), componentIndex: index, cutoutType: 'SINK', label: 'Recorte / cuba', quantity: 1, sizePending: true }] })}>+ Recorte / cuba / furo</button>
           <ComplementosOrcamento mode="cutouts" componentIndex={index} {...item} services={services} calculateCutout={calculateCutout} onChange={onChange} />
-          <label className="quick-price">Valor final da peça (material + acabamentos)<input inputMode="decimal" value={component.appliedTotal ?? ''} placeholder={money.format(value(component))} onChange={event => update(component.id, { appliedTotal: event.target.value || undefined })} /></label><small>Recortes e serviços do projeto são somados separadamente no resumo.</small>
+          <label className="quick-price">Valor final da peça (material + acabamentos)<input inputMode="decimal" value={component.appliedTotal ?? ''} placeholder={formatarMoeda(value(component))} onChange={event => update(component.id, { appliedTotal: event.target.value || undefined })} /></label><small>Recortes e serviços do projeto são somados separadamente no resumo.</small>
         </div></td></tr>}
       </Fragment>)}
     </tbody></table></div>
