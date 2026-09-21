@@ -22,7 +22,7 @@ import { useSession } from '../ApplicationShell';
 import { EtapasProjeto } from './ProjectStepper';
 import { calcularTotalPix, projetoTemDesenho, dadosEntradaProjeto, modoEntradaOrcamento, type QuoteEntryMode } from '@inova/domain';
 import { EditorOrcamentoRapido } from './QuickQuoteEditor';
-import { aplicarMaterialProjeto, prepararItemRapido } from '../../utilitarios/quick-quote';
+import { aplicarMaterialProjeto, arredondarMedidaParaCima, prepararItemRapido } from '../../utilitarios/quick-quote';
 import './quick-quote.css';
 
 type BillingUnit = 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED';
@@ -50,8 +50,11 @@ const blankComponent = (componentType: ComponentType): DraftComponent => ({ id: 
 // detalhado a qualquer momento sem criar outro orçamento.
 const newItem = (): DraftItem => ({ id: newId(), projectName: '', productTypeId: '', materialId: '', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [blankComponent('TOP')], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {}, drawingData: dadosEntradaProjeto(undefined, 'QUICK') });
 const newClientWorkspace = (): ClientWorkspace => ({ id: newId(), customer: null, items: [newItem()], activeIndex: 0, discount: '0', validUntil: '', notes: '', parentQuote: null });
-const calculateDraftComponent = (component: DraftComponent) => {
-  try { return calcularComponente({ label: component.label, componentType: component.componentType, orientation: component.orientation, lengthMm: centimetrosParaMilimetros(component.lengthCm), widthMm: centimetrosParaMilimetros(component.widthCm), quantity: component.quantity }); } catch { return null; }
+// roundUp (Orçamento Rápido, "M² fechado") só afeta o m² usado para calcular o
+// valor do material — as medidas exibidas, o desenho técnico e o que é salvo no
+// orçamento/PDF sempre usam component.lengthCm/widthCm exatos, sem passar por aqui.
+const calculateDraftComponent = (component: DraftComponent, roundUp = false) => {
+  try { return calcularComponente({ label: component.label, componentType: component.componentType, orientation: component.orientation, lengthMm: centimetrosParaMilimetros(roundUp ? arredondarMedidaParaCima(component.lengthCm) : component.lengthCm), widthMm: centimetrosParaMilimetros(roundUp ? arredondarMedidaParaCima(component.widthCm) : component.widthCm), quantity: component.quantity }); } catch { return null; }
 };
 
 type EditingQuote = { id: string; number: string; status: string; executionStatus: string; updatedAt: string; customer: Customer; customerId: string; items: SavedQuoteItem[]; discountAmount: number; validUntil?: string | null; notes?: string | null; parentQuote?: { id: string; number: string } | null };
@@ -272,7 +275,7 @@ export default function EditorOrcamento() {
   const drawingComponents = useDeferredValue(item.components);
   const drawingCutouts = useDeferredValue(item.cutouts);
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
-  const completedSteps = [(item.calculationMode === 'MANUAL_M2' ? !!materialFor(item) && decimal(item.manualM2) > 0 && !!item.manualJustification.trim() : item.components.length > 0 && item.components.every(component => !!materialFor(item, component) && !!calculateDraftComponent(component))) ? 1 : 0, ...reviewedSteps].filter(Boolean);
+  const completedSteps = [(item.calculationMode === 'MANUAL_M2' ? !!materialFor(item) && decimal(item.manualM2) > 0 && !!item.manualJustification.trim() : item.components.length > 0 && item.components.every(component => !!materialFor(item, component) && !!calculateDraftComponent(component, item.arredondarM2))) ? 1 : 0, ...reviewedSteps].filter(Boolean);
   const edgeCalculatedSubtotal = (draft: DraftItem, component: DraftComponent, edge: DraftEdge) => {
     const material = materialFor(draft, component);
     const savedEdge = snapshotFor(draft)?.components.flatMap((component) => component.edges).find((row) => row.id === edge.id && row.serviceId === edge.serviceId);
@@ -286,7 +289,7 @@ export default function EditorOrcamento() {
   };
   const componentCalculatedTotal = (draft: DraftItem, component: DraftComponent) => {
     const material = materialFor(draft, component);
-    const calculated = calculateDraftComponent(component);
+    const calculated = calculateDraftComponent(component, draft.arredondarM2);
     if (!calculated || !material) return 0;
     const materialValue = calcularLinha({ billingUnit: material.billingUnit, unitPrice: material.currentPrice, billedQuantity: calculated.billableArea }).subtotal;
     const edgeValue = component.edges.reduce((sum, edge) => sum + edgeCalculatedSubtotal(draft, component, edge), 0);
@@ -310,12 +313,12 @@ export default function EditorOrcamento() {
   };
   const itemSummary = (draft: DraftItem) => {
     const material = materialFor(draft);
-    const components = draft.components.map(calculateDraftComponent).filter(Boolean) as ReturnType<typeof calcularComponente>[];
+    const components = draft.components.map(component => calculateDraftComponent(component, draft.arredondarM2)).filter(Boolean) as ReturnType<typeof calcularComponente>[];
     const measuredArea = components.length ? somarAreasComponentes(components) : 0;
     const area = draft.calculationMode === 'MANUAL_M2' ? decimal(draft.manualM2) : measuredArea;
     const materialSubtotal = draft.calculationMode === 'MANUAL_M2'
       ? (material ? calcularLinha({ billingUnit: material.billingUnit, unitPrice: material.currentPrice, billedQuantity: area }).subtotal : 0)
-      : draft.components.reduce((sum, component) => { const selected = materialFor(draft, component); const measured = calculateDraftComponent(component); return sum + (selected && measured ? calcularLinha({ billingUnit: selected.billingUnit, unitPrice: selected.currentPrice, billedQuantity: measured.billableArea }).subtotal : 0); }, 0);
+      : draft.components.reduce((sum, component) => { const selected = materialFor(draft, component); const measured = calculateDraftComponent(component, draft.arredondarM2); return sum + (selected && measured ? calcularLinha({ billingUnit: selected.billingUnit, unitPrice: selected.currentPrice, billedQuantity: measured.billableArea }).subtotal : 0); }, 0);
     let calculatedServices = 0;
     let serviceDiscounts = 0;
     const serviceBreakdown: Array<{ id: string; name: string; amount: number }> = [];
@@ -337,7 +340,7 @@ export default function EditorOrcamento() {
       return sum + applied;
     }, 0);
     const calculatedComponents = draft.components.reduce((sum, component) => sum + componentCalculatedTotal(draft, component), 0);
-    const calculatedEdges = draft.components.reduce((sum, component) => sum + Math.max(0, componentCalculatedTotal(draft, component) - (calculateDraftComponent(component)?.billableArea ?? 0) * (materialFor(draft, component)?.currentPrice ?? 0)), 0);
+    const calculatedEdges = draft.components.reduce((sum, component) => sum + Math.max(0, componentCalculatedTotal(draft, component) - (calculateDraftComponent(component, draft.arredondarM2)?.billableArea ?? 0) * (materialFor(draft, component)?.currentPrice ?? 0)), 0);
     const componentTotal = draft.calculationMode === 'MANUAL_M2' ? materialSubtotal : draft.components.reduce((sum, component) => sum + componentAppliedTotal(draft, component), 0);
     const cutoutsTotal = draft.cutouts.reduce((sum, cutout) => {
       const calculated = cutoutCalculatedSubtotal(draft, cutout);
@@ -465,7 +468,7 @@ export default function EditorOrcamento() {
     for (const [index, component] of draft.components.entries()) {
       const name = component.label.trim() || `Componente ${index + 1}`;
       if (!materialFor(draft, component)) return { componentId: component.id, message: `${name}: selecione o material dessa peça no campo Material.` };
-      if (!calculateDraftComponent(component)) return { componentId: component.id, message: `${name}: confira comprimento, largura/altura e quantidade. As medidas devem ser maiores que zero.` };
+      if (!calculateDraftComponent(component, draft.arredondarM2)) return { componentId: component.id, message: `${name}: confira comprimento, largura/altura e quantidade. As medidas devem ser maiores que zero.` };
       for (const edge of quickDraft ? [] : component.edges) {
         const service = servicesFor(draft).find(entry => entry.id === edge.serviceId);
         if (acabamentoBordaPedra(service?.name ?? '') && !(decimal(edge.heightCm ?? '') > 0)) return { componentId: component.id, message: `${name}: informe a altura/largura de ${service?.name}.` };
@@ -484,13 +487,21 @@ export default function EditorOrcamento() {
     if (modoEntradaOrcamento(prepared.drawingData) !== 'QUICK') return prepared;
     const draftServices = servicesFor(prepared);
     const omitted = new Set<string>();
-    const components = prepared.components.map(component => ({ ...component, edges: component.edges.filter(edge => {
+    // "M² fechado": grava o valor de material calculado com a área arredondada como
+    // valor final da peça, para o orçamento cobrar por ele. Um valor final já digitado
+    // manualmente é preservado (componentAppliedTotal respeita component.appliedTotal
+    // como sobreposição antes de retornar o valor a gravar aqui). As medidas
+    // (lengthCm/widthCm) nunca são alteradas — o desenho técnico e o PDF continuam
+    // mostrando exatamente o que foi digitado.
+    const components = prepared.components.map(component => ({ ...component,
+      appliedTotal: prepared.arredondarM2 ? componentAppliedTotal(prepared, component).toFixed(2).replace('.', ',') : component.appliedTotal,
+      edges: component.edges.filter(edge => {
       const service = draftServices.find(entry => entry.id === edge.serviceId);
       const stripWithoutMeasure = !!acabamentoBordaPedra(service?.name ?? '') && !(decimal(edge.heightCm ?? '') > 0);
       if (stripWithoutMeasure) omitted.add(edge.serviceId);
       return !stripWithoutMeasure;
     }) }));
-    if (!omitted.size) return prepared;
+    if (!omitted.size && !prepared.arredondarM2) return prepared;
     return { ...prepared, components, serviceIds: [...new Set([...prepared.serviceIds, ...omitted])], serviceQuantities: { ...prepared.serviceQuantities, ...Object.fromEntries([...omitted].map(serviceId => [serviceId, prepared.serviceQuantities[serviceId] ?? '1'])) } };
   };
   async function salvarOrcamento(openPdf = false) {
@@ -584,7 +595,7 @@ export default function EditorOrcamento() {
       {!quickMode && !projetoTemDesenho(item.drawingData) && <button type="button" onClick={() => { const problem = projectProblem(item); if (problem) { setError(problem.message); return; } updateItem({ drawingData: { ...item.drawingData, detailingStatus: 'COMPLETED' } }); }}>Concluir detalhamento</button>}
     </div>
     {!quickMode && <div className="project-navigation"><EtapasProjeto current={currentStep} completed={completedSteps} onSelect={navigateStep} /><button type="button" className="view-all-button" aria-pressed={showAll} onClick={() => setShowAll((value) => !value)}>{showAll ? 'Ver por etapas' : 'Ver tudo'}</button></div>}
-    {quickMode && <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={patch => updateItem({ ...patch, drawingData: dadosEntradaProjeto(item.drawingData, 'QUICK') })} area={component => calculateDraftComponent(component)?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
+    {quickMode && <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={patch => updateItem({ ...patch, drawingData: dadosEntradaProjeto(item.drawingData, 'QUICK') })} area={component => calculateDraftComponent(component, item.arredondarM2)?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
     {!quickMode && <>
     <div className="project-stage-group project-setup-grid" hidden={quickMode || (!showAll && currentStep !== 1)}>
     <section className="section measurements-card" id="project-step-1" tabIndex={-1} onFocusCapture={() => setCurrentStep(1)}><CartaoMaterialSelecionado material={item.calculationMode === 'DIMENSIONS' ? materialFor(item, materialComponent) : selectedMaterial} /><TituloEtapaProjeto number={1} title="Componentes e medidas" description="Escolha o material e informe as medidas de cada peça." /><div className="project-details-row"><label className="project-name-field"><span>Nome do projeto</span><input id="project-name" value={item.projectName} onChange={event => updateItem({ projectName: event.target.value })} placeholder={`Projeto ${activeIndex + 1}`} /></label>{item.calculationMode === 'DIMENSIONS' && materialComponent && <div className="project-material-field"><SeletorMaterialComponente materials={catalog.materials.filter(material => material.billingUnit === 'SQUARE_METER')} selected={materialFor(item, materialComponent)} onSelect={materialId => updateItem({ components: item.components.map(component => component.id === materialComponent.id ? { ...component, materialId } : component) })} /></div>}</div><label className="calculation-mode"><input type="radio" checked={item.calculationMode === 'DIMENSIONS'} onChange={() => updateItem({ calculationMode: 'DIMENSIONS' })} /> Calcular pelas medidas</label>{isSuperAdmin && <label className="calculation-mode"><input type="radio" checked={item.calculationMode === 'MANUAL_M2'} onChange={() => updateItem({ calculationMode: 'MANUAL_M2' })} /> M² manual (auditável)</label>}{item.calculationMode === 'MANUAL_M2' ? <div className="manual-component"><SeletorMaterialComponente materials={catalog.materials} selected={selectedMaterial} onSelect={materialId => updateItem({ materialId })} /><div className="inline-form"><input inputMode="decimal" value={item.manualM2} onChange={(event) => updateItem({ manualM2: event.target.value })} placeholder="Área em m²" /><input value={item.manualJustification} onChange={(event) => updateItem({ manualJustification: event.target.value })} placeholder="Justificativa obrigatória" /></div></div> : <EditorComponentes renderCutouts={(componentIndex) => (<ComplementosOrcamento mode="cutouts" componentIndex={componentIndex} calculateCutout={(cutout) => cutoutCalculatedSubtotal(item, cutout)} cutouts={item.cutouts} components={item.components} services={activeServices} serviceIds={item.serviceIds} serviceQuantities={item.serviceQuantities} serviceAppliedValues={item.serviceAppliedValues} onChange={(patch) => updateItem(patch)} />)} cutouts={item.cutouts} materialFor={component => materialFor(item, component)} components={item.components} linearServices={drawingServices} onChange={(components) => updateItem({ components })} onActiveMaterialChange={setMaterialComponentId} onAdd={(type, parentIndex) => updateItem({ components: [...item.components, { ...blankComponent(type), materialId: parentIndex === undefined ? '' : item.components[parentIndex].materialId, parentComponentId: parentIndex === undefined ? undefined : item.components[parentIndex].id }] })} onRemove={(index) => { const patch = removerGrupoComponentes(item, index); if (patch.components.length) updateItem(patch); }} onAddCutout={(componentIndex) => { updateItem({ cutouts: [...item.cutouts, { id: newId(), componentIndex, cutoutType: 'SINK', label: 'Recorte / cuba', quantity: 1 }] }); }} />}<div className="partial"><span>Área total da pedra</span><strong>{summaries[activeIndex].area.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} m²</strong><span>Material</span><strong>{formatarMoeda(summaries[activeIndex].materialSubtotal)}</strong></div></section>

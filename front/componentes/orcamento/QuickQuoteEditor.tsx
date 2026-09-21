@@ -90,7 +90,10 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
   const opcaoServico = (service: Service) => <label key={service.id}><input type="checkbox" checked={item.serviceIds.includes(service.id)} onChange={event => toggleProjectService(service.id, event.target.checked)} />{service.name}</label>;
   const modalComponent = item.components.find(component => component.id === serviceModalComponentId);
   return <section className="section quick-quote" aria-label="Orçamento Rápido">
-    <div className="quick-heading"><h2>Orçamento Rápido</h2><small>Medidas em metros · Enter avança e adiciona linhas · Tab e Shift + Tab navegam</small></div>
+    <div className="quick-heading">
+      <div><h2>Orçamento Rápido</h2><small>Medidas em metros · Enter avança e adiciona linhas · Tab e Shift + Tab navegam</small></div>
+      <label className="quick-round-toggle" title="Calcula o valor do material como se cada peça fosse arredondada para cima, ao múltiplo de 5 cm mais próximo (vender sempre m² fechado). A medida exibida, o desenho e o PDF continuam mostrando a medida exata."><input type="checkbox" checked={!!item.arredondarM2} onChange={event => onChange({ arredondarM2: event.target.checked })} /> M² fechado</label>
+    </div>
     <div className="quick-project-fields"><label>Nome do projeto<input id="project-name" value={item.projectName} onChange={event => onChange({ projectName: event.target.value })} placeholder="Ex.: Cozinha" /></label>
       <SeletorMaterialComponente materials={materials.filter(entry => entry.billingUnit === 'SQUARE_METER')} selected={material} onSelect={materialId => onChange(aplicarMaterialProjeto(item, materialId))} />
     </div>
