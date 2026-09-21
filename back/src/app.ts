@@ -3,30 +3,32 @@ import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { join } from 'node:path';
 import { ZodError } from 'zod';
-import { registerAuth } from './modules/auth/auth.plugin.js';
-import { registerAuthRoutes } from './modules/auth/auth.routes.js';
-import { registerCatalogRoutes } from './modules/catalog/catalog.routes.js';
-import { registerCustomerRoutes } from './modules/customers/customer.routes.js';
-import { registerUserRoutes } from './modules/users/user.routes.js';
-import { registerQuoteRoutes } from './modules/quotes/quote.routes.js';
-import { registerAuditRoutes } from './modules/audit/audit.routes.js';
-import { registerNotificationRoutes } from './modules/notifications/notification.routes.js';
-import { AppError } from './shared/http.js';
+import { registrarAutenticacao } from './modulos/autenticacao/auth.plugin.js';
+import { registrarRotasAutenticacao } from './modulos/autenticacao/auth.routes.js';
+import { registrarRotasCatalogo } from './modulos/catalogo/catalog.routes.js';
+import { registrarRotasClientes } from './modulos/clientes/customer.routes.js';
+import { registrarRotasUsuarios } from './modulos/usuarios/user.routes.js';
+import { registrarRotasOrcamentos } from './modulos/orcamentos/quote.routes.js';
+import { registrarRotasAuditoria } from './modulos/auditoria/audit.routes.js';
+import { registrarRotasNotificacoes } from './modulos/notificacoes/notification.routes.js';
+import { registrarRotasDesenhos } from './modulos/desenhos/design.routes.js';
+import { AppError } from './compartilhado/http.js';
 
-export async function buildApp() {
+export async function criarAplicacao() {
   const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
   app.register(cors, { origin: process.env.WEB_ORIGIN ?? true, credentials: true });
   app.register(fastifyStatic, { root: join(process.cwd(), 'uploads'), prefix: '/uploads/', decorateReply: false });
-  await registerAuth(app);
+  await registrarAutenticacao(app);
 
   app.get('/health', async () => ({ status: 'ok' }));
-  app.register(registerAuthRoutes, { prefix: '/auth' });
-  app.register(registerCatalogRoutes, { prefix: '/catalog' });
-  app.register(registerCustomerRoutes, { prefix: '/customers' });
-  app.register(registerQuoteRoutes, { prefix: '/quotes' });
-  app.register(registerUserRoutes, { prefix: '/users' });
-  app.register(registerAuditRoutes, { prefix: '/audit' });
-  app.register(registerNotificationRoutes, { prefix: '/notifications' });
+  app.register(registrarRotasAutenticacao, { prefix: '/auth' });
+  app.register(registrarRotasCatalogo, { prefix: '/catalog' });
+  app.register(registrarRotasClientes, { prefix: '/customers' });
+  app.register(registrarRotasOrcamentos, { prefix: '/quotes' });
+  app.register(registrarRotasUsuarios, { prefix: '/users' });
+  app.register(registrarRotasAuditoria, { prefix: '/audit' });
+  app.register(registrarRotasNotificacoes, { prefix: '/notifications' });
+  app.register(registrarRotasDesenhos);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof ZodError) {

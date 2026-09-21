@@ -1,0 +1,1 @@
+ALTER TABLE "QuoteItemCutout" ADD COLUMN "sizePending" BOOLEAN NOT NULL DEFAULT false;

@@ -23,11 +23,12 @@ A aplicação abre em <http://localhost:3001>. As chamadas para `/api` são enca
 ## Estrutura relevante
 
 ```text
-app/                         páginas, layout e estilos globais
-components/                  componentes reutilizáveis e construtor de orçamento
-components/quote-builder/    componentes, complementos e desenho técnico 2D
-lib/                         cliente HTTP, rascunho local e formatação
-public/                      logo e imagens públicas
+app/                        páginas, layout e estilos globais
+componentes/                componentes reutilizáveis e visualizador de ambientes
+componentes/orcamento/      editor compartilhado, complementos e desenho técnico 2D
+componentes/desenhos/       editor técnico 2D (peças, recortes, cotas)
+utilitarios/                cliente HTTP, rascunho local, formatação e auxiliares
+public/                     logo, imagens do mostruário e ativos públicos
 ```
 
 ## Verificação
@@ -43,3 +44,5 @@ Os testes de interface, fluxo real de login, orçamento, PDF, edição, vínculo
 - Preserve o layout responsivo e os componentes visuais existentes.
 - Não trate preço do catálogo como estado local permanente: valores negociados pertencem ao orçamento salvo pela API.
 - Dados do cliente e do orçamento são persistidos no backend; armazenamento do navegador só é usado para recuperação de edição ainda não salva.
+
+O editor compartilhado fica em `componentes/orcamento/EditorOrcamento.tsx`. As páginas de criação e edição apenas o compõem; não importam uma página dentro da outra.

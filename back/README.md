@@ -26,7 +26,7 @@ Para o banco local:
 ```bash
 docker compose up -d postgres
 npm run db:generate
-npx prisma migrate deploy --schema back/prisma/schema.prisma
+npm run db:deploy
 npm run db:seed
 ```
 
@@ -34,18 +34,18 @@ npm run db:seed
 
 ```text
 prisma/                    schema, migrations incrementais e seed
-src/modules/auth/          login, renovação de sessão e autorização
-src/modules/customers/     cadastro, busca normalizada e histórico de clientes
-src/modules/catalog/       materiais, serviços, acabamentos e preços
-src/modules/quotes/        orçamento, snapshots, PDF, status e regras de edição
-src/modules/notifications/ alertas de prazo
-src/modules/audit/         trilha de auditoria
+src/modulos/autenticacao/          login, renovação de sessão e autorização
+src/modulos/clientes/     cadastro, busca normalizada e histórico de clientes
+src/modulos/catalogo/       materiais, serviços, acabamentos e preços
+src/modulos/orcamentos/        orçamento, snapshots, PDF, status e regras de edição
+src/modulos/notificacoes/ alertas de prazo
+src/modulos/auditoria/         trilha de auditoria
 ```
 
 ## Regras importantes
 
 - Preços e descontos aplicados ao orçamento são snapshots históricos: mudanças posteriores no catálogo não alteram negociações antigas.
-- Valores individuais ficam disponíveis internamente, mas o PDF destinado ao cliente mostra somente o total final.
+- Valores individuais ficam disponíveis internamente, e o PDF permite exibi-los ou mostrar apenas os totais de cada projeto e do orçamento.
 - Migrations são incrementais. Não edite uma migration já aplicada nem recrie tabelas para evoluir o banco.
 - Arquivos enviados em `uploads/` não são versionados.
 
@@ -72,3 +72,7 @@ npm run catalog:import-images --workspace=@inova/api -- /caminho/materiais-inova
 ```
 
 O importador associa imagens por nome, preserva IDs e preços dos materiais existentes e cria itens pendentes de revisão quando não houver cadastro correspondente. Imagens sem identificação e novos materiais sem preço ficam inativos até revisão na Administração.
+
+Um conjunto adicional de amostras fixas fica em `scripts/seed-assets/` e é associado automaticamente na mesma execução, sem precisar de pasta externa.
+
+As rotas mantêm seus caminhos HTTP. `src/modulos/orcamentos/serializacao.ts` normaliza valores decimais do Prisma para o contrato da interface. Conversões de itens salvos e regras financeiras são compartilhadas em `packages/domain/src/`.

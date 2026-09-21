@@ -33,6 +33,11 @@ enum ExecutionStatus {
   IN_PROGRESS
   COMPLETED
   REWORK
+  WAITING_MATERIAL
+  PENDING_WORK
+  READY
+  DELIVERY_PENDING
+  INSTALLATION_PENDING
 }
 
 enum CalculationMode {
@@ -42,11 +47,15 @@ enum CalculationMode {
 
 enum ComponentType {
   TOP
+  COUNTER
+  BASE
+  VISTA
   SKIRT
   BACKSPLASH
   SIDE_LEFT
   SIDE_RIGHT
   SILL
+  THRESHOLD
   STEP
   OTHER
 }
@@ -70,10 +79,20 @@ enum EdgeSide {
 
 enum CutoutType {
   SINK
+  OVAL_SINK
+  SCULPTED_SINK
   COOKTOP
   FAUCET_HOLE
   GENERIC_HOLE
   OTHER
+}
+
+enum DesignRevisionStatus {
+  IN_REVIEW
+  APPROVED
+  RETURNED
+  RELEASED
+  SUPERSEDED
 }
 
 model User {
@@ -83,11 +102,21 @@ model User {
   passwordHash         String
   role                 Role       @default(ADMIN)
   isActive             Boolean    @default(true)
+  workColor            String     @default("#607453")
+  commercialAccess     Boolean    @default(true)
+  designEdit           Boolean    @default(false)
+  designReview         Boolean    @default(false)
+  designRelease        Boolean    @default(false)
   maxDiscountPercent   Decimal    @default(0) @db.Decimal(5, 2)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   createdQuotes        Quote[]    @relation("QuoteCreator")
   auditLogs            AuditLog[]
+  workerAssignments    QuoteWorkerAssignment[]
+  editedDesignDrafts   DesignDraft[]       @relation("DesignDraftEditor")
+  createdDesignRevisions DesignRevision[]  @relation("DesignRevisionCreator")
+  revisionDecisions    RevisionDecision[]  @relation("RevisionDecisionMaker")
+  productionReleases   ProductionRelease[] @relation("ProductionReleaseMaker")
 }
 
 model Customer {
@@ -105,6 +134,7 @@ model Customer {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   quotes      Quote[]
+  jobs        Job[]
   @@index([name])
 }
 
@@ -120,6 +150,7 @@ model Material {
   images      MaterialImage[]
   prices      MaterialPrice[]
   quoteItems  QuoteItem[]
+  quoteComponents QuoteItemComponent[]
   @@index([name, isActive])
 }
 
@@ -174,6 +205,7 @@ model Quote {
   complements    Quote[] @relation("QuoteComplements")
   number          String      @unique
   customerId      String
+  jobId           String?
   customerNameSnapshot String @default("")
   customerPhoneSnapshot String? 
   workAddressSnapshot String?
@@ -185,6 +217,10 @@ model Quote {
   startedAt       DateTime?
   estimatedBusinessDays Int?
   dueDate         DateTime?
+  deliveryDeadline DateTime? @db.Date
+  installationDeadline DateTime? @db.Date
+  deadlineConfirmed Boolean @default(false)
+  deadlineNote String?
   validUntil      DateTime?
   discountAmount  Decimal     @default(0) @db.Decimal(12, 2)
   grossTotal      Decimal     @default(0) @db.Decimal(12, 2)
@@ -193,18 +229,191 @@ model Quote {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   customer        Customer    @relation(fields: [customerId], references: [id])
+  job             Job?        @relation(fields: [jobId], references: [id], onDelete: SetNull)
   createdBy       User        @relation("QuoteCreator", fields: [createdById], references: [id])
   items           QuoteItem[]
+  workerAssignments QuoteWorkerAssignment[]
   @@index([customerId, status, createdAt])
   @@index([status, dueDate])
+  @@index([status, executionStatus, deliveryDeadline])
+  @@index([installationDeadline])
+  @@index([createdById, createdAt])
   @@index([parentQuoteId])
+  @@index([jobId])
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  customerId  String
+  name        String
+  createdById String?
+  members     JobMember[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  projects    Project[]
+  quotes      Quote[]
+
+  @@index([customerId, createdAt])
+}
+
+model Project {
+  id               String              @id @default(cuid())
+  jobId            String
+  name             String
+  deliveryDeadline DateTime?           @db.Date
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  job              Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  designs          Design[]
+  releases         ProductionRelease[]
+
+  @@index([jobId, createdAt])
+}
+
+model Design {
+  id              String           @id @default(cuid())
+  projectId       String
+  name            String
+  legacySourceId  String?          @unique
+  nextRevision    Int              @default(1)
+  activeDraftId   String?          @unique
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activeDraft     DesignDraft?     @relation("ActiveDesignDraft", fields: [activeDraftId], references: [id], onDelete: SetNull)
+  drafts          DesignDraft[]    @relation("DesignDrafts")
+  revisions       DesignRevision[]
+
+  @@index([projectId, createdAt])
+}
+
+model DesignDraft {
+  id             String   @id @default(cuid())
+  designId       String
+  baseRevisionId String?
+  version        Int      @default(1)
+  schemaVersion  Int      @default(1)
+  document       Json
+  updatedById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  design         Design   @relation("DesignDrafts", fields: [designId], references: [id], onDelete: Cascade)
+  activeFor      Design?  @relation("ActiveDesignDraft")
+  updatedBy      User     @relation("DesignDraftEditor", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([designId, updatedAt])
+}
+
+model DesignRevision {
+  id             String               @id @default(cuid())
+  designId       String
+  number         Int
+  schemaVersion  Int
+  document       Json
+  contentHash    String
+  status         DesignRevisionStatus @default(IN_REVIEW)
+  createdById    String
+  createdAt      DateTime             @default(now())
+  design         Design               @relation(fields: [designId], references: [id], onDelete: Cascade)
+  createdBy      User                 @relation("DesignRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  decisions      RevisionDecision[]
+  releases       ProductionRelease[]
+  exports        ExportArtifact[]
+  commercialLinks CommercialDesignLink[]
+
+  @@unique([designId, number])
+  @@index([designId, status, createdAt])
+}
+
+model RevisionDecision {
+  id          String         @id @default(cuid())
+  revisionId  String
+  decision    String
+  note        String?
+  decidedById String
+  decidedAt   DateTime       @default(now())
+  revision    DesignRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  decidedBy   User           @relation("RevisionDecisionMaker", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@index([revisionId, decidedAt])
+}
+
+model ProductionRelease {
+  id                 String         @id @default(cuid())
+  projectId          String
+  designRevisionId   String
+  replacesReleaseId  String?
+  releasedById       String
+  releasedAt         DateTime       @default(now())
+  note               String         @default("")
+  commercialVerified Boolean        @default(false)
+  productionReference String        @default("")
+  project            Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  designRevision     DesignRevision @relation(fields: [designRevisionId], references: [id], onDelete: Restrict)
+  releasedBy         User           @relation("ProductionReleaseMaker", fields: [releasedById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, releasedAt])
+  @@index([designRevisionId])
+}
+
+model JobMember {
+  jobId String
+  userId String
+  access String @default("VIEWER")
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@id([jobId, userId])
+}
+
+model CommercialDesignLink {
+  id String @id @default(cuid())
+  quoteId String
+  quoteRevisionHash String
+  designRevisionId String
+  checkedById String
+  checkedAt DateTime @default(now())
+  note String
+  designRevision DesignRevision @relation(fields: [designRevisionId], references: [id], onDelete: Restrict)
+  @@index([quoteId, checkedAt])
+}
+
+model ExportArtifact {
+  id String @id @default(cuid())
+  revisionId String
+  format String
+  options Json
+  idempotencyKey String @unique
+  status String @default("PENDING")
+  contentHash String?
+  storageKey String?
+  report Json?
+  error String?
+  createdAt DateTime @default(now())
+  revision DesignRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  @@index([revisionId, createdAt])
+}
+
+model QuoteWorkerAssignment {
+  id            String   @id @default(cuid())
+  quoteId       String
+  workerId      String
+  colorSnapshot String
+  assignedAt    DateTime @default(now())
+  releasedAt    DateTime?
+  quote         Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  worker        User     @relation(fields: [workerId], references: [id], onDelete: Restrict)
+
+  @@index([quoteId, releasedAt])
+  @@index([workerId, releasedAt])
 }
 
 model QuoteSequence {
-  year          Int      @id
+  year          Int
+  month         Int
   lastNumber    Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  @@id([year, month])
 }
 
 model QuoteItem {
@@ -239,6 +448,11 @@ model QuoteItem {
 model QuoteItemComponent {
   id              String               @id @default(cuid())
   quoteItemId     String
+  materialId      String?
+  materialNameSnapshot String?
+  billingUnitSnapshot BillingUnit?
+  unitPriceSnapshot Decimal? @db.Decimal(12, 2)
+  material        Material? @relation(fields: [materialId], references: [id])
   label           String
   componentType   ComponentType
   orientation     ComponentOrientation
@@ -288,6 +502,7 @@ model QuoteItemCutout {
   quoteItemId     String
   componentId     String?
   cutoutType      CutoutType
+  sizePending     Boolean              @default(false)
   label           String?
   lengthMm        Int?
   widthMm         Int?

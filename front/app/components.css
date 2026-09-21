@@ -12,11 +12,24 @@
 .drawing-edge-label { fill: #9b6817 !important; font-size: 8px; font-weight: bold; }
 .drawing-skirt { fill: #ead49b; stroke: #9b6817; stroke-width: 1.5; }
 .drawing-skirt-height { fill: #635948 !important; font-size: 6px; font-weight: 700; }
-.drawing-no-finish-marker { stroke: #c9473c; stroke-width: 1.8; stroke-linecap: round; }
+.drawing-simple-finish-marker { stroke: #c9473c; stroke-width: 1.8; stroke-linecap: round; }
+.technical-drawing .drawing-legend { margin-top: 8px; color: var(--ink); font-weight: 700; }
 .drawing-description { fill: #6d6251 !important; font-size: 8px; }
 .drawing-quantity { fill: #5e4a25 !important; font-size: 9px; font-weight: 700; }
 .component-quantity { display: grid; gap: 3px; color: var(--muted); font-size: 10px; }
 .component-quantity input { width: 100%; }
+.component-actions { flex-wrap: wrap; }
+.component-actions button:disabled { opacity: .4; cursor: default; }
+.attached-components { display: grid; gap: 10px; margin-top: 14px; padding-left: 12px; border-left: 2px solid #dfc692; }
+.attached-components > p { margin: 0; color: var(--muted); font-size: 11px; }
+.attached-component { background: #fffdf9; }
+.sill-detail-editor { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 14px; }
+.sill-detail { margin: 0; width: 190px; max-width: 100%; }
+.sill-detail figcaption { color: var(--muted); font-size: 11px; }
+.sill-detail svg { display: block; width: 100%; }
+.sill-drawing-detail { display: inline-grid; gap: 6px; margin: 12px 20px 16px 0; font-size: 12px; }
+.sill-detail-editor > label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; }
+.sill-detail-editor input { width: 160px; max-width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
 .quote-component { display: grid; gap: 3px; padding: 8px 0 2px; border-top: 1px dashed var(--line); }
 
 .edge-menu,
@@ -41,6 +54,22 @@
 
 .edge-grid label span { color: var(--muted); font-size: 11px; }
 .edge-grid label input { width: 100%; }
+.edge-side { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.edge-side > strong { font-size: 12px; }
+.edge-finish { display: grid; gap: 7px; min-width: 0; padding: 9px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.edge-finish-title { display: flex; justify-content: space-between; align-items: start; gap: 6px; font-size: 12px; }
+.edge-finish-title button { border: 0; background: transparent; color: var(--muted); font-size: 10px; padding: 0; cursor: pointer; }
+.edge-finish small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.manufacturing-description { display: grid; gap: 12px; margin-top: 16px; text-align: left; color: var(--ink); }
+.manufacturing-description section { border-top: 1px solid var(--line); padding-top: 10px; min-width: 0; }
+.manufacturing-description h4 { margin: 0 0 6px; font-size: 13px; }
+.manufacturing-description p { margin: 4px 0; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.manufacturing-notes { white-space: pre-wrap; }
+@media print {
+  .manufacturing-description { color: #17251f; }
+  .manufacturing-description h4 { break-after: avoid; }
+  .manufacturing-description p { break-inside: avoid; }
+}
 .compact-menu-content { display: grid; gap: 8px; }
 .compact-option { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); text-align: left; }
 .compact-option.selected { border-color: var(--green); background: #fff7e5; }
@@ -67,6 +96,7 @@
 @media(max-width:640px){.project-setup-fields,.project-selection-grid{grid-template-columns:1fr}.environment-picker{min-height:68px}.draft-save-button{display:none}}
 .material-search-inline{width:170px;max-width:52%;height:32px;border:1px solid var(--line);border-radius:8px;padding:6px 9px;background:#fff;color:var(--ink);font-size:12px}.material-search-inline::placeholder{color:var(--muted)}
 .quote-steps{display:flex;align-items:center;gap:9px;margin-top:25px;color:#a39a8e;font-size:11px;text-align:center}.quote-steps b{color:#936717}.quote-steps b,.quote-steps span{min-width:58px}.quote-steps small{font-size:10px;font-weight:400}.quote-steps i{height:1px;background:#e4ddd3;flex:1}.quote-summary-card{position:fixed;z-index:10;right:34px;top:148px;width:245px;display:grid;gap:13px;padding:18px;border:1px solid #ebe2d6;border-radius:13px;background:#fff;box-shadow:0 7px 24px #4c351012;color:var(--muted);font-size:12px}.quote-summary-card>strong{font:18px Georgia,serif;color:var(--ink);padding-bottom:7px;border-bottom:1px solid var(--line)}.quote-summary-card span{display:flex;justify-content:space-between}.quote-summary-card b{color:var(--ink)}
+.project-stepper{display:flex;align-items:center;gap:8px;margin:26px 0 0;max-width:980px;color:#a39a8e;font-size:11px}.project-step{display:flex;align-items:center;gap:7px;min-width:0}.project-step-number{display:grid;place-items:center;width:28px;height:28px;flex:none;border-radius:50%;background:#eee9e1;color:#7c7367;font:700 12px Arial}.project-step-label{display:grid;line-height:1.1;white-space:nowrap}.project-step-label small{font-size:10px;font-weight:400}.project-step i{width:38px;height:1px;background:#ddd5ca}.project-step.current{color:#7f5715;font-weight:700}.project-step.current .project-step-number,.project-step.completed .project-step-number{background:#b6811e;color:#fff}.project-step.completed{color:#78664a}.project-step.completed i{background:#caa35e}@media(max-width:900px){.project-stepper{overflow-x:auto;padding-bottom:4px}.project-step i{width:20px}}@media(max-width:560px){.project-stepper{gap:5px}.project-step-label{font-size:10px}.project-step-label small{font-size:9px}.project-step-number{width:25px;height:25px}.project-step i{width:12px}}
 /* Camada visual profissional: preserva os componentes e apenas reorganiza a leitura. */
 body{background:#f3f1ed}.shell{max-width:1440px;min-height:100vh;padding:0 42px 116px 278px;background:#fffdf9}.topbar{position:fixed;z-index:20;inset:0 auto 0 0;width:236px;height:100vh;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px;padding:30px 18px;background:#fffdf9;border-right:1px solid #ebe5dc;box-shadow:4px 0 20px #3d2a1208}.topbar .brand-logo{width:150px!important;height:92px!important;margin:0 auto 28px;object-fit:contain!important}.header-link{margin:0;padding:12px 15px;border-radius:9px;color:#5f574c;font-size:13px;font-weight:600}.header-link:first-of-type{background:#fff1d4;color:#8a6118}.header-link:hover{background:#faf4e8}.intro{max-width:980px;padding:42px 0 26px}.intro h1{font-size:36px;color:#2b251b}.customer-card,.customer-flow,.section{max-width:980px}.customer-card{background:#fff;border-color:#e7dfd3;border-radius:13px;box-shadow:0 4px 18px #4c35100a}.section{padding:24px 0;border-top-color:#eee7dd}.section-heading h2{font-size:22px}.project-name-section{background:#fff;border:1px solid #eee7dd;border-radius:12px;padding:16px;margin:12px 0}.item-tabs{max-width:980px;padding:16px 0}.item-tab>button:first-child{min-height:54px}.catalog-panel{max-width:980px;border:1px solid #eee7dd;border-radius:12px;background:#fff;padding:14px;box-shadow:0 4px 18px #4c35100a}.catalog-panel>.material{background:#fffdf9;border-color:#e8dfd2}.total-bar{width:calc(100% - 236px);max-width:none;left:236px;transform:none;padding-left:42px;padding-right:42px;border-radius:0;background:#3e2c16}@media(max-width:760px){.shell{padding:0 16px 116px}.topbar{position:relative;inset:auto;width:auto;height:auto;flex-direction:row;align-items:center;flex-wrap:wrap;padding:12px;border-right:0;border-bottom:1px solid #ebe5dc;box-shadow:none}.topbar .brand-logo{width:88px!important;height:52px!important;margin:0 auto 0 0}.header-link{padding:8px;font-size:11px}.intro{padding-top:24px}.total-bar{left:0;width:100%;padding-left:16px;padding-right:16px}}
 .quote-summary-card{display:grid;width:360px;padding-bottom:18px}.quote-summary-actions{display:grid;gap:8px;margin-top:4px;padding-top:12px;border-top:1px solid var(--line)}.quote-summary-actions button{width:100%;border-radius:8px;padding:11px 12px;font:700 12px inherit;cursor:pointer}.save-quote-button{border:1px solid #a87318;background:#b6811e;color:#fff}.save-quote-button:hover{background:#936717}.save-draft-button{border:1px solid #d9c29a;background:#fffdf9;color:#795318}.quote-summary-actions button:disabled{opacity:.65;cursor:wait}@media(max-width:1100px){.quote-summary-card{position:static;width:100%;max-width:980px;margin:0 0 12px}.shell{padding-right:28px}}

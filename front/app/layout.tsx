@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 import './components.css';
 import './application.css';
-import { ApplicationShell } from '../components/ApplicationShell';
+import './stone-theme.css';
+import { EstruturaAplicacao } from '../componentes/ApplicationShell';
 
 export const metadata: Metadata = {
   title: 'Inova | Novo orçamento',
@@ -10,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="pt-BR"><body><ApplicationShell>{children}</ApplicationShell></body></html>;
+  return <html lang="pt-BR"><body className="inova-theme"><EstruturaAplicacao>{children}</EstruturaAplicacao></body></html>;
 }

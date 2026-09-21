@@ -1,7 +1,7 @@
 'use client';
 import { useParams } from 'next/navigation';
-import QuoteBuilder from '../../../page';
-export default function EditQuotePage() {
+import EditorOrcamento from '../../../../componentes/orcamento/EditorOrcamento';
+export default function PaginaEditarOrcamento() {
   const { id } = useParams<{ id: string }>();
-  return <QuoteBuilder key={id} />;
+  return <EditorOrcamento key={id} />;
 }

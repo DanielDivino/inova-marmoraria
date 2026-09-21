@@ -24,6 +24,7 @@ back/uploads/*
 # Arquivos do sistema/editor
 .DS_Store
 Thumbs.db
+.~lock.*#
 .idea/
 .vscode/*
 !.vscode/extensions.json
