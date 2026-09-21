@@ -26,11 +26,17 @@ cp .env.example .env
 npm install
 docker compose up -d postgres
 npm run db:generate
-npx prisma migrate deploy --schema back/prisma/schema.prisma
+npm run db:deploy
 npm run db:seed
 ```
 
-Em terminais separados:
+Para iniciar API e interface juntas:
+
+```bash
+npm run dev
+```
+
+Ou em terminais separados:
 
 ```bash
 npm run dev:api
@@ -46,7 +52,8 @@ Troque a senha inicial e `JWT_SECRET` antes de qualquer ambiente que não seja l
 ## Qualidade
 
 ```bash
-npm test                 # testes unitários
+npm run check           # TypeScript e detecção de código sem uso
+npm test                 # testes unitários, incluindo PDF
 npm run test:integration # API, banco e PDF em schema PostgreSQL temporário
 npm run test:e2e         # fluxos completos no navegador em serviços isolados
 npm run test:all         # todas as suítes
@@ -70,3 +77,16 @@ Não edite migrations já aplicadas. Crie uma nova migration para evoluir o esqu
 - [Aplicação web](front/README.md)
 - [API e banco](back/README.md)
 - Especificação inicial: `SDD_Orcamentos_Marmoraria_Inova_v1.1.docx`
+
+## Organização do código
+
+- `back/src/modulos/`: autenticação, catálogo, clientes, usuários, orçamentos, auditoria e notificações.
+- `back/src/compartilhado/`: contratos HTTP e erros comuns.
+- `front/componentes/orcamento/`: editor compartilhado, etapas, desenho, materiais e exportação.
+- `front/utilitarios/`: sessão, conversão de rascunhos e auxiliares de interface.
+- `packages/domain/src/calculos/`: regras de medidas e preços.
+- `packages/domain/src/orcamentos/`: snapshots, prazos, fabricação e nomes de PDF.
+
+Funções de negócio e componentes usam nomes em português. URLs, campos do banco, enums persistidos, chaves de rascunho e nomes exigidos pelo Next.js permanecem compatíveis. `app`, `public`, `prisma/migrations` e os identificadores dos workspaces são convenções técnicas preservadas.
+
+Os comandos Prisma carregam `.env` da raiz; `npm run db:deploy` aplica migrations existentes sem gerar mudanças nem reinicializar o banco.
