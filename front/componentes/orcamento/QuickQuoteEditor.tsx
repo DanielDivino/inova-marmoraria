@@ -8,7 +8,7 @@ import { ComplementosOrcamento } from './QuoteExtras';
 import { ValoresRecortes } from './CutoutValues';
 import { removerGrupoComponentes } from '../../utilitarios/component-groups';
 import { servicoDeRecorte } from '../../utilitarios/service-groups';
-import { aplicarMaterialProjeto, centimetrosRascunhoParaMetros, metrosParaCentimetrosRascunho, criarComponenteRapido } from '../../utilitarios/quick-quote';
+import { aplicarMaterialProjeto, arredondarMedidaParaCima, centimetrosRascunhoParaMetros, metrosParaCentimetrosRascunho, criarComponenteRapido } from '../../utilitarios/quick-quote';
 
 type Service = { id: string; name: string; category: string; billingUnit: 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED'; currentPrice: number };
 type Props = { item: DraftItem; materials: ComponentMaterial[]; material?: ComponentMaterial; services: Service[];
@@ -19,15 +19,25 @@ type Props = { item: DraftItem; materials: ComponentMaterial[]; material?: Compo
 import { formatarMoeda } from '../../utilitarios/formatadores';
 const sides: Exclude<EdgeSide, 'CUSTOM'>[] = ['BACK', 'FRONT', 'LEFT', 'RIGHT'];
 
-function MeterInput({ value, onChange, label, onKeyDown, id }: { value: string; onChange: (value: string) => void; label: string; onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void; id: string }) {
+function MeterInput({ value, onChange, label, onKeyDown, id, arredondar }: { value: string; onChange: (value: string) => void; label: string; onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void; id: string; arredondar?: boolean }) {
   const [text, setText] = useState(() => centimetrosRascunhoParaMetros(value));
   const focused = useRef(false);
   useEffect(() => { if (!focused.current) setText(centimetrosRascunhoParaMetros(value)); }, [value]);
-  return <input id={id} aria-label={label} inputMode="decimal" value={text} placeholder="0,00" onFocus={() => { focused.current = true; }} onBlur={() => { focused.current = false; setText(centimetrosRascunhoParaMetros(value)); }} onChange={event => { setText(event.target.value); onChange(metrosParaCentimetrosRascunho(event.target.value)); }} onKeyDown={onKeyDown} />;
+  return <input id={id} aria-label={label} inputMode="decimal" value={text} placeholder="0,00" onFocus={() => { focused.current = true; }} onBlur={() => {
+    focused.current = false;
+    const arredondado = arredondar ? arredondarMedidaParaCima(value) : value;
+    if (arredondado !== value) onChange(arredondado);
+    setText(centimetrosRascunhoParaMetros(arredondado));
+  }} onChange={event => { setText(event.target.value); onChange(metrosParaCentimetrosRascunho(event.target.value)); }} onKeyDown={onKeyDown} />;
 }
 
 export function EditorOrcamentoRapido({ item, materials, material, services, onChange, area, value, calculateCutout, onCreateService }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [arredondar, setArredondar] = useState(false);
+  const alternarArredondamento = (checked: boolean) => {
+    setArredondar(checked);
+    if (checked) onChange({ components: item.components.map(component => ({ ...component, lengthCm: arredondarMedidaParaCima(component.lengthCm), widthCm: arredondarMedidaParaCima(component.widthCm) })) });
+  };
   const [serviceModalComponentId, setServiceModalComponentId] = useState<string | null>(null);
   const [projectModalCategory, setProjectModalCategory] = useState<'CUTOUTS' | 'OTHER' | null>(null);
   const [creatingService, setCreatingService] = useState(false);
@@ -90,7 +100,10 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
   const opcaoServico = (service: Service) => <label key={service.id}><input type="checkbox" checked={item.serviceIds.includes(service.id)} onChange={event => toggleProjectService(service.id, event.target.checked)} />{service.name}</label>;
   const modalComponent = item.components.find(component => component.id === serviceModalComponentId);
   return <section className="section quick-quote" aria-label="Orçamento Rápido">
-    <div className="quick-heading"><h2>Orçamento Rápido</h2><small>Medidas em metros · Enter avança e adiciona linhas · Tab e Shift + Tab navegam</small></div>
+    <div className="quick-heading">
+      <div><h2>Orçamento Rápido</h2><small>Medidas em metros · Enter avança e adiciona linhas · Tab e Shift + Tab navegam</small></div>
+      <label className="quick-round-toggle" title="Arredonda cada medida para cima, ao múltiplo de 5 cm mais próximo, para vender sempre em m² fechado"><input type="checkbox" checked={arredondar} onChange={event => alternarArredondamento(event.target.checked)} /> M² fechado</label>
+    </div>
     <div className="quick-project-fields"><label>Nome do projeto<input id="project-name" value={item.projectName} onChange={event => onChange({ projectName: event.target.value })} placeholder="Ex.: Cozinha" /></label>
       <SeletorMaterialComponente materials={materials.filter(entry => entry.billingUnit === 'SQUARE_METER')} selected={material} onSelect={materialId => onChange(aplicarMaterialProjeto(item, materialId))} />
     </div>
@@ -98,8 +111,8 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
       {item.components.map((component, index) => <Fragment key={component.id}>
         <tr data-quick-row={component.id}>
           <td><select aria-label={`Tipo da peça ${index + 1}`} value={component.componentType} onChange={event => { const componentType = event.target.value as DraftComponent['componentType']; update(component.id, { componentType, orientation: ['TOP', 'COUNTER', 'BASE', 'VISTA', 'SILL', 'THRESHOLD', 'STEP'].includes(componentType) ? 'HORIZONTAL' : 'VERTICAL' }); }}>{Object.entries(componentTypeLabels).map(([type, label]) => <option value={type} key={type}>{label}</option>)}</select>{component.parentComponentId && <small>↳ {item.components.find(parent => parent.id === component.parentComponentId)?.label || 'Peça principal'}{component.parentSide ? ` · ${rotuloLadoBorda(component.parentSide)}` : ''}</small>}</td>
-          <td><MeterInput id={`quick-${component.id}-length`} label={`Comprimento da peça ${index + 1} (m)`} value={component.lengthCm} onChange={lengthCm => update(component.id, { lengthCm })} onKeyDown={event => enter(event, index, 'length')} /></td>
-          <td><MeterInput id={`quick-${component.id}-width`} label={`Largura da peça ${index + 1} (m)`} value={component.widthCm} onChange={widthCm => update(component.id, { widthCm })} onKeyDown={event => enter(event, index, 'width')} /></td>
+          <td><MeterInput id={`quick-${component.id}-length`} label={`Comprimento da peça ${index + 1} (m)`} value={component.lengthCm} onChange={lengthCm => update(component.id, { lengthCm })} onKeyDown={event => enter(event, index, 'length')} arredondar={arredondar} /></td>
+          <td><MeterInput id={`quick-${component.id}-width`} label={`Largura da peça ${index + 1} (m)`} value={component.widthCm} onChange={widthCm => update(component.id, { widthCm })} onKeyDown={event => enter(event, index, 'width')} arredondar={arredondar} /></td>
           <td><input id={`quick-${component.id}-quantity`} aria-label={`Quantidade da peça ${index + 1}`} type="number" min="1" step="1" value={component.quantity || ''} onChange={event => update(component.id, { quantity: Number(event.target.value) })} onKeyDown={event => enter(event, index, 'quantity')} /></td>
           <td className="quick-number">{area(component).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</td>
           <td className="quick-number"><strong>{formatarMoeda(value(component))}</strong>{component.appliedTotal !== undefined && <small>Valor ajustado</small>}</td>

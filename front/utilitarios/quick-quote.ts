@@ -7,6 +7,13 @@ export function metrosParaCentimetrosRascunho(value: string): string {
   const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) ? String(Math.round(parsed * 100000) / 1000) : value;
 }
+/** Arredonda uma medida (em cm) para cima, para o múltiplo de 5 cm mais próximo, para vender sempre em m² fechado. */
+export function arredondarMedidaParaCima(cmValue: string): string {
+  if (!cmValue.trim()) return cmValue;
+  const parsed = Number(cmValue.replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed <= 0) return cmValue;
+  return String(Math.ceil(parsed / 5) * 5);
+}
 export function centimetrosRascunhoParaMetros(value: string): string {
   if (!value.trim()) return '';
   const parsed = Number(value.replace(',', '.'));
