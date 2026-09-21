@@ -20,4 +20,6 @@ export type DraftItem = {
   serviceQuantities: Record<string, string>;
   serviceAppliedValues: Record<string, string>;
   drawingData?: Record<string, unknown>;
+  /** Orçamento Rápido: arredonda a área de cada peça para cima (múltiplo de 5 cm por lado) só para o cálculo do valor do material — a medida exibida/salva permanece exata. */
+  arredondarM2?: boolean;
 };
