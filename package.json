@@ -12,13 +12,16 @@
     "dev:web": "npm run build --workspace=@inova/domain && npm run dev --workspace=@inova/web",
     "dev:api": "npm run build --workspace=@inova/domain && npm run dev --workspace=@inova/api",
     "build": "npm run db:generate && npm run build --workspace=@inova/domain && npm run build --workspaces --if-present",
-    "test": "vitest run packages/domain/src front/lib back/src/modules/auth/auth.routes.test.ts back/src/modules/quotes/quote.status.test.ts back/src/modules/quotes/quote.schema.test.ts",
+    "test": "vitest run packages/domain/src front/utilitarios back/src",
     "db:generate": "npm run prisma:generate --workspace=@inova/api",
     "db:migrate": "npm run prisma:migrate --workspace=@inova/api",
     "db:seed": "npm run prisma:seed --workspace=@inova/api",
     "test:integration": "node tests/run-isolated.mjs integration",
     "test:e2e": "node tests/run-isolated.mjs e2e",
-    "test:all": "npm test && node tests/run-isolated.mjs all"
+    "test:all": "npm test && node tests/run-isolated.mjs all",
+    "db:deploy": "npm run prisma:deploy --workspace=@inova/api",
+    "check": "npm run build --workspace=@inova/domain && tsc --noEmit --noUnusedLocals --noUnusedParameters -p back/tsconfig.json && tsc --noEmit --noUnusedLocals --noUnusedParameters -p front/tsconfig.json",
+    "dev": "node scripts/desenvolvimento.mjs"
   },
   "engines": {
     "node": ">=22"
