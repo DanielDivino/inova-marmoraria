@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+  <rect width="640" height="480" fill="#efefe7"/>
+  <g fill="none" stroke="#abae9a" stroke-width="2" stroke-linejoin="round">
+    <path d="m320 155 85 48-85 48-85-48 85-48Z"/>
+    <path d="m235 225 85 48 85-48m-170 22 85 48 85-48"/>
+  </g>
+  <text x="320" y="335" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" fill="#787e6c">Amostra em breve</text>
+</svg>

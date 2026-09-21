@@ -1,0 +1,332 @@
+/* Identidade visual compartilhada. Regras restritas à tela preservam a impressão. */
+@media screen {
+  body.inova-theme {
+    --ink: #30342f;
+    --muted: #74766e;
+    --line: #e4e5de;
+    --green: #7c6341;
+    --gold: #b49a70;
+    --soft: #f4f3ee;
+    --surface: #ffffff;
+    --canvas: #f5f5f0;
+    --accent-soft: #f1eade;
+    --forest: #3e5549;
+    --shadow: 0 4px 24px #343d2a06;
+    margin: 0;
+    padding: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .inova-theme ::selection { background: #dfd6c2; color: #30342f; }
+  .inova-theme :is(button, a, input, select, textarea, summary) {
+    transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, color .18s ease;
+  }
+  .inova-theme :focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+  .inova-theme :is(input, select, textarea) { accent-color: var(--forest); color-scheme: light; }
+  .inova-theme :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea) {
+    border: 1px solid #dcded5;
+    border-radius: 9px;
+    background-color: #fff;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13px;
+  }
+  .inova-theme :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select) { min-height: 40px; }
+  .inova-theme textarea { padding: 12px; line-height: 1.6; }
+  .inova-theme input::placeholder, .inova-theme textarea::placeholder { color: #85877f; }
+  .inova-theme :is(input, select, textarea):focus-visible { border-color: #a79577; box-shadow: 0 0 0 3px #ac94661a; }
+  .inova-theme button:disabled { cursor: not-allowed; opacity: .5; }
+  .inova-theme .application-frame { grid-template-columns: 230px minmax(0, 1fr); }
+  .inova-theme .application-sidebar {
+    padding: 28px 18px 0;
+    background: #fafaf6;
+    border-right: 1px solid var(--line);
+  }
+  .inova-theme .application-brand { margin-bottom: 22px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+  .inova-theme .application-brand img { width: 152px; height: 90px; }
+  .inova-theme .sidebar-section-label { padding: 0 12px 10px; font-size: 9px; font-weight: 600; letter-spacing: .13em; color: #838579; }
+  .inova-theme .application-sidebar nav { gap: 7px; }
+  .inova-theme .application-sidebar nav a { min-height: 46px; padding: 12px; border-radius: 9px; font-size: 13px; color: #697063; }
+  .inova-theme .application-sidebar nav a:hover { background: #eeeee6; color: var(--ink); }
+  .inova-theme .application-sidebar nav a.active { background: #e9ede5; color: #354d3d; font-weight: 600; box-shadow: inset 3px 0 #819073; }
+  .inova-theme .sidebar-marble-message {
+    min-height: 200px; margin: auto -18px 0; padding: 36px 30px 28px;
+    background: linear-gradient(150deg, #fafaf600, #eae9dd);
+    color: #858676; font-size: 9px; line-height: 1.9; letter-spacing: .18em;
+  }
+  .inova-theme .sidebar-marble-message::before { background: linear-gradient(137deg, transparent 40%, #b7b8a319 40.3%, transparent 41%), linear-gradient(148deg, transparent 56%, #b0a88c26 56.3%, transparent 56.8%); }
+  .inova-theme .sidebar-marble-message::after { background: linear-gradient(90deg, transparent, #aeab8d66, transparent); }
+  .inova-theme .application-content { background: var(--canvas); }
+  .inova-theme .application-header-actions { min-height: 78px; padding: 14px 32px; background: #fafaf6; border-bottom: 1px solid var(--line); gap: 18px; }
+  .inova-theme .application-header-tabs .client-tabs-bar { width: 100%; min-height: 36px; border-color: #dddcd0; }
+  .inova-theme .client-tabs-label { color: #818373; }
+  .inova-theme .client-tab { background: #efefe8; }
+  .inova-theme .client-tab.active { background: #fff; border-color: #dddcd0; border-bottom-color: #fff; box-shadow: inset 0 2px #a58a5e; }
+  .inova-theme .account-avatar { background: #e8ebdf; color: #536447; width: 34px; height: 34px; font-size: 13px; }
+  .inova-theme .header-account { border-color: var(--line); gap: 11px; }
+  .inova-theme .header-account strong { font-size: 12px; font-weight: 600; }
+  .inova-theme .header-account small { font-size: 10px; }
+  .inova-theme .header-account button { background: #fff; border-color: var(--line); color: #66705f; }
+  .inova-theme .notification-bell { color: #7d806d; background: #efefe7; border-color: #e4e5d8; border-radius: 11px; }
+  .inova-theme .notification-bell:hover { background: #e5e8dc; }
+  .inova-theme .notification-panel { background: #fff; box-shadow: 0 16px 50px #2633221a; border-radius: 16px; }
+
+  /* Mesmo ritmo de títulos, filtros e cartões em todas as páginas. */
+  .inova-theme .application-content :is(.shell, .list-page) { background: transparent; padding: 28px 32px 48px; }
+  .inova-theme .application-content .list-page { max-width: 1440px; }
+  .inova-theme .list-header { position: relative; display: flex; align-items: center; gap: 12px 20px; padding: 0 0 22px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+  .inova-theme .list-header > :is(h1, div) { order: -1; flex: 1 1 50%; }
+  .inova-theme :is(.list-header h1, .project-title-client h1, .intro h1) { color: #303a31; font: 400 clamp(28px, 2.4vw, 36px)/1.2 Georgia, 'Times New Roman', serif; letter-spacing: -.7px; }
+  .inova-theme .list-header a { color: #756445; font-size: 12px; font-weight: 500; }
+  .inova-theme :is(.eyebrow, .catalog-eyebrow) { color: #8b7755 !important; letter-spacing: .16em; font-size: 10px !important; }
+  .inova-theme .catalog-eyebrow { margin-bottom: 7px; }
+  .inova-theme :is(.primary-button, .primary-compact-button, .save-quote-button) {
+    border: 1px solid #3e5549; border-radius: 9px; background: #3e5549; color: #fff;
+    font-family: inherit; font-weight: 600; box-shadow: 0 3px 8px #3e554914;
+  }
+  .inova-theme :is(.primary-button, .primary-compact-button, .save-quote-button):hover:not(:disabled) { background: #30473a; border-color: #30473a; }
+  .inova-theme :is(.secondary-button, .photo-upload-button) { background: #fff; color: #6c604a; border: 1px solid #ddd9cc; border-radius: 8px; min-height: 38px; font-family: inherit; text-decoration: none; }
+  .inova-theme :is(.secondary-button, .photo-upload-button):hover:not(:disabled) { background: #f4f1e9; border-color: #b8aa90; }
+  .inova-theme .text-button { color: #796545; font-weight: 600; text-underline-offset: 4px; }
+  .inova-theme .text-button:hover { color: #454e3c; text-decoration: underline; }
+  .inova-theme .search { padding: 13px 16px; min-height: 46px; border-radius: 10px; background: #fff; box-shadow: var(--shadow); }
+  .inova-theme :is(.material-filter-bar, .showcase-filters) { gap: 8px; }
+  .inova-theme .material-filter-bar { padding: 14px; background: #eeeee6; border: 1px solid #e3e3d9; border-radius: 12px; margin-bottom: 18px; }
+  .inova-theme .quote-filter-panel .material-filter-bar { margin-bottom: 0; }
+  .inova-theme .material-filter-separator { width: 1px; height: 24px; margin: 0 3px; background: #d6d8ce; }
+  .inova-theme :is(.material-filter-bar, .showcase-filters) button { padding: 8px 14px; min-height: 34px; background: #fff; border: 1px solid #dfdfd5; color: #676b5f; font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1.4; border-radius: 999px; }
+  .inova-theme :is(.material-filter-bar, .showcase-filters) button.selected { background: #e6ebdf; border-color: #a6b298; color: #40563b; font-weight: 600; }
+  .inova-theme :is(.material-filter-bar, .showcase-filters) button:hover { border-color: #a6b298; }
+  .inova-theme .admin-tabs { display: flex; width: fit-content; max-width: 100%; padding: 5px; margin-bottom: 22px; gap: 5px; border-radius: 11px; background: #eaece3; }
+  .inova-theme .admin-tabs button { border-color: transparent; background: transparent; padding: 10px 18px; color: #6b7064; font-size: 13px; border-radius: 8px; }
+  .inova-theme .admin-tabs button.selected { background: #fff; color: #354d3d; box-shadow: 0 2px 5px #303a3110; }
+  .inova-theme .catalog-toolbar { gap: 14px; margin-bottom: 22px; }
+  .inova-theme .catalog-notice { margin: -8px 0 18px; padding: 10px 13px; border: 1px solid #cbd9c7; border-radius: 9px; background: #edf4ea; color: #456043; font-size: 12px; }
+  .inova-theme .catalog-toolbar .primary-button { min-height: 46px; padding-inline: 22px; }
+  .inova-theme .catalog-toolbar .catalog-archive-button { display: inline-flex; align-items: center; gap: 8px; min-height: 46px; padding: 10px 14px; white-space: nowrap; }
+  .inova-theme .catalog-archive-button b { display: grid; min-width: 20px; height: 20px; place-items: center; border-radius: 999px; background: #e9ece2; color: #4d6245; font-size: 10px; }
+  .inova-theme .material-admin-grid { grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); gap: 20px; }
+  .inova-theme .material-admin-card { background: #fff; border: 1px solid var(--line); border-radius: 15px; box-shadow: var(--shadow); }
+  .inova-theme .material-admin-card > img { aspect-ratio: 4 / 3; }
+  .inova-theme .material-admin-copy { padding: 16px; gap: 7px; }
+  .inova-theme .material-admin-copy strong { color: #353b32; font-size: 15px; font-weight: 600; }
+  .inova-theme .material-admin-copy b { color: #516446; font-size: 13px; }
+  .inova-theme .material-admin-copy .text-button { padding: 9px 0 0; margin-top: 4px; border-top: 1px solid #efefe9; width: 100%; text-align: left; }
+  .inova-theme :is(.cards, .admin-rows) { gap: 14px; }
+  .inova-theme :is(.saved-quote-card, .detail-card, .admin-rows article, .quote-card) { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
+  .inova-theme .saved-quote-card > .quote-card { padding: 0 0 16px; border: 0; border-radius: 0; box-shadow: none; }
+  .inova-theme .saved-quote-card .detail-actions { padding-top: 14px; border-top: 1px solid #efefe9; }
+  .inova-theme .quote-card strong { font-size: 17px; font-weight: 600; }
+  .inova-theme .quote-card > b { color: #435d4a; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .inova-theme .quote-card small, .inova-theme .admin-rows small { font-size: 12px; line-height: 1.7; }
+  .inova-theme .status-badges .status { border-radius: 999px; padding: 4px 10px; font-size: 10px; }
+  .inova-theme .status-legend { font-size: 10px; gap: 8px 18px; }
+  .inova-theme .quote-filter-row { padding: 16px; background: #eeeee7; border-radius: 12px; margin: 18px 0 24px; }
+  .inova-theme .quote-filter-row label { font-size: 11px; gap: 6px; }
+  .inova-theme .customer-toolbar { grid-template-columns: minmax(0, 1fr) auto; align-items: center; margin-bottom: 22px; gap: 14px; }
+  .inova-theme .customer-toolbar .primary-button { width: auto; padding-inline: 24px; min-height: 46px; }
+  .inova-theme .admin-rows article { padding: 20px 22px; }
+  .inova-theme .admin-rows article strong { font-size: 15px; font-weight: 600; }
+  .inova-theme :is(.inline-form, .admin-form) { background: #eeeee6; padding: 20px; border: 1px solid var(--line); border-radius: 14px; gap: 12px; }
+  .inova-theme .detail-card { margin-bottom: 16px; gap: 8px; }
+  .inova-theme .detail-card.quote-tracking-card, .inova-theme .detail-card.quote-worker-card { padding:14px; margin-bottom:12px; }
+  .inova-theme .detail-card > span { color: #7a785f; letter-spacing: .08em; font-size: 10px; }
+  .inova-theme .detail-total { padding: 24px; margin-top: 22px; background: #e9ede3; border: 1px solid #dce3d3; border-radius: 14px; }
+  .inova-theme .detail-total b { color: #3e5549; font-size: 22px; margin-top: 8px; }
+  .inova-theme :is(.empty, .catalog-empty, .showcase-empty) { background: #fafaf6; border: 1px dashed #d6d9cd; border-radius: 14px; padding: 42px 20px; }
+
+  /* Orçamento: hierarquia clara sem perder a densidade dos campos de medidas. */
+  .inova-theme .project-builder { --ink: #30342f; --muted: #74766e; --line: #e4e5de; --green: #7c6341; }
+  /* O resumo precisa acomodar valores e ações sem quebrar a leitura.
+     Os dois modos usam a mesma coluna, para a mudança ser consistente. */
+  .inova-theme .project-builder .quote-workspace { grid-template-columns: minmax(0, 1fr) minmax(410px, 460px); gap: 18px; }
+  .inova-theme .application-content .project-builder { padding-top: 0; }
+  .inova-theme .project-topbar { padding: 26px 0 22px; }
+  .inova-theme .project-tabs-bar { border-color: #dcded2; }
+  .inova-theme .project-tab { background: #eaece3; border-radius: 9px 9px 0 0; }
+  .inova-theme .project-tab.active { border-color: #dcded2; border-bottom-color: #fff; box-shadow: inset 0 3px #839174; }
+  .inova-theme .project-tab.active [role=tab] { color: #3e5549; }
+  .inova-theme .compact-customer { color: #717668; font-size: 12px; }
+  .inova-theme .quote-mode-switch { padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: #eeeee7; gap: 8px; }
+  .inova-theme .quote-mode-switch button { border-radius: 8px; border-color: transparent; background: transparent; color: #717365; padding: 9px 14px; }
+  .inova-theme .quote-mode-switch button[aria-pressed=true] { background: #fff; color: #3e5549; border-color: #dce0d3; box-shadow: 0 2px 5px #303a3108; }
+  .inova-theme .project-builder .quote-form-column .section { padding: 16px; margin-bottom: 14px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+  .inova-theme .project-builder .project-stage-heading { margin-bottom: 14px; }
+  .inova-theme .project-builder .project-stage-heading h2 { font: 400 23px/1.2 Georgia, serif; color: #303a31; }
+  .inova-theme .project-builder .project-stage-heading p { font-family: inherit; color: #7a7e72; font-size: 12px; }
+  .inova-theme .project-stage-heading .stage-badge { background: #ede8db; color: #806943; width: 34px; height: 34px; flex-basis: 34px; }
+  .inova-theme .project-builder .project-step.current .project-step-number, .inova-theme .project-builder .project-step.completed .project-step-number { background: #607453; }
+  .inova-theme .project-builder .project-step.current .project-step-number { box-shadow: 0 0 0 3px var(--canvas), 0 0 0 4px #b6c0a9; }
+  .inova-theme .project-builder .component-card { border-color: #e3e5db; border-radius: 11px; background: #fcfcf9; }
+  .inova-theme .project-builder .selected-stone-card { border: 1px solid #e0e1d6; background: #f6f5ef; border-radius: 11px; padding-bottom: 10px; }
+  .inova-theme .project-builder .selected-stone-image-frame { aspect-ratio: 2 / 1; max-height: 180px; }
+  .inova-theme .project-builder .selected-stone-card > strong { padding-top: 8px; font-size: 12px; }
+  .inova-theme .project-builder .selected-stone-card > small { color: #787b6b; }
+  .inova-theme .project-builder .component-material-picker { border-color: #dcded5; border-radius: 9px; }
+  .inova-theme .project-builder .component-material-picker .picker-summary { min-height: 40px; border-radius: 9px; }
+  .inova-theme .project-builder :is(.secondary-button, .primary-compact-button) { border-radius: 8px; min-height: 38px; padding: 8px 12px; font-size: 12px; }
+  .inova-theme .project-builder .primary-compact-button { background: #3e5549; border-color: #3e5549; }
+  .inova-theme .project-builder .map-side { border-radius: 7px; background: #f0f1e9; }
+  .inova-theme .project-builder .map-side.has-finishes { background: #ece8dc; color: #6a6147; }
+  .inova-theme .project-builder .map-side[aria-expanded=true] { border-color: #9b9b7f; }
+  .inova-theme .project-builder :is(.compact-menu, .edge-menu, .partial, .quote-values-total) { background: #f3f4ec; border-radius: 9px; }
+  .inova-theme .project-builder .quote-summary-card { background: #fff; border: 1px solid #dce1d2; border-radius: 14px; box-shadow: var(--shadow); padding: 20px; gap: 14px; }
+  .inova-theme .project-builder .quote-summary-card > strong { font: 400 23px/1.3 Georgia, serif; color: #303a31; }
+  .inova-theme .project-builder .quote-summary-card .summary-grand-total { background: #edf1e7; color: #3c523b; padding: 16px 12px; border-radius: 9px; margin: 6px 0; align-items: center; }
+  .inova-theme .summary-grand-total b { font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .inova-theme .project-builder .save-quote-button { background: #3e5549; border-color: #3e5549; border-radius: 9px; min-height: 44px; font-size: 13px; }
+  .inova-theme .project-builder .quote-visual-card { margin: -20px -20px 0; border-radius: 14px 14px 0 0; background: linear-gradient(90deg, #273525aa, #27352500), url('/ambientes/cozinha.png') center / cover; }
+  .inova-theme .quick-heading h2 { font: 400 21px/1.2 Georgia, serif; color: #303a31; }
+  .inova-theme .quick-table-scroll { border: 1px solid #e3e5da; border-radius: 11px; }
+  .inova-theme .quick-table th { background: #eff1e8; color: #666e5c; padding: 9px 7px; font-weight: 600; }
+  .inova-theme .quick-table td { padding: 7px 6px; border-bottom-color: #ebede4; background: #fff; }
+  .inova-theme .quick-table tbody tr:last-child td { border-bottom: 0; }
+  .inova-theme .quick-table tbody tr:hover td { background: #fafbf6; }
+  .inova-theme .quick-table .quick-number { padding-top: 16px; font-variant-numeric: tabular-nums; }
+  .inova-theme .quick-project-actions button { border-radius: 8px; border-color: #dadccc; background: #f6f6ef; color: #667156; }
+
+  /* Diálogos e painéis seguem os mesmos materiais e contraste. */
+  .inova-theme :is(.catalog-modal, .quick-services-modal, .customer-dialog) { background: #fff; color: var(--ink); border: 1px solid #e0e2d8; border-radius: 18px; padding: 24px; box-shadow: 0 24px 80px #27312129; }
+  .inova-theme :is(.catalog-modal-backdrop, .quick-services-modal-backdrop) { background: #29352866; backdrop-filter: blur(4px); }
+  .inova-theme .customer-dialog::backdrop { background: #29352866; backdrop-filter: blur(4px); }
+  .inova-theme :is(.material-picker-panel, .environment-picker-panel) { border-color: #dfe2d4; border-radius: 12px; box-shadow: 0 12px 32px #2935281a; }
+  .inova-theme .catalog-modal .admin-form { border: 0; }
+  .inova-theme .catalog-archive-modal { width: min(700px, 100%); }
+  .inova-theme .catalog-archive-help { margin: -4px 0 16px; color: var(--muted); font-size: 12px; }
+  .inova-theme .catalog-archive-list { display: grid; gap: 10px; max-height: min(520px, 58dvh); overflow-y: auto; padding-right: 3px; }
+  .inova-theme .catalog-archive-list article { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fafbf7; }
+  .inova-theme .catalog-archive-list img { width: 54px; height: 54px; border-radius: 7px; }
+  .inova-theme .catalog-archive-list strong, .inova-theme .catalog-archive-list small { display: block; overflow-wrap: anywhere; }
+  .inova-theme .catalog-archive-list strong { color: var(--ink); font-size: 13px; }
+  .inova-theme .catalog-archive-list small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+  .inova-theme .catalog-archive-list .secondary-button { padding: 8px 10px; font-size: 11px; }
+  .inova-theme .quick-modal-simple-list, .inova-theme .quick-modal-service-list fieldset { border-color: var(--line); border-radius: 10px; background: #fafbf6; }
+
+  /* Vitrine com fotografia existente, amostras e o mesmo tom mineral. */
+  .inova-theme .showcase-page { background: var(--canvas); color: var(--ink); }
+  .inova-theme .showcase-hero { margin: 24px 32px 0; border-radius: 18px; min-height: 650px; padding: 56px 40px 220px; }
+  .inova-theme .showcase-hero h1 { font-size: clamp(38px, 4.3vw, 64px); line-height: 1.02; }
+  .inova-theme .showcase-hero-copy p { font-family: inherit; font-size: 13px; line-height: 1.7; }
+  .inova-theme .showcase-eyebrow { letter-spacing: .2em; }
+  .inova-theme .showcase-featured { background: #fafaf2ed; border-color: #ffffffa6; top: 36px; right: 28px; width: 43%; grid-template-columns: 90px minmax(0, 1fr); padding: 18px; gap: 16px; box-shadow: 0 12px 40px #25351f26; }
+  .inova-theme .showcase-featured > img { width: 90px; height: 120px; }
+  .inova-theme .showcase-featured h2 { font-size: 27px; color: #333c30; }
+  .inova-theme .showcase-featured-facts { gap: 12px; flex-wrap: wrap; }
+  .inova-theme .showcase-featured-actions { flex-wrap: wrap; }
+  .inova-theme .showcase-collection-strip { background: #fafaf2ed; box-shadow: 0 8px 24px #25351f1a; border-radius: 13px; }
+  .inova-theme .showcase-catalog { padding: 44px 32px; max-width: 1440px; }
+  .inova-theme .showcase-catalog h2 { color: #303a31; font-size: 36px; }
+  .inova-theme .showcase-catalog-heading p { font-family: inherit; font-size: 13px; line-height: 1.7; }
+  .inova-theme .showcase-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 18px; }
+  .inova-theme .showcase-material-card { background: #fff; border-color: var(--line); border-radius: 13px; padding: 10px; gap: 8px; box-shadow: var(--shadow); }
+  .inova-theme .showcase-material-card img { aspect-ratio: 4 / 3; }
+  .inova-theme .showcase-material-card strong { font-size: 13px; }
+  .inova-theme .showcase-material-card.selected { border-color: #9aa987; box-shadow: 0 0 0 1px #9aa987; }
+  .inova-theme .showcase-search { background: #fff; border-color: #dcded5; border-radius: 10px; padding: 0 12px; }
+  .inova-theme .showcase-search input { border: 0; min-height: 42px; }
+  .inova-theme .showcase-dark-button { background: #3e5549; border-color: #3e5549; }
+  .inova-theme .ambientes-showcase { margin: 0 32px 40px; padding: 28px; background: #eeefe7; border: 1px solid var(--line); border-radius: 18px; max-width: none; }
+  .inova-theme .ambientes-heading h2 { color: #303a31; }
+  .inova-theme .ambientes-figure { border-radius: 12px; }
+  .inova-theme .ambientes-tabs button[aria-pressed=true] { color: #526746; border-color: #839174; }
+  .inova-theme .ambientes-swatches button[aria-pressed=true] img { outline-color: #839174; }
+
+  /* Login com imagem da marca e tipografia disponível localmente. */
+  .inova-theme .login-screen { padding: 48px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr); gap: 7vw; background: var(--canvas); min-height: 100dvh; }
+  .inova-theme .login-atmosphere { position: relative; display: flex; align-items: flex-end; align-self: stretch; width: 100%; min-height: 560px; border-radius: 22px; padding: 48px; overflow: hidden; color: #fff; background: linear-gradient(0deg, #223023cc, #22302300 75%), url('/ambientes/cozinha.png') center / cover; }
+  .inova-theme .login-atmosphere h2 { font: 400 clamp(36px, 4vw, 60px)/1.08 Georgia, serif; margin: 16px 0; letter-spacing: -1px; }
+  .inova-theme .login-atmosphere p { color: #eff0e5; max-width: 350px; line-height: 1.7; font-size: 13px; }
+  .inova-theme .login-atmosphere small { font-size: 10px; letter-spacing: .2em; color: #e9e6d5; }
+  .inova-theme .login-card { justify-self: start; width: min(100%, 400px); padding: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+  .inova-theme .login-card h1 { font: 400 37px/1.15 Georgia, serif; color: #303a31; margin: 14px 0; }
+  .inova-theme .login-help { font-size: 14px; line-height: 1.7; margin-bottom: 28px; }
+  .inova-theme .login-card input { min-height: 48px; margin-top: 8px; }
+  .inova-theme .login-card label { margin-top: 20px; font-weight: 500; font-size: 13px; }
+  .inova-theme .login-card .primary-button { min-height: 48px; margin-top: 26px; font-size: 14px; }
+  .inova-theme .login-card > small { margin-top: 22px; font-size: 11px; }
+}
+
+@media screen and (max-width: 1280px) {
+  .inova-theme .project-builder .quote-workspace { grid-template-columns: minmax(0, 1fr); }
+  .inova-theme .project-builder .quote-summary-card { position: static; max-height: none; }
+}
+@media screen and (max-width: 1180px) {
+  .inova-theme .application-frame { grid-template-columns: 206px minmax(0, 1fr); }
+  .inova-theme .application-sidebar { padding-inline: 12px; }
+  .inova-theme .application-sidebar nav a { font-size: 12px; gap: 9px; }
+  .inova-theme .showcase-hero { padding-inline: 28px; }
+  .inova-theme .showcase-featured { position: relative; inset: auto; width: 100%; margin-top: 28px; grid-template-columns: 90px minmax(0, 1fr); }
+  .inova-theme .showcase-hero { padding-bottom: 210px; }
+  .inova-theme .showcase-featured-facts { margin-block: 10px; }
+}
+@media screen and (max-width: 760px) {
+  .inova-theme .application-frame { display: block; }
+  .inova-theme .application-sidebar { display: flex; flex-direction: column; gap: 8px; height: auto; padding: 12px 16px; border-right: 0; }
+  .inova-theme .application-brand { align-self: flex-start; padding: 0; margin: 0; border: 0; }
+  .inova-theme .application-brand img { width: 98px; height: 52px; }
+  .inova-theme .sidebar-section-label, .inova-theme .sidebar-marble-message { display: none; }
+  .inova-theme .application-sidebar nav { display: flex; flex-wrap: nowrap; width: 100%; overflow-x: auto; gap: 5px; padding-bottom: 3px; scrollbar-width: thin; }
+  .inova-theme .application-sidebar nav a { flex: 0 0 auto; min-height: 40px; padding: 10px 12px; font-size: 12px; white-space: nowrap; }
+  .inova-theme .application-sidebar nav a.active { box-shadow: inset 0 -2px #819073; }
+  .inova-theme .application-header-actions { padding: 12px 16px; gap: 10px; min-height: 64px; flex-wrap: wrap; }
+  .inova-theme .application-header-tabs { order: 2; flex-basis: 100%; }
+  .inova-theme .application-header-tabs:empty { display: none; }
+  .inova-theme .application-header-tabs .client-tabs-bar { width: 100%; }
+  .inova-theme .header-account { padding-left: 10px; }
+  .inova-theme .header-account strong { max-width: 145px; }
+  .inova-theme .showcase-header-request { margin-right: auto; font-size: 10px; padding-inline: 10px; }
+  .inova-theme .application-content :is(.shell, .list-page) { padding: 22px 16px 36px; }
+  .inova-theme .list-header { gap: 12px; padding-bottom: 18px; margin-bottom: 20px; }
+  .inova-theme .list-header > :is(h1, div) { flex-basis: 100%; }
+  .inova-theme .list-header a:last-child { margin-left: auto; }
+  .inova-theme .project-topbar { padding: 22px 0 18px; }
+  .inova-theme .project-builder .quote-form-column .section, .inova-theme .project-builder .quote-summary-card { padding: 16px; border-radius: 12px; }
+  .inova-theme .project-builder .quote-summary-card { position: static; max-height: none; }
+  .inova-theme .project-builder .quote-visual-card { margin: -16px -16px 0; }
+  .inova-theme .project-builder .project-stage-heading h2 { font-size: 21px; }
+  .inova-theme .quote-mode-switch { flex-wrap: wrap; }
+  .inova-theme .customer-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .inova-theme .customer-toolbar .primary-button { justify-self: start; }
+  .inova-theme .admin-tabs button { padding: 9px 12px; font-size: 12px; }
+  .inova-theme .material-admin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .inova-theme .material-admin-copy { padding: 12px; }
+  .inova-theme .material-admin-copy strong { font-size: 13px; overflow-wrap: anywhere; }
+  .inova-theme .material-filter-bar { padding: 10px; }
+  .inova-theme .material-filter-bar > span { flex-basis: 100%; }
+  .inova-theme .material-filter-separator { display: none; }
+  .inova-theme :is(.saved-quote-card, .detail-card, .admin-rows article) { padding: 16px; }
+  .inova-theme .admin-rows article { gap: 9px; }
+  .inova-theme .quote-filter-row label { flex: 1 1 160px; }
+  .inova-theme .quote-filter-row select { width: 100%; min-width: 0; }
+  .inova-theme :is(.catalog-modal, .quick-services-modal, .customer-dialog) { padding: 18px; border-radius: 14px; }
+  .inova-theme .catalog-archive-list article { grid-template-columns: 46px minmax(0, 1fr); gap: 9px; }
+  .inova-theme .catalog-archive-list img { width: 46px; height: 46px; }
+  .inova-theme .catalog-archive-list .secondary-button { grid-column: 2; justify-self: start; }
+  .inova-theme .showcase-hero { margin: 16px 16px 0; padding: 34px 24px 220px; border-radius: 14px; }
+  .inova-theme .showcase-hero h1 { font-size: 44px; }
+  .inova-theme .showcase-featured { grid-template-columns: 76px minmax(0, 1fr); padding: 12px; gap: 12px; }
+  .inova-theme .showcase-featured > img { width: 76px; height: 100px; }
+  .inova-theme .showcase-featured h2 { font-size: 23px; }
+  .inova-theme .showcase-collection-strip { padding: 14px; gap: 12px; }
+  .inova-theme .showcase-strip-heading { flex-basis: 90px; }
+  .inova-theme .showcase-catalog { padding: 32px 16px; }
+  .inova-theme .showcase-catalog h2 { font-size: 30px; }
+  .inova-theme .showcase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .inova-theme .showcase-toolbar { align-items: stretch; flex-direction: column; }
+  .inova-theme .showcase-search { width: 100%; }
+  .inova-theme .ambientes-showcase { margin: 0 16px 28px; padding: 18px; border-radius: 14px; }
+  .inova-theme .ambientes-heading h2 { font-size: 28px; }
+  .inova-theme .login-screen { grid-template-columns: minmax(0, 1fr); padding: 28px 24px; gap: 32px; }
+  .inova-theme .login-atmosphere { min-height: 220px; padding: 26px; border-radius: 16px; }
+  .inova-theme .login-atmosphere h2 { font-size: 34px; margin-bottom: 0; }
+  .inova-theme .login-atmosphere p { display: none; }
+  .inova-theme .login-card { justify-self: center; padding-bottom: 16px; }
+}
+@media screen and (prefers-reduced-motion: reduce) {
+  .inova-theme :is(button, a, input, select, textarea, summary) { transition: none; }
+  .inova-theme .showcase-material-card:hover { transform: none; }
+}
