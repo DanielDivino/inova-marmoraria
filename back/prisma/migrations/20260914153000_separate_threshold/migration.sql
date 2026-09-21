@@ -1,0 +1,1 @@
+ALTER TYPE "ComponentType" ADD VALUE 'THRESHOLD';
