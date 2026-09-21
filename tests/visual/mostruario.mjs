@@ -62,7 +62,10 @@ try {
   const area = page.locator('#ambientes');
   const foto = area.locator('.ambientes-photo');
   const original = area.getByLabel('Ver original', { exact: true });
-  const escolher = nome => area.getByRole('button', { name: nome, exact: true }).click();
+  // Os cartões de pedra agora mostram nome + preço no mesmo botão, então o nome
+  // acessível deixou de ser exato; localizamos pelo texto do <span> do nome.
+  const escolher = nome => area.locator(`.ambientes-tabs button:text-is("${nome}"), .ambientes-swatches button:has(span:text-is("${nome}"))`).click();
+  const pedraSelecionada = nome => area.locator('.ambientes-swatches button').filter({ has: page.locator(`span:text-is("${nome}")`) });
   await escolher('Preto São Gabriel');
   await page.waitForFunction(() => document.querySelector('.ambientes-photo')?.getAttribute('aria-label')?.includes('Preto São Gabriel'));
   for (const largura of [1440, 768, 390]) {
@@ -94,7 +97,7 @@ try {
   await area.screenshot({ path: resolve(saida, 'cozinha-clara-mobile.png') });
   await page.setViewportSize({ width: 1440, height: 1050 });
   await area.screenshot({ path: resolve(saida, 'cozinha-clara-desktop.png') });
-  assert.equal(await area.getByRole('button', { name: 'Calacata', exact: true }).getAttribute('aria-pressed'), 'true');
+  assert.equal(await pedraSelecionada('Calacata').getAttribute('aria-pressed'), 'true');
   await area.getByLabel('Buscar pedra', { exact: true }).fill('sao');
   assert.equal(await area.locator('.ambientes-swatches button').count(), 1);
   await area.getByLabel('Buscar pedra', { exact: true }).fill('nao-existe');
