@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calcularComponente, calcularAcabamentoBorda, calcularTotalPix, projetoTemDesenho, dadosEntradaProjeto } from '@inova/domain';
-import { aplicarMaterialProjeto, duplicarComponenteRapido, metrosParaCentimetrosRascunho, prepararItemRapido, criarComponenteRapido } from './quick-quote';
+import { aplicarMaterialProjeto, arredondarMedidaParaCima, duplicarComponenteRapido, metrosParaCentimetrosRascunho, prepararItemRapido, criarComponenteRapido } from './quick-quote';
 import { rascunhoParaEntradaItem } from './saved-quote';
 import type { DraftItem } from '../componentes/orcamento/types';
 
@@ -35,6 +35,11 @@ describe('Orçamento rápido compartilha o modelo detalhado', () => {
     expect(amounts.reduce((n, row) => n + row.billedQuantity, 0)).toBe(1);
     expect(amounts.reduce((n, row) => n + row.subtotal, 0)).toBe(85);
     expect(calcularTotalPix(1350.5)).toBe(1282.98);
+  });
+  it.each([
+    ['19', '20'], ['34', '35'], ['96', '100'], ['6', '10'], ['10', '10'], ['210', '210'], ['', ''],
+  ])('arredonda %s cm para cima, múltiplo de 5 (m² fechado)', (entrada, esperado) => {
+    expect(arredondarMedidaParaCima(entrada)).toBe(esperado);
   });
   it('abrir o desenho preserva os dados, exige conclusão e mantém compatibilidade legada', () => {
     expect(projetoTemDesenho(undefined)).toBe(true);
