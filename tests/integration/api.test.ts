@@ -1,11 +1,11 @@
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { buildApp } from '../../back/src/app.js';
+import { criarAplicacao } from '../../back/src/app.js';
 import { prisma } from '../../back/src/config/prisma.js';
-import { savedItemInput } from '@inova/domain';
+import { itemSalvoParaEntrada } from '@inova/domain';
 
 if (!/^inova_test_[a-f0-9]{32}$/.test(process.env.INOVA_TEST_SCHEMA ?? '') || new URL(process.env.DATABASE_URL!).searchParams.get('schema') !== process.env.INOVA_TEST_SCHEMA) throw new Error('Banco de testes isolado obrigatório.');
-const app = await buildApp();
+const app = await criarAplicacao();
 let headers: Record<string, string>, attendant: Record<string, string>, catalog: any;
 let counter = 0;
 const request = async (method: 'GET' | 'POST' | 'PATCH' | 'PUT', url: string, payload?: unknown, auth = headers) => app.inject({ method, url, headers: auth, ...(payload === undefined ? {} : { payload: payload as object }) });
@@ -22,7 +22,7 @@ async function quote(extra = {}) {
   const response = await request('POST', '/quotes', { customerId: client.id, items: [item()], ...extra });
   expect(response.statusCode, response.body).toBe(201); return response.json();
 }
-const editInput = (quote: any) => ({ customerId: quote.customerId, expectedUpdatedAt: quote.updatedAt, discountAmount: quote.discountAmount, notes: quote.notes, validUntil: quote.validUntil, items: quote.items.map(savedItemInput) });
+const editInput = (quote: any) => ({ customerId: quote.customerId, expectedUpdatedAt: quote.updatedAt, discountAmount: quote.discountAmount, notes: quote.notes, validUntil: quote.validUntil, items: quote.items.map(itemSalvoParaEntrada) });
 beforeAll(async () => {
   await app.ready();
   const login = await request('POST', '/auth/login', { email: 'admin@inovamarmoraria.local', password: process.env.SEED_PASSWORD }, {});
@@ -71,6 +71,96 @@ describe('Clientes, validações e histórico', () => {
 });
 
 describe('Orçamento, snapshots, edição e relacionamentos', () => {
+  it('calcula materiais por componente e preserva seus preços ao editar e reabrir', async () => {
+    const otherResponse = await request('POST', '/catalog/materials', { name: `Pedra por componente ${++counter}`, category: 'Granito', billingUnit: 'SQUARE_METER', unitPrice: 1000 });
+    expect(otherResponse.statusCode, otherResponse.body).toBe(201);
+    const secondMaterial = otherResponse.json();
+    const vista = catalog.services.find((entry: any) => entry.name === 'Vista');
+    const first = item().components[0];
+    let q = await quote({ items: [item({ components: [
+      { ...first, materialId: item().materialId, edges: [{ side: 'FRONT', serviceId: vista.id, heightMm: 50 }] },
+      { ...first, componentType: 'THRESHOLD', label: 'Soleira', materialId: secondMaterial.id, lengthMm: 1000, widthMm: 200, edges: [{ side: 'FRONT', serviceId: vista.id, heightMm: 50 }] },
+    ] })] });
+    expect(q.items[0].materialSubtotal).toBe(920);
+    expect(q.netTotal).toBe(1030);
+    expect(q.items[0].components.map((piece: any) => piece.unitPriceSnapshot)).toEqual([600, 1000]);
+    expect(q.items[0].components.map((piece: any) => piece.edges[0].appliedSubtotal)).toEqual([60, 50]);
+    await request('POST', `/catalog/materials/${secondMaterial.id}/prices`, { amount: 1500 });
+    const input = editInput(q);
+    input.items[0].components[1].widthMm = 300;
+    const response = await request('PUT', `/quotes/${q.id}`, input);
+    expect(response.statusCode, response.body).toBe(200);
+    q = response.json();
+    expect(q.netTotal).toBe(1130);
+    expect(q.items[0].components[1]).toMatchObject({ materialId: secondMaterial.id, unitPriceSnapshot: 1000, subtotal: 300 });
+    const reopened = (await request('GET', `/quotes/${q.id}`)).json();
+    expect(itemSalvoParaEntrada(reopened.items[0]).components.map((piece: any) => piece.materialId)).toEqual([item().materialId, secondMaterial.id]);
+    const pdf = await request('GET', `/quotes/${q.id}/pdf?individualPrices=true`);
+    expect(pdf.statusCode).toBe(200);
+    const text = execFileSync('pdftotext', ['-', '-'], { input: pdf.rawPayload, encoding: 'utf8' });
+    expect(text).toContain(secondMaterial.name);
+    expect(text).toContain('MATERIAIS POR COMPONENTE');
+    const duplicate = await request('POST', `/quotes/${q.id}/duplicate`);
+    expect(duplicate.statusCode, duplicate.body).toBe(201);
+    expect(duplicate.json().items[0].components[1]).toMatchObject({ materialId: secondMaterial.id, unitPriceSnapshot: 1500, subtotal: 450 });
+    const invalid = editInput(q);
+    invalid.items[0].components[1].materialId = 'cm00000000000000000000000';
+    expect((await request('PUT', `/quotes/${q.id}`, invalid)).statusCode).toBe(422);
+  });
+  it('cobra vista pela pedra, edita pelo snapshot e duplica com as medidas e preço vigente', async () => {
+    const vista = catalog.services.find((entry: any) => entry.name === 'Vista');
+    const skirt = catalog.services.find((entry: any) => entry.name === 'Saia');
+    const miter = catalog.services.find((entry: any) => entry.name.includes('45°') && entry.name.includes('Granito'));
+    let q = await quote({ items: [item({ components: [{ ...item().components[0], quantity: 2, edges: [
+      { side: 'FRONT', serviceId: vista.id, lengthMm: 1000, heightMm: 50, quantity: 2 },
+      { side: 'FRONT', serviceId: skirt.id, heightMm: 100 },
+      { side: 'FRONT', serviceId: miter.id },
+    ] }] })] });
+    const edges = () => q.items[0].components[0].edges;
+    expect(edges().find((edge: any) => edge.serviceId === vista.id)).toMatchObject({ billingUnitSnapshot: 'SQUARE_METER', unitPriceSnapshot: 600, billedQuantity: 0.2, calculatedSubtotal: 120, heightMm: 50 });
+    expect(q.netTotal).toBe(2080);
+    const input = editInput(q);
+    delete input.items[0].components[0].edges[0].heightMm;
+    const invalid = await request('PUT', `/quotes/${q.id}`, input);
+    expect(invalid.statusCode).toBe(422);
+    expect(invalid.body).toContain('largura da vista');
+    await request('POST', `/catalog/materials/${q.items[0].materialId}/prices`, { amount: 900 });
+    try {
+      input.items[0].components[0].edges[0].heightMm = 100;
+      const response = await request('PUT', `/quotes/${q.id}`, input);
+      expect(response.statusCode, response.body).toBe(200);
+      q = response.json();
+      expect(edges()).toHaveLength(3);
+      expect(edges().find((edge: any) => edge.serviceId === vista.id)).toMatchObject({ unitPriceSnapshot: 600, calculatedSubtotal: 240 });
+      expect(edges().find((edge: any) => edge.serviceId === skirt.id).calculatedSubtotal).toBe(240);
+      expect(edges().find((edge: any) => edge.serviceId === miter.id).calculatedSubtotal).toBe(280);
+      const duplicate = await request('POST', `/quotes/${q.id}/duplicate`);
+      expect(duplicate.statusCode, duplicate.body).toBe(201);
+      // Duplicating creates a new quote at current catalog prices; editing keeps the original snapshot.
+      expect(duplicate.json().items[0].components[0].edges.find((edge: any) => edge.serviceId === vista.id)).toMatchObject({ heightMm: 100, billedQuantity: 0.4, unitPriceSnapshot: 900, calculatedSubtotal: 360 });
+    } finally { await request('POST', `/catalog/materials/${q.items[0].materialId}/prices`, { amount: 600 }); }
+  });
+  it.each(['FRONT', 'LEFT'])('calcula e preserva 45 graus + saia no lado %s independentemente', async (side) => {
+    const miter = catalog.services.find((entry: any) => entry.name.includes('45°') && entry.name.includes('Granito'));
+    const skirt = catalog.services.find((entry: any) => entry.name === 'Saia');
+    const lengthM = side === 'FRONT' ? 2 : 0.6;
+    let q = await quote({ items: [item({ components: [{ ...item().components[0], quantity: 2, edges: [
+      { side, serviceId: miter.id }, { side, serviceId: skirt.id, lengthMm: 500, heightMm: 100 },
+    ] }] })] });
+    const edges = () => q.items[0].components[0].edges;
+    expect(edges().find((edge: any) => edge.serviceId === miter.id)).toMatchObject({ billingUnitSnapshot: 'LINEAR_METER', billedQuantity: lengthM * 2, calculatedSubtotal: lengthM * 2 * miter.currentPrice });
+    expect(edges().find((edge: any) => edge.serviceId === skirt.id)).toMatchObject({ billingUnitSnapshot: 'SQUARE_METER', billedQuantity: 0.1, calculatedSubtotal: 60 });
+    const input = editInput(q);
+    input.items[0].components[0].edges.find((edge: any) => edge.serviceId === skirt.id)!.heightMm = 200;
+    const response = await request('PUT', `/quotes/${q.id}`, input);
+    expect(response.statusCode, response.body).toBe(200); q = response.json();
+    expect(edges()).toHaveLength(2);
+    expect(edges().find((edge: any) => edge.serviceId === miter.id).calculatedSubtotal).toBe(lengthM * 2 * miter.currentPrice);
+    expect(edges().find((edge: any) => edge.serviceId === skirt.id).calculatedSubtotal).toBe(120);
+    const duplicate = await request('POST', `/quotes/${q.id}/duplicate`);
+    expect(duplicate.statusCode).toBe(201);
+    expect(duplicate.json().items[0].components[0].edges).toHaveLength(2);
+  });
   it('aplica valores manuais em componentes, bordas, recortes e serviços, mais desconto global', async () => {
     const edge = catalog.services.find((entry: any) => entry.name.includes('Meia Cana'));
     const cut = catalog.services.find((entry: any) => entry.name === 'Furo de Cuba');
@@ -140,7 +230,7 @@ describe('Orçamento, snapshots, edição e relacionamentos', () => {
     const response = await request('GET', `/quotes/${q.id}/pdf`);
     expect(response.statusCode).toBe(200); expect(response.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
     const text = execFileSync('pdftotext', ['-', '-'], { input: response.rawPayload, encoding: 'utf8' });
-    expect(text).toContain('975,31'); expect(text).not.toContain('987,65'); expect(text).not.toContain('600,00');
+    expect(text).toContain('975,31'); expect(text).toContain('987,65'); expect(text).toContain('TOTAL DO PROJETO'); expect(text).not.toContain('600,00');
   });
 });
 
