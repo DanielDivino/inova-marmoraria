@@ -32,15 +32,33 @@ const strategies: Record<BillingUnit, Strategy> = {
   FIXED: () => 1
 };
 
-export function calculateLine(input: CalculationInput): CalculationResult {
+export function calcularLinha(input: CalculationInput): CalculationResult {
   const unitPrice = nonNegative(input.unitPrice, 'Preço');
   const billedQuantity = strategies[input.billingUnit](input);
   return { billedQuantity, subtotal: roundCurrency(billedQuantity * unitPrice) };
 }
 
-export function calculateQuoteTotal(subtotals: number[], discount = 0): number {
+/** Arredonda a área total do serviço antes de aplicar o preço por m². */
+export function calcularLinhaServico(input: CalculationInput & { serviceName?: string }): CalculationResult {
+  const name = input.serviceName?.toLocaleLowerCase('pt-BR') ?? '';
+  const increment = name.includes('jateado') ? 1 : name.includes('rebaixo italiano') ? 0.5 : undefined;
+  if (increment && input.billingUnit === 'SQUARE_METER') {
+    const area = nonNegative(strategies.SQUARE_METER(input), 'Área');
+    // Medidas em mm têm precisão de seis casas em m²; elimina ruído de ponto flutuante.
+    const normalizedArea = Math.round(area * 1_000_000) / 1_000_000;
+    return calcularLinha({ ...input, billedQuantity: Math.ceil(normalizedArea / increment) * increment });
+  }
+  return calcularLinha(input);
+}
+
+export function calcularTotalOrcamento(subtotals: number[], discount = 0): number {
   const gross = subtotals.reduce((sum, subtotal) => sum + nonNegative(subtotal, 'Subtotal'), 0);
   const validDiscount = nonNegative(discount, 'Desconto');
   if (validDiscount > gross) throw new Error('O desconto não pode ser maior que o total bruto.');
   return roundCurrency(gross - validDiscount);
+}
+
+export function calcularTotalPix(total: number): number {
+  const cents = Math.round(nonNegative(total, 'Total') * 100);
+  return Math.round(cents * 95 / 100) / 100;
 }
