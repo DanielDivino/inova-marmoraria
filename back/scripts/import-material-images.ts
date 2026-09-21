@@ -105,9 +105,9 @@ async function main() {
     report.associated.push(`${requestedName} → ${material.name}`);
   }
 
-  const workspace = resolve(process.cwd(), '..');
+  const seedAssets = resolve(process.cwd(), 'scripts', 'seed-assets');
   for (const sample of additionalSamples) {
-    const source = join(workspace, sample.file);
+    const source = join(seedAssets, sample.file);
     try { await stat(source); } catch { report.skipped.push(`${sample.file} (arquivo ausente)`); continue; }
     let material = await findMaterial(sample.name);
     if (material && sample.replaceName && material.name !== sample.name) {
