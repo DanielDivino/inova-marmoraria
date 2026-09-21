@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api } from '../../lib/api';
+import { api } from '../../utilitarios/api';
 
 export type QuoteLink = { id: string; number: string; customerId: string; customer: { id: string; name: string; phone: string }; items?: { projectName?: string | null }[] };
-export function QuoteLinker({ value, onChange }: { value: QuoteLink | null; onChange: (value: QuoteLink | null) => void }) {
+export function VincularOrcamento({ value, onChange }: { value: QuoteLink | null; onChange: (value: QuoteLink | null) => void }) {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<QuoteLink[]>([]);

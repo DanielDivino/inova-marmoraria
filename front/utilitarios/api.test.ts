@@ -61,8 +61,8 @@ describe('sessão da aplicação', () => {
       return path.endsWith('/pdf') ? new Response('%PDF-1.3', { headers: { 'content-type': 'application/pdf' } }) : response(200, { ok: true });
     });
     vi.stubGlobal('fetch', fetch);
-    const { api, apiFile } = await import('./api');
-    const [data, file] = await Promise.all([api('/quotes'), apiFile('/quotes/example/pdf')]);
+    const { api, buscarArquivoApi } = await import('./api');
+    const [data, file] = await Promise.all([api('/quotes'), buscarArquivoApi('/quotes/example/pdf')]);
     expect(data).toEqual({ ok: true });
     expect(await file.text()).toBe('%PDF-1.3');
     expect(fetch.mock.calls.filter(([path]) => path.endsWith('/auth/refresh'))).toHaveLength(1);
@@ -92,11 +92,11 @@ describe('sessão da aplicação', () => {
   it('sair limpa credenciais e cache somente após encerrar o cookie no backend', async () => {
     const fetch = vi.fn().mockResolvedValue(response(200, { ok: true }));
     vi.stubGlobal('fetch', fetch);
-    const { setSession, logout } = await import('./api');
-    setSession('token', user);
+    const { definirSessao, encerrarSessao } = await import('./api');
+    definirSessao('token', user);
     sessionStorage.setItem('inova_catalog_cache_v1', 'catalog');
     localStorage.setItem('inova_quote_draft_v2:internal-user', 'draft');
-    await logout();
+    await encerrarSessao();
     expect(fetch).toHaveBeenCalledWith('/api/auth/logout', expect.objectContaining({ method: 'POST', credentials: 'include' }));
     expect(localStorage.getItem('inova_user')).toBeNull();
     expect(localStorage.getItem('inova_access_token')).toBeNull();
@@ -113,11 +113,11 @@ describe('sessão da aplicação', () => {
       if (path.endsWith('/auth/logout')) return Promise.resolve(response(200, { ok: true }));
       return Promise.resolve(response(401, {}));
     }));
-    const { api, logout } = await import('./api');
+    const { api, encerrarSessao } = await import('./api');
     const pending = api('/quotes');
     const assertion = expect(pending).rejects.toThrow('Sessão encerrada.');
     await started;
-    await logout();
+    await encerrarSessao();
     finishRefresh(response(200, { accessToken: 'too-late', user }));
     await assertion;
     expect(localStorage.getItem('inova_access_token')).toBeNull();

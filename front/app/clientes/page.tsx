@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { api } from '../../lib/api';
+import { api } from '../../utilitarios/api';
 
 type Customer = { id: string; name: string; phone: string; document?: string | null; email?: string | null; address?: string | null; quotes?: { number: string; createdAt: string; status: string; items: { materialNameSnapshot: string; productType: { name: string } }[] }[] };
 type CustomerForm = { name: string; phone: string; document: string; email: string; address: string; neighborhood: string; city: string; postalCode: string; complement: string; notes: string };

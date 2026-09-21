@@ -10,11 +10,11 @@ let sessionVersion = 0;
 let signingOut = false;
 
 export function token() { return typeof window === 'undefined' ? null : localStorage.getItem('inova_access_token'); }
-export function setSession(accessToken: string, user: SessionUser) {
+export function definirSessao(accessToken: string, user: SessionUser) {
   localStorage.setItem('inova_access_token', accessToken);
   localStorage.setItem('inova_user', JSON.stringify(user));
 }
-function clearSession() {
+function limparSessao() {
   sessionVersion += 1;
   localStorage.removeItem('inova_access_token');
   localStorage.removeItem('inova_user');
@@ -38,54 +38,54 @@ async function request(path: string, init: RequestInit = {}) {
     throw new Error('Não foi possível conectar ao servidor da Inova. Verifique a conexão e tente novamente.');
   } finally { window.clearTimeout(timeout); init.signal?.removeEventListener('abort', cancel); }
 }
-async function responseError(response: Response) {
+async function erroResposta(response: Response) {
   const body = await response.json().catch(() => ({}));
   return new ApiError(body.message ?? 'Não foi possível concluir a operação.', response.status);
 }
-async function refreshSession() {
+async function renovarSessao() {
   if (!refreshPromise) {
     const version = sessionVersion;
     refreshPromise = (async () => {
       const response = await request('/auth/refresh', { method: 'POST' });
-      if (!response.ok) throw await responseError(response);
+      if (!response.ok) throw await erroResposta(response);
       const session = await response.json() as Session;
       // A renovação iniciada antes de sair não pode reativar a sessão.
       if (version !== sessionVersion || signingOut) throw new ApiError('Sessão encerrada.', 401);
-      setSession(session.accessToken, session.user);
+      definirSessao(session.accessToken, session.user);
     })().finally(() => { refreshPromise = null; });
   }
   return refreshPromise;
 }
-async function authenticatedRequest(path: string, init: RequestInit = {}) {
+async function requisicaoAutenticada(path: string, init: RequestInit = {}) {
   let response = await request(path, init);
   if (response.status === 401 && !['/auth/login', '/auth/logout', '/auth/refresh'].includes(path)) {
     try {
-      await refreshSession();
+      await renovarSessao();
       response = await request(path, init);
-      if (response.status === 401) throw await responseError(response);
+      if (response.status === 401) throw await erroResposta(response);
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
-        clearSession();
+        limparSessao();
         if (window.location.pathname !== '/login') window.location.replace('/login');
       }
       throw cause;
     }
   }
-  if (!response.ok) throw await responseError(response);
+  if (!response.ok) throw await erroResposta(response);
   return response;
 }
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  return (await authenticatedRequest(path, init)).json() as Promise<T>;
+  return (await requisicaoAutenticada(path, init)).json() as Promise<T>;
 }
-export async function apiFile(path: string): Promise<Blob> {
-  return (await authenticatedRequest(path)).blob();
+export async function buscarArquivoApi(path: string): Promise<Blob> {
+  return (await requisicaoAutenticada(path)).blob();
 }
-export async function logout() {
+export async function encerrarSessao() {
   signingOut = true;
   sessionVersion += 1;
   try {
     // O backend limpa o cookie HttpOnly; depois removemos as credenciais locais.
     await api('/auth/logout', { method: 'POST' });
-    clearSession();
+    limparSessao();
   } finally { signingOut = false; }
 }
