@@ -2,24 +2,17 @@
 
 Sistema interno para criar, revisar, aprovar e acompanhar orçamentos e projetos da Inova Marmoraria.
 
-O projeto é um monorepo Node.js: a interface e a API permanecem separadas, mas usam as mesmas regras de domínio para cálculos, descontos, prazos e apresentação de status.
+O projeto é um monorepo Node.js: a interface e a API permanecem separadas, mas usam as mesmas regras de domínio (`packages/domain/`) para cálculos, descontos, prazos e apresentação de status.
 
-## Estrutura
+## Como iniciar o projeto
 
-| Diretório | Responsabilidade |
-| --- | --- |
-| [`front/`](front/README.md) | Aplicação web Next.js: orçamento, clientes, histórico, desenhos 2D e interface administrativa. |
-| [`back/`](back/README.md) | API Fastify, Prisma, autenticação, PDF, banco e migrations. |
-| `packages/domain/` | Regras de cálculo, snapshots de valores, prazos úteis e status compartilhados. |
-| `tests/` | Testes de integração, E2E e executor isolado de banco temporário. |
-
-## Requisitos
+### Requisitos
 
 - Node.js 22 ou superior
 - Docker e Docker Compose (PostgreSQL local)
 - `pdftotext` opcional, somente para o teste legado de persistência/PDF
 
-## Início rápido
+### Primeira vez
 
 ```bash
 cp .env.example .env
@@ -29,6 +22,8 @@ npm run db:generate
 npm run db:deploy
 npm run db:seed
 ```
+
+### Rodar em desenvolvimento
 
 Para iniciar API e interface juntas:
 
@@ -44,21 +39,40 @@ npm run dev:web
 ```
 
 - Web: <http://localhost:3001>
-- API: <http://localhost:3333>
+- API: <http://localhost:3333> (verificação de disponibilidade em `GET /health`)
 - Acesso inicial de desenvolvimento: `admin@inovamarmoraria.local` / `Inova@123`
 
 Troque a senha inicial e `JWT_SECRET` antes de qualquer ambiente que não seja local.
+
+## Estrutura
+
+| Diretório | Responsabilidade |
+| --- | --- |
+| [`front/`](front/README.md) | Aplicação web Next.js: orçamento, clientes, histórico, desenhos 2D e interface administrativa. |
+| [`back/`](back/README.md) | API Fastify, Prisma, autenticação, PDF, banco e migrations. |
+| `packages/domain/` | Regras de cálculo, snapshots de valores, prazos úteis e status compartilhados entre front e back. |
+| `tests/` | Testes de integração, E2E, roteiros visuais e executor isolado de banco temporário. |
+| `documentacao/` | Especificações, notas de revisão e ativos de marca (logo original). |
+| `scripts/` | Scripts de orquestração do monorepo (dev combinado, wrapper do Prisma, teste visual em lote). |
 
 ## Qualidade
 
 ```bash
 npm run check           # TypeScript e detecção de código sem uso
-npm test                 # testes unitários, incluindo PDF
+npm test                 # testes unitários, incluindo PDF (colocados junto do código-fonte)
 npm run test:integration # API, banco e PDF em schema PostgreSQL temporário
-npm run test:e2e         # fluxos completos no navegador em serviços isolados
-npm run test:all         # todas as suítes
+npm run test:e2e         # fluxos completos no navegador em serviços isolados (Playwright)
+npm run test:visual      # roteiros visuais com API mockada, sem tocar banco/API reais
+npm run test:all         # unitários + integração + E2E
 npm run build            # typecheck e build de produção
 ```
+
+Camadas de teste:
+
+- **Unitários** (`*.test.ts` ao lado do código, `packages/domain/src/`, `front/utilitarios/`, `back/src/`): regras puras, rodam com Vitest, sem banco nem rede.
+- **Integração** (`tests/integration/*.test.ts`): sobem a API real contra um schema PostgreSQL descartável.
+- **E2E** (`tests/e2e/*.spec.ts`): fluxo completo no navegador (Playwright) contra API e web reais, em portas isoladas.
+- **Visuais** (`tests/visual/*.mjs`): roteiros Playwright standalone que interceptam toda chamada `/api/**` — não iniciam backend nem gravam dados reais. Cada um também roda isolado com `node tests/visual/<arquivo>.mjs`.
 
 Os testes de integração e E2E criam um schema PostgreSQL temporário com prefixo seguro e o removem automaticamente; os dados de desenvolvimento não são alterados.
 
@@ -72,20 +86,31 @@ npm run db:migrate
 
 Não edite migrations já aplicadas. Crie uma nova migration para evoluir o esquema sem apagar registros existentes.
 
+## Imagens e outros ativos
+
+- `front/public/`: tudo que o Next.js precisa servir diretamente (logo da interface, ambientes do mostruário, placeholder de pedra).
+- `back/assets/`: ativos lidos do disco pela API (hoje, só o logo usado na geração de PDF).
+- `back/scripts/seed-assets/`: fotos de amostras de material e o zip de origem (`granitos-e-materiais-inova.zip`, ignorado pelo git) usados apenas para popular o catálogo via `npm run catalog:import-images --workspace=@inova/api`. Não são servidos pela aplicação.
+- `back/uploads/materials/`: destino em runtime das imagens do catálogo (gerado pelo importador, ignorado pelo git — nunca versionar).
+- `documentacao/marca/`: fonte canônica do logo em alta resolução. As cópias em `front/public/` e `back/assets/` são mantidas manualmente em sincronia porque cada uma é lida por um processo diferente em tempo de execução.
+
 ## Documentação adicional
 
 - [Aplicação web](front/README.md)
 - [API e banco](back/README.md)
-- Especificação inicial: `SDD_Orcamentos_Marmoraria_Inova_v1.1.docx`
+- Especificação: `SDD_Inova_Marmoraria_v2.docx`
+- Notas de revisão: [`documentacao/`](documentacao/)
 
 ## Organização do código
 
-- `back/src/modulos/`: autenticação, catálogo, clientes, usuários, orçamentos, auditoria e notificações.
+- `back/src/modulos/`: autenticação, catálogo, clientes, usuários, orçamentos, desenhos, auditoria e notificações.
 - `back/src/compartilhado/`: contratos HTTP e erros comuns.
 - `front/componentes/orcamento/`: editor compartilhado, etapas, desenho, materiais e exportação.
-- `front/utilitarios/`: sessão, conversão de rascunhos e auxiliares de interface.
+- `front/componentes/desenhos/`: editor técnico 2D.
+- `front/utilitarios/`: sessão, conversão de rascunhos, formatação e auxiliares de interface.
 - `packages/domain/src/calculos/`: regras de medidas e preços.
 - `packages/domain/src/orcamentos/`: snapshots, prazos, fabricação e nomes de PDF.
+- `packages/domain/src/tecnico/`: geometria, comandos e schema do desenho técnico.
 
 Funções de negócio e componentes usam nomes em português. URLs, campos do banco, enums persistidos, chaves de rascunho e nomes exigidos pelo Next.js permanecem compatíveis. `app`, `public`, `prisma/migrations` e os identificadores dos workspaces são convenções técnicas preservadas.
 
