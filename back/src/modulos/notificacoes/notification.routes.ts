@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { businessDaysBetween, deadlineStatus, type DeadlineStatus } from '@inova/domain';
+import { diasUteisEntre, situacaoPrazoInterno, type DeadlineStatus } from '@inova/domain';
 import { prisma } from '../../config/prisma.js';
 
 const labels: Record<DeadlineStatus, string> = { NORMAL: 'No prazo', NEAR_DUE: 'Próximo do prazo', DUE_TODAY: 'Vence hoje', OVERDUE: 'Atrasado' };
 
-export async function registerNotificationRoutes(app: FastifyInstance) {
+export async function registrarRotasNotificacoes(app: FastifyInstance) {
   app.get('/deadlines', { preHandler: [app.authenticate] }, async () => {
     const today = new Date();
     const quotes = await prisma.quote.findMany({
@@ -14,8 +14,8 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
     });
     const alerts = quotes.map((quote) => {
       const dueDate = quote.dueDate!;
-      const status = deadlineStatus(dueDate, today);
-      return { id: quote.id, number: quote.number, customerName: quote.customerNameSnapshot, projectName: quote.items[0]?.projectName ?? null, dueDate, status, label: labels[status], businessDays: businessDaysBetween(today, dueDate) };
+      const status = situacaoPrazoInterno(dueDate, today);
+      return { id: quote.id, number: quote.number, customerName: quote.customerNameSnapshot, projectName: quote.items[0]?.projectName ?? null, dueDate, status, label: labels[status], businessDays: diasUteisEntre(today, dueDate) };
     }).filter((alert) => alert.status !== 'NORMAL');
     return { count: alerts.length, alerts };
   });

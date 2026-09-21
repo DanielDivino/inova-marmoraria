@@ -19,13 +19,28 @@ const aliases: Record<string, string[]> = {
   'Branco Itaúnas': ['Branco Itaúna'],
   'Super Nanoglass': ['Super Nano'],
   'Ônix Translúcido': ['Translúcido'],
-  'Preto Stellar': ['Stellar']
+  'Preto Stellar': ['Stellar'],
+  'Preto Blackstone': ['Black Stone'],
+  'Calacatta Gold': ['Calacata Golden']
 };
 
 const inferredCategories: Record<string, string> = {
   'Ultracompacto Branco': 'Industrializados / Importados',
-  'Nero Marquina': 'Mármores'
+  'Nero Marquina': 'Mármores',
+  'Alaska': 'Granitos',
+  'Grey Claro': 'Industrializados / Importados',
+  'Grey Escuro': 'Industrializados / Importados'
 };
+
+const additionalSamples = [
+  { name: 'Preto Blackstone', file: 'preto-blackstone.png', replaceName: true },
+  { name: 'Calacatta Gold', file: 'calacata-golden.png' },
+  { name: 'Preto Escovado', file: 'preto-escovado.png' },
+  { name: 'Taj Mahal', file: 'taj-mahal.png' },
+  { name: 'Alaska', file: 'alaska.png' },
+  { name: 'Grey Claro', file: 'grey-claro.png' },
+  { name: 'Grey Escuro', file: 'grey-escuro.png' }
+] as const;
 
 const normalizeFileName = (value: string) => value
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -42,11 +57,24 @@ async function findMaterial(name: string) {
   });
 }
 
+async function ensureImage(material: { id: string; name: string }, source: string, requestedName: string) {
+  const storedName = normalizeFileName(basename(source));
+  const destination = join(resolve(process.cwd(), 'uploads', 'materials'), storedName);
+  try { await stat(destination); } catch { await copyFile(source, destination); }
+  const url = `/uploads/materials/${storedName}`;
+  await prisma.$transaction(async (tx) => {
+    await tx.materialImage.updateMany({ where: { materialId: material.id }, data: { isPrimary: false } });
+    const existingImage = await tx.materialImage.findFirst({ where: { materialId: material.id, url } });
+    if (existingImage) await tx.materialImage.update({ where: { id: existingImage.id }, data: { alt: requestedName, isPrimary: true } });
+    else await tx.materialImage.create({ data: { materialId: material.id, url, alt: requestedName, isPrimary: true } });
+  });
+  return url;
+}
+
 async function main() {
   const manifestPath = resolve(sourceDirectory, 'materiais.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as SourceMaterial[];
-  const uploadDirectory = resolve(process.cwd(), 'uploads', 'materials');
-  await mkdir(uploadDirectory, { recursive: true });
+  await mkdir(resolve(process.cwd(), 'uploads', 'materials'), { recursive: true });
 
   const report = { associated: [] as string[], createdPending: [] as string[], skipped: [] as string[] };
 
@@ -73,18 +101,32 @@ async function main() {
       report.createdPending.push(material.name);
     }
 
-    const storedName = normalizeFileName(basename(entry.arquivo));
-    const destination = join(uploadDirectory, storedName);
-    try { await stat(destination); } catch { await copyFile(source, destination); }
-
-    const url = `/uploads/materials/${storedName}`;
-    await prisma.$transaction(async (tx) => {
-      await tx.materialImage.updateMany({ where: { materialId: material!.id }, data: { isPrimary: false } });
-      const existingImage = await tx.materialImage.findFirst({ where: { materialId: material!.id, url } });
-      if (existingImage) await tx.materialImage.update({ where: { id: existingImage.id }, data: { alt: requestedName, isPrimary: true } });
-      else await tx.materialImage.create({ data: { materialId: material!.id, url, alt: requestedName, isPrimary: true } });
-    });
+    await ensureImage(material!, source, requestedName);
     report.associated.push(`${requestedName} → ${material.name}`);
+  }
+
+  const workspace = resolve(process.cwd(), '..');
+  for (const sample of additionalSamples) {
+    const source = join(workspace, sample.file);
+    try { await stat(source); } catch { report.skipped.push(`${sample.file} (arquivo ausente)`); continue; }
+    let material = await findMaterial(sample.name);
+    if (material && sample.replaceName && material.name !== sample.name) {
+      material = await prisma.material.update({ where: { id: material.id }, data: { name: sample.name } });
+    }
+    if (!material) {
+      material = await prisma.material.create({
+        data: {
+          name: sample.name,
+          category: inferredCategories[sample.name] ?? 'A confirmar',
+          billingUnit: BillingUnit.SQUARE_METER,
+          isActive: false,
+          prices: { create: { amount: 0 } }
+        }
+      });
+      report.createdPending.push(material.name);
+    }
+    await ensureImage(material, source, sample.name);
+    report.associated.push(`${sample.name} → ${material.name}`);
   }
 
   console.log(JSON.stringify(report, null, 2));
