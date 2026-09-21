@@ -18,6 +18,7 @@
     "db:seed": "npm run prisma:seed --workspace=@inova/api",
     "test:integration": "node tests/run-isolated.mjs integration",
     "test:e2e": "node tests/run-isolated.mjs e2e",
+    "test:visual": "npm run build --workspace=@inova/domain && node scripts/executar-testes-visuais.mjs",
     "test:all": "npm test && node tests/run-isolated.mjs all",
     "db:deploy": "npm run prisma:deploy --workspace=@inova/api",
     "check": "npm run build --workspace=@inova/domain && tsc --noEmit --noUnusedLocals --noUnusedParameters -p back/tsconfig.json && tsc --noEmit --noUnusedLocals --noUnusedParameters -p front/tsconfig.json",

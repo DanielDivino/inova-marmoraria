@@ -1,9 +1,10 @@
 import { chromium, expect } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
 // Exercises the real form with a mocked API, without changing customer records.
-const browser = await chromium.launch({ executablePath: '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome' });
+const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
+const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? (existsSync(installed) ? installed : undefined) });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 const errors = [];
 let saved;
@@ -22,13 +23,21 @@ await page.route('**/api/**', async route => {
     saved = route.request().postDataJSON();
     return route.fulfill({ status: 201, json: { id: 'saved' } });
   }
+  if (path === '/api/quotes/saved/status') return route.fulfill({ json: { status: 'SENT' } });
   if (path === '/api/quotes') return route.fulfill({ json: { data: [], total: 0 } });
   return route.fulfill({ status: 404, json: {} });
 });
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
-  await page.locator('.customer-section .search').fill('Cliente');
+  await page.locator('#project-name').waitFor();
+  // A "compact-customer" bar opens a modal dialog for picking the customer; a fresh
+  // project also starts in "Orçamento Rápido" mode, so the detailed editor (with the
+  // classic component/measurements flow) must be selected explicitly.
+  await page.getByRole('button', { name: 'Selecionar cliente' }).click();
+  await page.locator('.customer-dialog .search').fill('Cliente');
   await page.locator('.customer-result').click();
+  await page.getByRole('button', { name: 'Orçamento com Desenho / Detalhado' }).click();
+  await page.locator('.project-step').nth(0).getByRole('button').click();
   await page.locator('#project-name').fill('Rodabancas por lado');
   await page.locator('.material-picker summary').click();
   await page.locator('.material-picker-panel button').click();
@@ -66,15 +75,20 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.reload();
-  await root.getByRole('button', { name: 'Editar acabamentos — Direito', exact: true }).click();
+  await page.locator('#project-name').waitFor();
+  await page.locator('.map-side-right').filter({ hasText: 'Rodabanca' }).waitFor();
+  // The last edited side reopens automatically after reload; only click if it collapsed.
+  if ((await root.locator('.map-side-right').getAttribute('aria-expanded')) !== 'true') {
+    await root.getByRole('button', { name: 'Editar acabamentos — Direito', exact: true }).click();
+  }
   await expect(root.getByLabel('Altura da rodabanca (cm)')).toHaveValue('10');
   await expect(root.getByLabel('Editar comprimento — Rodabanca')).toContainText('50 cm');
-  await page.locator('.project-step').nth(4).getByRole('button').click();
+  await page.locator('.project-step').nth(2).getByRole('button').click();
   await expect(page.locator('.technical-drawing .drawing-description')).toHaveCount(3);
   await expect(page.locator('.manufacturing-description')).toContainText('50 × 10 cm');
   await expect(page.locator('.manufacturing-description')).toContainText('70 × 10 cm');
   await page.locator('.technical-drawing').screenshot({ path: '.test-artifacts/rodabanca-lados/desenho.png' });
-  await page.locator('.project-step').nth(2).getByRole('button').click();
+  await page.locator('.project-step').nth(0).getByRole('button').click();
   await root.getByRole('button', { name: 'Editar acabamentos — Superior', exact: true }).click();
   await root.getByRole('button', { name: 'Remover Rodabanca — Superior', exact: true }).click();
   await expect(page.locator('.quote-summary-card')).not.toContainText('Rodabanca · Superior');
