@@ -1,0 +1,69 @@
+import type { ComponentType, EdgeSide } from '../calculos/components.js';
+
+export const edgeSideLabels: Record<EdgeSide, string> = { BACK: 'Superior', FRONT: 'Inferior', LEFT: 'Esquerdo', RIGHT: 'Direito', CUSTOM: 'Personalizado' };
+
+/** Use centimetres when two decimal places in metres would lose millimetres. */
+export function rotuloMedidaDesenho(millimeters: number, unit: 'auto' | 'cm' = 'auto') {
+  if (unit === 'cm' || millimeters % 10 !== 0) return `${(millimeters / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} cm`;
+  return `${(millimeters / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m`;
+}
+
+/** Side-strip dimensions go above the outline, leaving the centre for the 45° symbol. */
+export function posicaoMedidaFaixa(side: string, strip: { x: number; y: number; width: number; height: number }, outlineTop: number, lane = 0) {
+  return side === 'LEFT' || side === 'RIGHT'
+    ? { x: strip.x + strip.width / 2, y: outlineTop - 8 - lane * 12, anchor: 'middle' as const }
+    : { x: strip.x + strip.width + 5, y: strip.y + strip.height / 2, anchor: 'start' as const };
+}
+
+export const isMiterFinish = (name: string) => /(?:^|\D)45\s*(?:°|º|graus?)/i.test(name);
+// Section of the two stone strips meeting at a 45-degree miter.
+export const miterJointPath = 'M0 0 H20 V18 H12 V8 H0 Z M20 0 L12 8';
+
+export function posicaoMarcadorMeiaEsquadria(side: EdgeSide, piece: { x: number; y: number; width: number; height: number }, extra = { left: 0, right: 0, top: 0, bottom: 0 }) {
+  const centerX = piece.x + piece.width / 2;
+  const centerY = piece.y + piece.height / 2;
+  switch (side) {
+    case 'BACK': return { x: centerX - 20, y: piece.y - extra.top - 16, rotation: 0 };
+    case 'FRONT': return { x: centerX - 20, y: piece.y + piece.height + extra.bottom + 4, rotation: 0 };
+    case 'LEFT': return { x: piece.x - extra.left - 16, y: centerY + 20, rotation: -90 };
+    case 'RIGHT': return { x: piece.x + piece.width + extra.right + 16, y: centerY - 20, rotation: 90 };
+    default: return null;
+  }
+}
+
+/** Persisted enums and legacy drawing keys share the same user-facing names. */
+export function rotuloLadoBorda(side: string): string {
+  const key = side.trim().toUpperCase();
+  return edgeSideLabels[(key === 'UP' ? 'BACK' : key === 'DOWN' ? 'FRONT' : key) as EdgeSide] ?? edgeSideLabels.CUSTOM;
+}
+
+export const componentTypeLabels: Record<ComponentType, string> = { TOP: 'Tampo', COUNTER: 'Bancada', BASE: 'Base', VISTA: 'Vista', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', SIDE_LEFT: `Lateral — ${edgeSideLabels.LEFT}`, SIDE_RIGHT: `Lateral — ${edgeSideLabels.RIGHT}`, SILL: 'Peitoril', THRESHOLD: 'Soleira', STEP: 'Degrau', OTHER: 'Componente' };
+export type ComponentDrawingDetail = { parentComponentIndex?: number; parentSide?: Exclude<EdgeSide, 'CUSTOM'>; sillDetailMm?: number; sillDetailHeightMm?: number };
+
+/** Indexes follow the persisted component sort order, so recreated IDs are safe. */
+export function detalheDesenhoComponente(data: unknown, index: number): ComponentDrawingDetail {
+  if (!data || typeof data !== 'object' || !('componentDetails' in data) || !Array.isArray(data.componentDetails)) return {};
+  const detail = data.componentDetails[index];
+  if (!detail || typeof detail !== 'object') return {};
+  return {
+    ...(Number.isInteger(detail.parentComponentIndex) && detail.parentComponentIndex >= 0 && detail.parentComponentIndex < index ? { parentComponentIndex: detail.parentComponentIndex } : {}),
+    ...(['BACK', 'FRONT', 'LEFT', 'RIGHT'].includes(detail.parentSide) ? { parentSide: detail.parentSide } : {}),
+    ...(Number.isInteger(detail.sillDetailMm) && detail.sillDetailMm > 0 ? { sillDetailMm: detail.sillDetailMm } : {}),
+    ...(Number.isInteger(detail.sillDetailHeightMm) && detail.sillDetailHeightMm > 0 ? { sillDetailHeightMm: detail.sillDetailHeightMm } : {}),
+  };
+}
+
+export function nomeExibicaoComponente(component: { label?: string; componentType?: string }): string {
+  return component.label?.trim() || componentTypeLabels[component.componentType as ComponentType] || 'Componente';
+}
+
+/** Visual only: widen very thin pieces while keeping the drawing inside its cell. */
+export function escalasDesenhoTecnico(lengthMm: number, widthMm: number, extra: { left: number; right: number; top: number; bottom: number }, maxWidth: number, maxHeight: number, minimumSize = 24) {
+  const maxX = maxWidth / (lengthMm + extra.left + extra.right);
+  const maxY = maxHeight / (widthMm + extra.top + extra.bottom);
+  const proportional = Math.min(maxX, maxY);
+  return {
+    scaleX: Math.min(maxX, Math.max(proportional, minimumSize / lengthMm)),
+    scaleY: Math.min(maxY, Math.max(proportional, minimumSize / widthMm)),
+  };
+}

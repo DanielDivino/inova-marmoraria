@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { savedItemInput, type SavedQuoteItem } from './snapshot.js';
-import { canEditQuote } from './presentation.js';
+import { itemSalvoParaEntrada, type SavedQuoteItem } from './snapshot.js';
+import { podeEditarOrcamento } from './presentation.js';
 
 const item: SavedQuoteItem = {
   id: 'item-1', materialId: 'material', productTypeId: 'product', materialNameSnapshot: 'Pedra', billingUnitSnapshot: 'SQUARE_METER', unitPriceSnapshot: '600', calculationMode: 'DIMENSIONS', quantity: 1, billedQuantity: '0.76', total: '500',
@@ -11,14 +11,14 @@ const item: SavedQuoteItem = {
 };
 describe('Saved quote input', () => {
   it('preserves manual and zero values without applying new overrides', () => {
-    const input = savedItemInput(item);
+    const input = itemSalvoParaEntrada(item);
     expect(input.components[0].appliedTotal).toBe(850);
     expect(input.components[0].edges[0].appliedSubtotal).toBe(200);
     expect(input.cutouts[0].appliedSubtotal).toBe(0);
     expect(input.services[0].appliedSubtotal).toBeUndefined();
   });
   it('keeps quantities, orientation, partial skirt geometry and cutout links', () => {
-    const input = savedItemInput(item);
+    const input = itemSalvoParaEntrada(item);
     expect(input.components[0].quantity).toBe(2);
     expect(input.components[0].orientation).toBe('VERTICAL');
     expect(input.components[0].edges[0]).toMatchObject({ lengthMm: 950, heightMm: 100, quantity: 2 });
@@ -26,17 +26,17 @@ describe('Saved quote input', () => {
     expect(input.components[0].id).toBe('component-1');
   });
   it('does not attach an orphan cutout to another component', () => {
-    expect(savedItemInput({ ...item, cutouts: [{ ...item.cutouts[0], componentId: 'deleted' }] }).cutouts[0].componentIndex).toBeUndefined();
+    expect(itemSalvoParaEntrada({ ...item, cutouts: [{ ...item.cutouts[0], componentId: 'deleted' }] }).cutouts[0].componentIndex).toBeUndefined();
   });
   it('preserves manual-area records without inventing drawings', () => {
-    const input = savedItemInput({ ...item, calculationMode: 'MANUAL_M2', components: [], billedQuantity: '2.4', manualJustification: 'Área acordada' });
+    const input = itemSalvoParaEntrada({ ...item, calculationMode: 'MANUAL_M2', components: [], billedQuantity: '2.4', manualJustification: 'Área acordada' });
     expect(input.billedQuantity).toBe(2.4); expect(input.components).toEqual([]);
     expect(input.manualJustification).toBe('Área acordada');
   });
   it('only permits editing open records, including rework', () => {
-    expect(canEditQuote({ status: 'SENT' })).toBe(true);
-    expect(canEditQuote({ status: 'APPROVED', executionStatus: 'REWORK' })).toBe(true);
-    expect(canEditQuote({ status: 'APPROVED', executionStatus: 'COMPLETED' })).toBe(false);
-    expect(canEditQuote({ status: 'REJECTED' })).toBe(false);
+    expect(podeEditarOrcamento({ status: 'SENT' })).toBe(true);
+    expect(podeEditarOrcamento({ status: 'APPROVED', executionStatus: 'REWORK' })).toBe(true);
+    expect(podeEditarOrcamento({ status: 'APPROVED', executionStatus: 'COMPLETED' })).toBe(false);
+    expect(podeEditarOrcamento({ status: 'REJECTED' })).toBe(false);
   });
 });

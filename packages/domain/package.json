@@ -5,6 +5,8 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }, "./technical": { "types": "./dist/tecnico/index.d.ts", "default": "./dist/tecnico/index.js" } },
+  "dependencies": { "zod": "^3.24.2" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run"
