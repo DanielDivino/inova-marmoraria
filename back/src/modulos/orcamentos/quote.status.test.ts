@@ -1,8 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import { registerQuoteRoutes } from './quote.routes.js';
+import { registrarRotasOrcamentos } from './quote.routes.js';
 import { prisma } from '../../config/prisma.js';
-import { AppError } from '../../shared/http.js';
+import { AppError } from '../../compartilhado/http.js';
 
 vi.mock('../../config/prisma.js', () => ({ prisma: {
   quote: { findUnique: vi.fn(), update: vi.fn() }, auditLog: { create: vi.fn() }, $transaction: vi.fn(),
@@ -17,7 +17,7 @@ beforeEach(async () => {
   app = Fastify();
   app.decorate('authenticate', async (request: any) => { request.user = { id: 'internal-user', role: 'ADMIN' }; });
   app.setErrorHandler((error, _request, reply) => reply.status(error instanceof AppError ? error.statusCode : 500).send({ message: error instanceof Error ? error.message : 'Erro interno' }));
-  await app.register(registerQuoteRoutes, { prefix: '/quotes' });
+  await app.register(registrarRotasOrcamentos, { prefix: '/quotes' });
 });
 afterEach(async () => { await app.close(); });
 const change = (payload: object) => app.inject({ method: 'PATCH', url: `/quotes/${quote.id}/status`, payload });

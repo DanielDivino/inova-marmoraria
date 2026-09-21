@@ -7,10 +7,11 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc --noEmit",
     "start": "tsx src/server.ts",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "node ../scripts/prisma.mjs generate",
+    "prisma:migrate": "node ../scripts/prisma.mjs migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
-    "catalog:import-images": "tsx scripts/import-material-images.ts"
+    "catalog:import-images": "tsx scripts/import-material-images.ts",
+    "prisma:deploy": "node ../scripts/prisma.mjs migrate deploy"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

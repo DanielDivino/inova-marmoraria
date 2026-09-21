@@ -1,10 +1,10 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { registerAuth } from './auth.plugin.js';
-import { registerAuthRoutes } from './auth.routes.js';
+import { registrarAutenticacao } from './auth.plugin.js';
+import { registrarRotasAutenticacao } from './auth.routes.js';
 import { prisma } from '../../config/prisma.js';
-import { AppError } from '../../shared/http.js';
+import { AppError } from '../../compartilhado/http.js';
 
 vi.mock('../../config/prisma.js', () => ({ prisma: { user: { findUnique: vi.fn() } } }));
 let app: FastifyInstance;
@@ -13,8 +13,8 @@ beforeEach(async () => {
   vi.mocked(prisma.user.findUnique).mockReset();
   app = Fastify();
   app.setErrorHandler((error: Error, _request: FastifyRequest, reply: FastifyReply) => reply.status(error instanceof AppError ? error.statusCode : 500).send({ message: error.message }));
-  await registerAuth(app);
-  app.register(registerAuthRoutes, { prefix: '/auth' });
+  await registrarAutenticacao(app);
+  app.register(registrarRotasAutenticacao, { prefix: '/auth' });
   await app.ready();
 });
 afterEach(async () => { await app.close(); });
