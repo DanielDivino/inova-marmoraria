@@ -51,6 +51,12 @@
 .quick-row-actions { display:flex; gap:4px; flex-wrap:wrap; }
 .quick-row-actions button { white-space:nowrap; font-size:11px; }
 .quick-services { background:#faf9f6; padding:12px; display:grid; gap:12px; }
+.quick-sill-cell button { width:100%; text-align:left; }
+.quick-sill-duplo { display:grid; gap:10px; padding-bottom:12px; border-bottom:1px solid #e8e4dd; }
+.quick-sill-duplo .sill-detail-duplo { width:420px; max-width:100%; }
+.quick-sill-duplo-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.quick-sill-duplo-fields label { display:grid; gap:4px; font-size:11px; color:#625644; }
+@media(max-width:800px) { .quick-sill-duplo-fields { grid-template-columns:repeat(2,minmax(0,1fr)); } .quick-sill-duplo .sill-detail-duplo { width:100%; max-width:340px; } }
 .quick-sides { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .quick-sides b { display:block; margin-bottom:6px; }
 .quick-edge { display:grid; gap:4px; padding:6px 0; }

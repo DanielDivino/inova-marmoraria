@@ -1,8 +1,9 @@
 import { memo } from 'react';
 import type { DraftComponent, DraftCutout } from './types';
 import { centimetrosParaMilimetros, formatoRecorte, nomeExibicaoComponente, escalasDesenhoTecnico, isMiterFinish, miterJointPath, posicaoMarcadorMeiaEsquadria, rotuloLadoBorda, acabamentoBordaPedra, faixasBordaPedra, rotuloMedidaDesenho, posicaoMedidaFaixa } from '@inova/domain';
-import { DetalhePeitoril } from './SillDetail';
+import { DetalhePeitoril, DetalhePeitorilDuplo } from './SillDetail';
 import { descricaoProducaoRascunho } from '../../utilitarios/manufacturing-description';
+import { ehPeitorilDuplo } from '../../utilitarios/quick-quote';
 
 type Props = { components: DraftComponent[]; cutouts: DraftCutout[]; materialName?: string; materialNames?: Record<string, string>; linearServices?: { id: string; name: string }[]; services?: { id: string; name: string }[]; additionalServices?: { name: string; quantity?: string }[]; notes?: string | null };
 type NormalizedComponent = DraftComponent & { componentIndex: number; lengthMm: number; widthMm: number };
@@ -93,6 +94,7 @@ export const DesenhoTecnico = memo(function DesenhoTecnico({ components, cutouts
       })}
     </svg>}
     {valid.filter((component) => component.componentType === 'SILL').map((component) => <div className="sill-drawing-detail" key={component.id}><strong>{nomeExibicaoComponente(component)}</strong><DetalhePeitoril measure={component.sillDetailCm} height={component.sillDetailHeightCm} showEmpty={false} /></div>)}
+    {components.filter((component) => component.componentType === 'SILL' && ehPeitorilDuplo(component)).map((component) => <div className="sill-drawing-detail" key={component.id}><strong>{nomeExibicaoComponente(component)}</strong><DetalhePeitorilDuplo topLength={component.sillTopLengthCm} topWidth={component.sillTopWidthCm} bottomLength={component.sillBottomLengthCm} bottomWidth={component.sillBottomWidthCm} finalWidth={component.sillFinalWidthCm} overlap={component.sillOverlapCm} showEmpty={false} /></div>)}
     <small>Um desenho representa um componente. Para outra peça, use “Adicionar componente”; até 5 desenhos ficam por linha.</small>
     <small className="drawing-legend">X = Acabamento simples · Área tracejada = recorte.</small>
     <div className="manufacturing-description">

@@ -40,13 +40,18 @@ export function montarLinhasPdf(items: any[]): { items: QuotePdfLine[][]; linear
       group.total = (cents(group.total) + cents(total)) / 100;
       areaFinishes.set(key, group);
     };
+    // Peitoril (SILL) não tem um "comprimento × largura" único e significativo
+    // nesta tabela resumo — o peitoril duplo, em especial, guarda um retângulo
+    // sintético (mesma área, mas sem corresponder a nenhuma pedra real) em
+    // lengthMm/widthMm só para o cálculo do valor. Deixa em branco pros dois casos.
+    const sillMm = (component: any, mm: number | undefined) => component.componentType === 'SILL' ? undefined : mm;
     for (const component of item.components ?? []) {
       const material = Number(component.subtotal ?? Number(component.billableArea ?? 0) * Number(component.unitPriceSnapshot ?? item.unitPriceSnapshot ?? 0));
       const name = nomeExibicaoComponente(component) + (mixed ? ` · ${materialLabel(component)}` : '');
       const isBacksplash = component.componentType === 'BACKSPLASH';
       const backsplashKey = component.materialId ?? materialLabel(component) ?? '';
       if (isBacksplash) {
-        const group = backsplashes.get(backsplashKey) ?? { line: { description: 'Rodabanca' + (mixed ? ` · ${materialLabel(component)}` : ''), measure: 0, quantity: 0, total: 0, unit: 'm²', lengthMm: component.lengthMm, widthMm: component.widthMm }, count: 0, adjustment: 0 };
+        const group = backsplashes.get(backsplashKey) ?? { line: { description: 'Rodabanca' + (mixed ? ` · ${materialLabel(component)}` : ''), measure: 0, quantity: 0, total: 0, unit: 'm²', lengthMm: sillMm(component, component.lengthMm), widthMm: sillMm(component, component.widthMm) }, count: 0, adjustment: 0 };
         group.count++;
         group.line.measure = Math.round(((group.line.measure ?? 0) + Number(component.billableArea ?? 0)) * 10000) / 10000;
         group.line.quantity = (group.line.quantity ?? 0) + Number(component.quantity ?? 1);
@@ -67,8 +72,8 @@ export function montarLinhasPdf(items: any[]): { items: QuotePdfLine[][]; linear
         } else {
           const line = {
             description: name,
-            lengthMm: component.lengthMm,
-            widthMm: component.widthMm,
+            lengthMm: sillMm(component, component.lengthMm),
+            widthMm: sillMm(component, component.widthMm),
             measure: Number(component.billableArea ?? 0),
             unit: 'm²',
             quantity: Number(component.quantity ?? 1),

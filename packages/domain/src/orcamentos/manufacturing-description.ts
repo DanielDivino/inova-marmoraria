@@ -11,6 +11,10 @@ export type ManufacturingCutout = {
 export type ManufacturingComponent = {
   label?: string; componentType?: string; orientation?: string; lengthMm: number; widthMm: number; quantity: number;
   sillDetailMm?: number; sillDetailHeightMm?: number;
+  /** Peitoril de duas pedras sobrepostas (Orçamento Rápido); lengthMm/widthMm acima
+   * viram um retângulo sintético (mesma área total) só para o cálculo do preço —
+   * aqui descrevemos as duas peças reais que a oficina precisa cortar. */
+  sillTopLengthMm?: number; sillTopWidthMm?: number; sillBottomLengthMm?: number; sillBottomWidthMm?: number; sillFinalWidthMm?: number; sillOverlapMm?: number;
   edges: { side: string; customLabel?: string | null; serviceName: string; lengthMm?: number | null; heightMm?: number | null; quantity?: number }[];
 };
 const n = (value: number) => value.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
@@ -43,8 +47,11 @@ export function descricaoProducaoComponente(component: ManufacturingComponent, c
   const lines: ManufacturingLine[] = [];
   const dimensions: string[] = [];
   const type = componentTypeLabels[component.componentType as ComponentType];
+  const peitorilDuplo = component.componentType === 'SILL' && !!(component.sillTopLengthMm && component.sillTopWidthMm && component.sillBottomLengthMm && component.sillBottomWidthMm);
   if (type && component.componentType !== 'OTHER' && type !== nomeExibicaoComponente(component)) dimensions.push(type);
-  if (component.lengthMm > 0 && component.widthMm > 0) dimensions.push(`${cm(component.lengthMm)} × ${cm(component.widthMm)} cm`);
+  // O peitoril duplo usa lengthMm/widthMm como retângulo sintético (mesma área
+  // total) só para o preço; a medida real de cada pedra vai no bloco abaixo.
+  if (!peitorilDuplo && component.lengthMm > 0 && component.widthMm > 0) dimensions.push(`${cm(component.lengthMm)} × ${cm(component.widthMm)} cm`);
   if (component.orientation) dimensions.push(component.orientation === 'VERTICAL' ? 'vertical' : 'horizontal');
   dimensions.push(`${component.quantity} ${component.quantity === 1 ? 'peça' : 'peças'}`);
   if (component.lengthMm > 0 && component.widthMm > 0) dimensions.push(`${(component.lengthMm * component.widthMm * component.quantity / 1_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m² total`);
@@ -64,6 +71,12 @@ export function descricaoProducaoComponente(component: ManufacturingComponent, c
     const details = [];
     if (component.sillDetailMm) details.push(`medida horizontal ${cm(component.sillDetailMm)} cm`);
     if (component.sillDetailHeightMm) details.push(`medida vertical ${cm(component.sillDetailHeightMm)} cm`);
+    if (peitorilDuplo) {
+      details.push(`pedra de cima ${cm(component.sillTopLengthMm!)} × ${cm(component.sillTopWidthMm!)} cm`);
+      details.push(`pedra de baixo ${cm(component.sillBottomLengthMm!)} × ${cm(component.sillBottomWidthMm!)} cm`);
+      if (component.sillOverlapMm) details.push(`sobreposição/encaixe ${cm(component.sillOverlapMm)} cm`);
+      if (component.sillFinalWidthMm) details.push(`largura final montada ${cm(component.sillFinalWidthMm)} cm`);
+    }
     if (details.length) lines.push({ label: 'Detalhe do peitoril', text: details.join(' · ') });
   }
   lines.push(...cutouts.flatMap(descricaoProducaoRecorte));

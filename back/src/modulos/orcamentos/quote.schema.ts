@@ -17,7 +17,7 @@ const quoteItemBaseSchema = z.object({ id: z.string().optional(), projectName: z
 export const quoteItemSchema = quoteItemBaseSchema.superRefine((value, context) => {
   if (value.drawingData && !z.object({ entryMode: z.enum(QUOTE_ENTRY_MODES).optional(), detailingStatus: z.enum(DETAILING_STATUSES).optional() }).safeParse(value.drawingData).success) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Modo do orçamento ou situação do desenho inválido.', path: ['drawingData'] });
   if (value.drawingData?.componentDetails !== undefined) {
-  const parsed = z.array(z.object({ parentComponentIndex: z.number().int().nonnegative().optional(), parentSide: z.enum(['BACK', 'FRONT', 'LEFT', 'RIGHT']).optional(), sillDetailMm: positiveMm.optional(), sillDetailHeightMm: positiveMm.optional() })).safeParse(value.drawingData.componentDetails);
+  const parsed = z.array(z.object({ parentComponentIndex: z.number().int().nonnegative().optional(), parentSide: z.enum(['BACK', 'FRONT', 'LEFT', 'RIGHT']).optional(), sillDetailMm: positiveMm.optional(), sillDetailHeightMm: positiveMm.optional(), sillTopLengthMm: positiveMm.optional(), sillTopWidthMm: positiveMm.optional(), sillBottomLengthMm: positiveMm.optional(), sillBottomWidthMm: positiveMm.optional(), sillFinalWidthMm: positiveMm.optional(), sillOverlapMm: positiveMm.optional() })).safeParse(value.drawingData.componentDetails);
   if (!parsed.success) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Detalhes dos componentes inválidos.', path: ['drawingData', 'componentDetails'] });
   else {
     if (parsed.data.length > value.components.length) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Detalhe sem componente correspondente.', path: ['drawingData', 'componentDetails'] });
@@ -25,7 +25,7 @@ export const quoteItemSchema = quoteItemBaseSchema.superRefine((value, context) 
       const parent = detail.parentComponentIndex;
       if (detail.parentSide !== undefined && (parent === undefined || value.components[index]?.componentType !== 'BACKSPLASH')) context.addIssue({ code: z.ZodIssueCode.custom, message: 'O lado deve pertencer a uma rodabanca vinculada a um componente.', path: ['drawingData', 'componentDetails', index, 'parentSide'] });
       if (parent !== undefined && (parent >= index || parsed.data[parent]?.parentComponentIndex !== undefined)) context.addIssue({ code: z.ZodIssueCode.custom, message: 'A peça adicional deve pertencer a um componente principal anterior.', path: ['drawingData', 'componentDetails', index, 'parentComponentIndex'] });
-      for (const field of ['sillDetailMm', 'sillDetailHeightMm'] as const) {
+      for (const field of ['sillDetailMm', 'sillDetailHeightMm', 'sillTopLengthMm', 'sillTopWidthMm', 'sillBottomLengthMm', 'sillBottomWidthMm', 'sillFinalWidthMm', 'sillOverlapMm'] as const) {
         if (detail[field] !== undefined && value.components[index]?.componentType !== 'SILL') context.addIssue({ code: z.ZodIssueCode.custom, message: 'As medidas do detalhe são exclusivas do peitoril.', path: ['drawingData', 'componentDetails', index, field] });
       }
     });

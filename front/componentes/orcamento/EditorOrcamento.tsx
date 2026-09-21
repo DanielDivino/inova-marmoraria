@@ -22,7 +22,7 @@ import { useSession } from '../ApplicationShell';
 import { EtapasProjeto } from './ProjectStepper';
 import { calcularTotalPix, projetoTemDesenho, dadosEntradaProjeto, modoEntradaOrcamento, type QuoteEntryMode } from '@inova/domain';
 import { EditorOrcamentoRapido } from './QuickQuoteEditor';
-import { aplicarMaterialProjeto, arredondarMedidaParaCima, prepararItemRapido } from '../../utilitarios/quick-quote';
+import { aplicarMaterialProjeto, arredondarMedidaParaCima, medidasEfetivasPeitorilDuplo, prepararItemRapido } from '../../utilitarios/quick-quote';
 import './quick-quote.css';
 
 type BillingUnit = 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED';
@@ -54,7 +54,11 @@ const newClientWorkspace = (): ClientWorkspace => ({ id: newId(), customer: null
 // valor do material — as medidas exibidas, o desenho técnico e o que é salvo no
 // orçamento/PDF sempre usam component.lengthCm/widthCm exatos, sem passar por aqui.
 const calculateDraftComponent = (component: DraftComponent, roundUp = false) => {
-  try { return calcularComponente({ label: component.label, componentType: component.componentType, orientation: component.orientation, lengthMm: centimetrosParaMilimetros(roundUp ? arredondarMedidaParaCima(component.lengthCm) : component.lengthCm), widthMm: centimetrosParaMilimetros(roundUp ? arredondarMedidaParaCima(component.widthCm) : component.widthCm), quantity: component.quantity }); } catch { return null; }
+  try {
+    const peitorilDuplo = medidasEfetivasPeitorilDuplo(component, roundUp);
+    if (peitorilDuplo) return calcularComponente({ label: component.label, componentType: component.componentType, orientation: component.orientation, lengthMm: peitorilDuplo.lengthMm, widthMm: peitorilDuplo.widthMm, quantity: component.quantity });
+    return calcularComponente({ label: component.label, componentType: component.componentType, orientation: component.orientation, lengthMm: centimetrosParaMilimetros(roundUp ? arredondarMedidaParaCima(component.lengthCm) : component.lengthCm), widthMm: centimetrosParaMilimetros(roundUp ? arredondarMedidaParaCima(component.widthCm) : component.widthCm), quantity: component.quantity });
+  } catch { return null; }
 };
 
 type EditingQuote = { id: string; number: string; status: string; executionStatus: string; updatedAt: string; customer: Customer; customerId: string; items: SavedQuoteItem[]; discountAmount: number; validUntil?: string | null; notes?: string | null; parentQuote?: { id: string; number: string } | null };

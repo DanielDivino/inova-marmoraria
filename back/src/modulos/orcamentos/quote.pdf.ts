@@ -75,6 +75,11 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
     ['RIGHT', right, y, right, bottom, right + 6, (y + bottom) / 2],
   ] as const;
 
+  // Peitoril duplo: lengthMm/widthMm formam um retângulo sintético (mesma área
+  // total) só para o cálculo do valor — não são uma medida real, então os rótulos
+  // de dimensão não são desenhados aqui (as medidas reais das duas pedras saem no
+  // bloco "Detalhe do peitoril" mais abaixo).
+  const peitorilDuplo = component.componentType === 'SILL' && component.sillTopLengthMm && component.sillTopWidthMm && component.sillBottomLengthMm && component.sillBottomWidthMm;
   pdf.save();
   pdf.strokeColor(dimColor).fillColor(dimColor).lineWidth(0.8);
   // Horizontal dimension, kept well away from the rectangle.
@@ -84,12 +89,12 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   pdf.moveTo(x, dimensionY - 27).lineTo(x, dimensionY - 13).stroke();
   pdf.moveTo(right, dimensionY - 27).lineTo(right, dimensionY - 13).stroke();
   const dimensionWidth = Math.max(width, 48);
-  pdf.font('Helvetica-Bold').fontSize(10).text(rotuloMedidaDesenho(lengthMm), x + width / 2 - dimensionWidth / 2, dimensionY - 39, { width: dimensionWidth, align: 'center' });
+  if (!peitorilDuplo) pdf.font('Helvetica-Bold').fontSize(10).text(rotuloMedidaDesenho(lengthMm), x + width / 2 - dimensionWidth / 2, dimensionY - 39, { width: dimensionWidth, align: 'center' });
   // Vertical dimension, outside the left edge and rotated like the web drawing.
   pdf.moveTo(dimensionX - 28, y).lineTo(dimensionX - 28, bottom).stroke();
   pdf.moveTo(dimensionX - 35, y).lineTo(dimensionX - 21, y).stroke();
   pdf.moveTo(dimensionX - 35, bottom).lineTo(dimensionX - 21, bottom).stroke();
-  pdf.save().font('Helvetica-Bold').fontSize(10).translate(dimensionX - 43, (y + bottom) / 2).rotate(-90)
+  if (!peitorilDuplo) pdf.save().font('Helvetica-Bold').fontSize(10).translate(dimensionX - 43, (y + bottom) / 2).rotate(-90)
     .text(rotuloMedidaDesenho(widthMm), -35, -5, { width: 70, align: 'center' }).restore();
   pdf.restore();
 
@@ -159,7 +164,22 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   }
   const detailY = bottom + bottomExtra * scaleY + (hasMiter ? 36 : 22);
   pdf.y = detailY;
-  if (component.componentType === 'SILL') {
+  if (component.componentType === 'SILL' && peitorilDuplo) {
+    // Peitoril de duas pedras: lista as medidas reais das duas peças em vez do
+    // esquema de uma pedra só — a oficina precisa saber exatamente o que cortar.
+    const detailTop = pdf.y + 12;
+    pdf.font('Helvetica-Bold').fontSize(9).text('Detalhe do peitoril — duas pedras', areaX, detailTop, { width: areaW, align: 'center' });
+    pdf.font('Helvetica').fontSize(8);
+    const linhas = [
+      `Pedra de cima: ${number(component.sillTopLengthMm / 10, 1)} × ${number(component.sillTopWidthMm / 10, 1)} cm`,
+      `Pedra de baixo: ${number(component.sillBottomLengthMm / 10, 1)} × ${number(component.sillBottomWidthMm / 10, 1)} cm`,
+      ...(component.sillOverlapMm ? [`Sobreposição/encaixe: ${number(component.sillOverlapMm / 10, 1)} cm`] : []),
+      ...(component.sillFinalWidthMm ? [`Largura final montada: ${number(component.sillFinalWidthMm / 10, 1)} cm`] : []),
+    ];
+    let lineY = detailTop + 16;
+    for (const linha of linhas) { pdf.text(linha, areaX, lineY, { width: areaW, align: 'center' }); lineY += 12; }
+    pdf.y = Math.max(pdf.y, lineY);
+  } else if (component.componentType === 'SILL') {
     const detailTop = pdf.y + 12;
     const detailX = areaX + (cellW - 170) / 2;
     pdf.font('Helvetica-Bold').fontSize(9).text('Detalhe do peitoril', areaX, detailTop, { width: areaW, align: 'center' });

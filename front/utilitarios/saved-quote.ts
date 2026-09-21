@@ -1,5 +1,6 @@
 import { centimetrosParaMilimetros, detalheDesenhoComponente, itemSalvoParaEntrada, type SavedQuoteItem } from '@inova/domain';
 import type { DraftItem } from '../componentes/orcamento/types';
+import { medidasEfetivasPeitorilDuplo } from './quick-quote';
 
 const cm = (value?: number) => value === undefined ? undefined : String(value / 10);
 const price = (value?: number) => value === undefined ? undefined : value.toFixed(2).replace('.', ',');
@@ -16,6 +17,12 @@ export function itemSalvoParaRascunho(saved: SavedQuoteItem): DraftItem {
       parentSide: detalheDesenhoComponente(input.drawingData, index).parentSide,
       sillDetailCm: cm(detalheDesenhoComponente(input.drawingData, index).sillDetailMm),
       sillDetailHeightCm: cm(detalheDesenhoComponente(input.drawingData, index).sillDetailHeightMm),
+      sillTopLengthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillTopLengthMm),
+      sillTopWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillTopWidthMm),
+      sillBottomLengthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillBottomLengthMm),
+      sillBottomWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillBottomWidthMm),
+      sillFinalWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillFinalWidthMm),
+      sillOverlapCm: cm(detalheDesenhoComponente(input.drawingData, index).sillOverlapMm),
       appliedTotal: price(component.appliedTotal), edges: component.edges.map((edge) => ({ ...edge, lengthCm: cm(edge.lengthMm), heightCm: cm(edge.heightMm), appliedTotal: price(edge.appliedSubtotal) })),
     })),
     cutouts: input.cutouts.map((cutout, index) => ({ ...cutout, id: saved.cutouts[index].id, lengthCm: cm(cutout.lengthMm), widthCm: cm(cutout.widthMm), diameterCm: cm(cutout.diameterMm), positionXCm: cm(cutout.positionX), positionYCm: cm(cutout.positionY), appliedTotal: price(cutout.appliedSubtotal) })),
@@ -42,6 +49,15 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
       ...(parentComponentIndex >= 0 && component.componentType === 'BACKSPLASH' && component.parentSide ? { parentSide: component.parentSide } : {}),
       ...(component.componentType === 'SILL' && component.sillDetailCm?.trim() ? { sillDetailMm: centimetrosParaMilimetros(component.sillDetailCm) } : {}),
       ...(component.componentType === 'SILL' && component.sillDetailHeightCm?.trim() ? { sillDetailHeightMm: centimetrosParaMilimetros(component.sillDetailHeightCm) } : {}),
+      // Peitoril duplo: medidas reais das duas pedras, exatas (sem "M² fechado"),
+      // para a oficina cortar certo — o valor cobrado usa o retângulo sintético
+      // (component.lengthMm/widthMm) montado logo abaixo.
+      ...(component.componentType === 'SILL' && component.sillTopLengthCm?.trim() ? { sillTopLengthMm: centimetrosParaMilimetros(component.sillTopLengthCm) } : {}),
+      ...(component.componentType === 'SILL' && component.sillTopWidthCm?.trim() ? { sillTopWidthMm: centimetrosParaMilimetros(component.sillTopWidthCm) } : {}),
+      ...(component.componentType === 'SILL' && component.sillBottomLengthCm?.trim() ? { sillBottomLengthMm: centimetrosParaMilimetros(component.sillBottomLengthCm) } : {}),
+      ...(component.componentType === 'SILL' && component.sillBottomWidthCm?.trim() ? { sillBottomWidthMm: centimetrosParaMilimetros(component.sillBottomWidthCm) } : {}),
+      ...(component.componentType === 'SILL' && component.sillFinalWidthCm?.trim() ? { sillFinalWidthMm: centimetrosParaMilimetros(component.sillFinalWidthCm) } : {}),
+      ...(component.componentType === 'SILL' && component.sillOverlapCm?.trim() ? { sillOverlapMm: centimetrosParaMilimetros(component.sillOverlapCm) } : {}),
     };
   }) : [];
   const hasDetails = componentDetails.some((detail) => Object.keys(detail).length);
@@ -56,7 +72,11 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
       id: saved?.components.some((entry) => entry.id === component.id) ? component.id : undefined,
       materialId: component.materialId || draft.materialId || undefined,
       label: component.label, componentType: component.componentType, orientation: component.orientation, shape: 'RECTANGLE' as const,
-      lengthMm: centimetrosParaMilimetros(component.lengthCm), widthMm: centimetrosParaMilimetros(component.widthCm), quantity: component.quantity,
+      // Peitoril duplo: medida exata (sem arredondamento de "M² fechado") — o
+      // retângulo sintético garante que a área cobrada bata com a soma real das
+      // duas pedras em qualquer lugar do sistema que multiplique lengthMm × widthMm.
+      ...(medidasEfetivasPeitorilDuplo(component, false) ?? { lengthMm: centimetrosParaMilimetros(component.lengthCm), widthMm: centimetrosParaMilimetros(component.widthCm) }),
+      quantity: component.quantity,
       appliedTotal: component.appliedTotal === undefined ? undefined : currency(component.appliedTotal), sortOrder,
       edges: component.edges.map((edge) => ({ id: edge.id, side: edge.side, customLabel: edge.customLabel,
         lengthMm: optionalMm(edge.lengthCm), heightMm: optionalMm(edge.heightCm), quantity: edge.quantity, serviceId: edge.serviceId,

@@ -45,6 +45,18 @@ export function calcularComponente(component: ComponentDimensions): CalculatedCo
   return { ...component, shape: component.shape ?? 'RECTANGLE', quantity, billableArea: calcularAreaRetangularM2(component.lengthMm, component.widthMm, quantity) };
 }
 
+/**
+ * Peitoril de duas pedras sobrepostas: a área cobrada é a soma das duas peças
+ * reais, sem descontar a sobreposição/encaixe entre elas (são duas peças de
+ * pedra sendo cortadas de verdade, mesmo que se sobreponham na instalação).
+ */
+export function calcularAreaPeitorilDuplo(input: { topLengthMm: number; topWidthMm: number; bottomLengthMm: number; bottomWidthMm: number; quantity?: number }): number {
+  const quantity = inteiroPositivo(input.quantity ?? 1, 'Quantidade');
+  const areaSuperior = calcularAreaRetangularM2(input.topLengthMm, input.topWidthMm, 1);
+  const areaInferior = calcularAreaRetangularM2(input.bottomLengthMm, input.bottomWidthMm, 1);
+  return (areaSuperior + areaInferior) * quantity;
+}
+
 export function somarAreasComponentes(components: ComponentDimensions[]): number {
   if (!components.length) throw new Error('Informe ao menos um componente.');
   const squareMillimeters = components.reduce((total, component) => {
