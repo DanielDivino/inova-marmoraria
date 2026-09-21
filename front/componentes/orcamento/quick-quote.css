@@ -2,12 +2,9 @@
 .quote-mode-switch button, .quick-quote button { border:1px solid #ded7ca; background:#fff; color:#71532c; border-radius:5px; padding:7px 10px; cursor:pointer; }
 .quote-mode-switch button[aria-pressed="true"] { background:#a17b3e; color:#fff; border-color:#a17b3e; }
 .quote-mode-switch small { color:#77766f; }
-.quick-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+.quick-heading { margin-bottom:10px; }
 .quick-heading h2 { margin:0 0 5px; font:600 21px Georgia,serif; }
 .quick-heading small, .quick-quote td small { display:block; color:#77766f; font-size:11px; }
-.quick-round-toggle { display:flex; align-items:center; gap:6px; flex-shrink:0; padding:7px 10px; border:1px solid #ded7ca; border-radius:6px; background:#fffaf0; color:#71532c; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
-.quick-round-toggle input { width:auto; }
-@media(max-width:560px) { .quick-heading { flex-direction:column; } }
 .quick-project-fields { display:grid; grid-template-columns:1fr 1fr; align-items:end; gap:10px; margin-bottom:12px; }
 .quick-project-fields label { display:grid; gap:5px; font-size:12px; }
 .quick-table-scroll { overflow-x:auto; margin-bottom:12px; }
