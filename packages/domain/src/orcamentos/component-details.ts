@@ -39,9 +39,10 @@ export function rotuloLadoBorda(side: string): string {
 
 export const componentTypeLabels: Record<ComponentType, string> = { TOP: 'Tampo', COUNTER: 'Bancada', BASE: 'Base', VISTA: 'Vista', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', SIDE_LEFT: `Lateral — ${edgeSideLabels.LEFT}`, SIDE_RIGHT: `Lateral — ${edgeSideLabels.RIGHT}`, SILL: 'Peitoril', THRESHOLD: 'Soleira', STEP: 'Degrau', OTHER: 'Componente' };
 export type ComponentDrawingDetail = { parentComponentIndex?: number; parentSide?: Exclude<EdgeSide, 'CUSTOM'>; sillDetailMm?: number; sillDetailHeightMm?: number;
-  /** Peitoril de duas pedras sobrepostas (Orçamento Rápido). */
-  sillTopLengthMm?: number; sillTopWidthMm?: number; sillBottomLengthMm?: number; sillBottomWidthMm?: number; sillFinalWidthMm?: number; sillOverlapMm?: number };
-const sillDuploNumericFields = ['sillTopLengthMm', 'sillTopWidthMm', 'sillBottomLengthMm', 'sillBottomWidthMm', 'sillFinalWidthMm', 'sillOverlapMm'] as const;
+  /** Peitoril de duas pedras sobrepostas (Orçamento Rápido) — comprimento é o
+   * normal do componente (lengthMm), compartilhado pelas duas pedras. */
+  sillTopWidthMm?: number; sillBottomWidthMm?: number; sillFinalWidthMm?: number; sillOverlapMm?: number };
+const sillDuploNumericFields = ['sillTopWidthMm', 'sillBottomWidthMm', 'sillFinalWidthMm', 'sillOverlapMm'] as const;
 
 /** Indexes follow the persisted component sort order, so recreated IDs are safe. */
 export function detalheDesenhoComponente(data: unknown, index: number): ComponentDrawingDetail {

@@ -24,9 +24,9 @@ describe('medidas e componentes', () => {
     expect(calcularAreaRetangularM2(2000, 100)).toBe(0.2);
   });
   it('peitoril duplo cobra a soma das duas pedras, sem descontar a sobreposição', () => {
-    expect(calcularAreaPeitorilDuplo({ topLengthMm: 2100, topWidthMm: 70, bottomLengthMm: 2100, bottomWidthMm: 160 })).toBeCloseTo(0.483, 8);
-    expect(calcularAreaPeitorilDuplo({ topLengthMm: 2100, topWidthMm: 70, bottomLengthMm: 2100, bottomWidthMm: 160, quantity: 2 })).toBeCloseTo(0.966, 8);
-    expect(() => calcularAreaPeitorilDuplo({ topLengthMm: 2100, topWidthMm: 70, bottomLengthMm: 2100, bottomWidthMm: 160, quantity: 0 })).toThrow('maior que zero');
+    expect(calcularAreaPeitorilDuplo({ lengthMm: 2100, topWidthMm: 70, bottomWidthMm: 160 })).toBeCloseTo(0.483, 8);
+    expect(calcularAreaPeitorilDuplo({ lengthMm: 2100, topWidthMm: 70, bottomWidthMm: 160, quantity: 2 })).toBeCloseTo(0.966, 8);
+    expect(() => calcularAreaPeitorilDuplo({ lengthMm: 2100, topWidthMm: 70, bottomWidthMm: 160, quantity: 0 })).toThrow('maior que zero');
   });
   it('multiplica os acabamentos pela quantidade de peças', () => {
     expect(calcularMetrosLineares(1900, 12)).toBeCloseTo(22.8, 8);

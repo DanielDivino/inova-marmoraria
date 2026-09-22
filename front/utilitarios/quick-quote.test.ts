@@ -41,18 +41,18 @@ describe('Orçamento rápido compartilha o modelo detalhado', () => {
   ])('arredonda %s cm para cima, múltiplo de 5 (usado só no cálculo do valor)', (entrada, esperado) => {
     expect(arredondarMedidaParaCima(entrada)).toBe(esperado);
   });
-  it('peitoril duplo: medida efetiva é um retângulo de 1 m cuja área bate com a soma das duas pedras', () => {
-    const peitoril = { ...criarComponenteRapido('stone'), componentType: 'SILL' as const, sillTopLengthCm: '210', sillTopWidthCm: '7', sillBottomLengthCm: '210', sillBottomWidthCm: '16' };
+  it('peitoril duplo: comprimento normal compartilhado + largura combinada bate com a soma das duas pedras', () => {
+    const peitoril = { ...criarComponenteRapido('stone'), componentType: 'SILL' as const, lengthCm: '210', sillTopWidthCm: '7', sillBottomWidthCm: '16' };
     expect(ehPeitorilDuplo(peitoril)).toBe(true);
     expect(ehPeitorilDuplo({ ...peitoril, sillBottomWidthCm: '' })).toBe(false);
     expect(ehPeitorilDuplo({ ...peitoril, componentType: 'TOP' })).toBe(false);
     const efetiva = medidasEfetivasPeitorilDuplo(peitoril, false);
-    expect(efetiva).toEqual({ lengthMm: 1000, widthMm: 483 });
+    expect(efetiva).toEqual({ lengthMm: 2100, widthMm: 230 });
     expect((efetiva!.lengthMm * efetiva!.widthMm) / 1_000_000).toBeCloseTo(0.483, 3);
     expect(medidasEfetivasPeitorilDuplo({ ...criarComponenteRapido('stone'), componentType: 'SILL' }, false)).toBeNull();
-    // M² fechado: arredonda cada medida real antes de somar (7->10, 16->20 cm; 210 já é múltiplo de 5).
+    // M² fechado: arredonda comprimento e larguras antes de somar (7->10, 16->20 cm; 210 já é múltiplo de 5).
     const arredondada = medidasEfetivasPeitorilDuplo(peitoril, true);
-    expect(arredondada).toEqual({ lengthMm: 1000, widthMm: 630 });
+    expect(arredondada).toEqual({ lengthMm: 2100, widthMm: 300 });
   });
   it('abrir o desenho preserva os dados, exige conclusão e mantém compatibilidade legada', () => {
     expect(projetoTemDesenho(undefined)).toBe(true);

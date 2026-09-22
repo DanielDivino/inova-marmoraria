@@ -75,11 +75,12 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
     ['RIGHT', right, y, right, bottom, right + 6, (y + bottom) / 2],
   ] as const;
 
-  // Peitoril duplo: lengthMm/widthMm formam um retângulo sintético (mesma área
-  // total) só para o cálculo do valor — não são uma medida real, então os rótulos
-  // de dimensão não são desenhados aqui (as medidas reais das duas pedras saem no
+  // Peitoril duplo: lengthMm é o comprimento real (compartilhado pelas duas
+  // pedras, mostrado normalmente); widthMm é a largura de cima + largura de
+  // baixo somadas — real, mas não corresponde a nenhuma pedra sozinha, então o
+  // rótulo de largura não é desenhado aqui (as duas larguras reais saem no
   // bloco "Detalhe do peitoril" mais abaixo).
-  const peitorilDuplo = component.componentType === 'SILL' && component.sillTopLengthMm && component.sillTopWidthMm && component.sillBottomLengthMm && component.sillBottomWidthMm;
+  const peitorilDuplo = component.componentType === 'SILL' && component.sillTopWidthMm && component.sillBottomWidthMm;
   pdf.save();
   pdf.strokeColor(dimColor).fillColor(dimColor).lineWidth(0.8);
   // Horizontal dimension, kept well away from the rectangle.
@@ -89,7 +90,7 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   pdf.moveTo(x, dimensionY - 27).lineTo(x, dimensionY - 13).stroke();
   pdf.moveTo(right, dimensionY - 27).lineTo(right, dimensionY - 13).stroke();
   const dimensionWidth = Math.max(width, 48);
-  if (!peitorilDuplo) pdf.font('Helvetica-Bold').fontSize(10).text(rotuloMedidaDesenho(lengthMm), x + width / 2 - dimensionWidth / 2, dimensionY - 39, { width: dimensionWidth, align: 'center' });
+  pdf.font('Helvetica-Bold').fontSize(10).text(rotuloMedidaDesenho(lengthMm), x + width / 2 - dimensionWidth / 2, dimensionY - 39, { width: dimensionWidth, align: 'center' });
   // Vertical dimension, outside the left edge and rotated like the web drawing.
   pdf.moveTo(dimensionX - 28, y).lineTo(dimensionX - 28, bottom).stroke();
   pdf.moveTo(dimensionX - 35, y).lineTo(dimensionX - 21, y).stroke();
@@ -171,8 +172,8 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
     pdf.font('Helvetica-Bold').fontSize(9).text('Detalhe do peitoril — duas pedras', areaX, detailTop, { width: areaW, align: 'center' });
     pdf.font('Helvetica').fontSize(8);
     const linhas = [
-      `Pedra de cima: ${number(component.sillTopLengthMm / 10, 1)} × ${number(component.sillTopWidthMm / 10, 1)} cm`,
-      `Pedra de baixo: ${number(component.sillBottomLengthMm / 10, 1)} × ${number(component.sillBottomWidthMm / 10, 1)} cm`,
+      `Pedra de cima: ${number(component.lengthMm / 10, 1)} × ${number(component.sillTopWidthMm / 10, 1)} cm`,
+      `Pedra de baixo: ${number(component.lengthMm / 10, 1)} × ${number(component.sillBottomWidthMm / 10, 1)} cm`,
       ...(component.sillOverlapMm ? [`Sobreposição/encaixe: ${number(component.sillOverlapMm / 10, 1)} cm`] : []),
       ...(component.sillFinalWidthMm ? [`Largura final montada: ${number(component.sillFinalWidthMm / 10, 1)} cm`] : []),
     ];

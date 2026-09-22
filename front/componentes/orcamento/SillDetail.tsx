@@ -8,31 +8,29 @@ export function DetalhePeitoril({ measure, height, showEmpty = true }: { measure
 }
 
 /** Peitoril de duas pedras sobrepostas (Orçamento Rápido) — desenho esquemático
- * fixo (não escalado pelos valores reais, só os textos mudam), vista em corte. */
-export function DetalhePeitorilDuplo({ topLength, topWidth, bottomLength, bottomWidth, finalWidth, overlap, showEmpty = true }: {
-  topLength?: string; topWidth?: string; bottomLength?: string; bottomWidth?: string; finalWidth?: string; overlap?: string; showEmpty?: boolean;
+ * fixo (não escalado pelos valores reais, só os textos mudam), em degrau: pedra
+ * de cima à esquerda, pedra de baixo à direita, sobrepostas no meio. O
+ * comprimento é o normal do componente (compartilhado pelas duas peças) — este
+ * desenho mostra só a largura, que é onde a peça se divide em duas. */
+export function DetalhePeitorilDuplo({ topWidth, bottomWidth, finalWidth, overlap, showEmpty = true }: {
+  topWidth?: string; bottomWidth?: string; finalWidth?: string; overlap?: string; showEmpty?: boolean;
 }) {
   const rotulo = (value?: string) => value?.trim() || '________';
   const mostrar = (value?: string) => showEmpty || value?.trim();
   return <figure className="sill-detail sill-detail-duplo">
     <figcaption>Detalhe do peitoril — duas pedras sobrepostas</figcaption>
-    <svg viewBox="0 0 360 176" role="img" aria-label="Detalhe do peitoril com as medidas das duas pedras, a sobreposição e a largura final">
-      <g fill="#fffaf0" stroke="#6e5830" strokeWidth="1.5"><rect x="30" y="82" width="190" height="46" /></g>
-      <g fill="#fff" stroke="#6e5830" strokeWidth="1.5"><rect x="50" y="40" width="140" height="46" /></g>
-      <rect x="50" y="82" width="140" height="4" fill="#c9973b" opacity="0.6" />
+    <svg viewBox="0 0 340 200" role="img" aria-label="Detalhe do peitoril com a largura das duas pedras, a sobreposição e a largura final">
+      <g fill="#fff" stroke="#6e5830" strokeWidth="1.5"><rect x="40" y="40" width="150" height="50" /></g>
+      <g fill="#e7ebe0" stroke="#6e5830" strokeWidth="1.5"><rect x="110" y="90" width="190" height="55" /></g>
       <g stroke="#8d816e" strokeWidth="1">
-        <line x1="50" y1="30" x2="190" y2="30" /><line x1="50" y1="25" x2="50" y2="35" /><line x1="190" y1="25" x2="190" y2="35" />
-        <line x1="30" y1="140" x2="220" y2="140" /><line x1="30" y1="135" x2="30" y2="145" /><line x1="220" y1="135" x2="220" y2="145" />
-        <line x1="40" y1="40" x2="40" y2="86" /><line x1="35" y1="40" x2="45" y2="40" /><line x1="35" y1="86" x2="45" y2="86" />
-        <line x1="234" y1="82" x2="234" y2="128" /><line x1="229" y1="82" x2="239" y2="82" /><line x1="229" y1="128" x2="239" y2="128" />
-        <line x1="262" y1="40" x2="262" y2="128" /><line x1="257" y1="40" x2="267" y2="40" /><line x1="257" y1="128" x2="267" y2="128" />
+        <line x1="40" y1="30" x2="190" y2="30" /><line x1="40" y1="25" x2="40" y2="35" /><line x1="190" y1="25" x2="190" y2="35" />
+        <line x1="110" y1="155" x2="300" y2="155" /><line x1="110" y1="150" x2="110" y2="160" /><line x1="300" y1="150" x2="300" y2="160" />
+        <line x1="40" y1="180" x2="300" y2="180" /><line x1="40" y1="175" x2="40" y2="185" /><line x1="300" y1="175" x2="300" y2="185" />
       </g>
-      {mostrar(topLength) && <text x="120" y="22" textAnchor="middle" fill="#635948" fontSize="9">Comp. cima {rotulo(topLength)} cm</text>}
-      {mostrar(bottomLength) && <text x="125" y="153" textAnchor="middle" fill="#635948" fontSize="9">Comp. baixo {rotulo(bottomLength)} cm</text>}
-      {mostrar(topWidth) && <text x="4" y="64" fill="#635948" fontSize="9">Larg.{' '}cima{' '}{rotulo(topWidth)}{' '}cm</text>}
-      {mostrar(bottomWidth) && <text x="238" y="107" fill="#635948" fontSize="9">Larg. baixo {rotulo(bottomWidth)} cm</text>}
-      {mostrar(overlap) && <text x="118" y="94" textAnchor="middle" fill="#7c531e" fontSize="9" fontWeight="700">Sobrep. {rotulo(overlap)} cm</text>}
-      {mostrar(finalWidth) && <text x="266" y="84" fill="#635948" fontSize="9">Larg.{' '}final{' '}{rotulo(finalWidth)}{' '}cm</text>}
+      {mostrar(topWidth) && <text x="115" y="22" textAnchor="middle" fill="#635948" fontSize="10">{rotulo(topWidth)} cm</text>}
+      {mostrar(overlap) && <text x="115" y="107" fill="#7c531e" fontSize="9" fontWeight="700">{rotulo(overlap)} cm</text>}
+      {mostrar(bottomWidth) && <text x="205" y="149" textAnchor="middle" fill="#635948" fontSize="10">{rotulo(bottomWidth)} cm</text>}
+      {mostrar(finalWidth) && <text x="170" y="195" textAnchor="middle" fill="#635948" fontSize="10">{rotulo(finalWidth)} cm total</text>}
     </svg>
   </figure>;
 }

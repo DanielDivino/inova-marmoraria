@@ -17,9 +17,7 @@ export function itemSalvoParaRascunho(saved: SavedQuoteItem): DraftItem {
       parentSide: detalheDesenhoComponente(input.drawingData, index).parentSide,
       sillDetailCm: cm(detalheDesenhoComponente(input.drawingData, index).sillDetailMm),
       sillDetailHeightCm: cm(detalheDesenhoComponente(input.drawingData, index).sillDetailHeightMm),
-      sillTopLengthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillTopLengthMm),
       sillTopWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillTopWidthMm),
-      sillBottomLengthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillBottomLengthMm),
       sillBottomWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillBottomWidthMm),
       sillFinalWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillFinalWidthMm),
       sillOverlapCm: cm(detalheDesenhoComponente(input.drawingData, index).sillOverlapMm),
@@ -49,12 +47,10 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
       ...(parentComponentIndex >= 0 && component.componentType === 'BACKSPLASH' && component.parentSide ? { parentSide: component.parentSide } : {}),
       ...(component.componentType === 'SILL' && component.sillDetailCm?.trim() ? { sillDetailMm: centimetrosParaMilimetros(component.sillDetailCm) } : {}),
       ...(component.componentType === 'SILL' && component.sillDetailHeightCm?.trim() ? { sillDetailHeightMm: centimetrosParaMilimetros(component.sillDetailHeightCm) } : {}),
-      // Peitoril duplo: medidas reais das duas pedras, exatas (sem "M² fechado"),
-      // para a oficina cortar certo — o valor cobrado usa o retângulo sintético
-      // (component.lengthMm/widthMm) montado logo abaixo.
-      ...(component.componentType === 'SILL' && component.sillTopLengthCm?.trim() ? { sillTopLengthMm: centimetrosParaMilimetros(component.sillTopLengthCm) } : {}),
+      // Peitoril duplo: larguras reais das duas pedras, exatas (sem "M² fechado") —
+      // o comprimento é o normal do componente (compartilhado pelas duas peças),
+      // já salvo abaixo em lengthMm; a oficina cruza os dois pra saber o que cortar.
       ...(component.componentType === 'SILL' && component.sillTopWidthCm?.trim() ? { sillTopWidthMm: centimetrosParaMilimetros(component.sillTopWidthCm) } : {}),
-      ...(component.componentType === 'SILL' && component.sillBottomLengthCm?.trim() ? { sillBottomLengthMm: centimetrosParaMilimetros(component.sillBottomLengthCm) } : {}),
       ...(component.componentType === 'SILL' && component.sillBottomWidthCm?.trim() ? { sillBottomWidthMm: centimetrosParaMilimetros(component.sillBottomWidthCm) } : {}),
       ...(component.componentType === 'SILL' && component.sillFinalWidthCm?.trim() ? { sillFinalWidthMm: centimetrosParaMilimetros(component.sillFinalWidthCm) } : {}),
       ...(component.componentType === 'SILL' && component.sillOverlapCm?.trim() ? { sillOverlapMm: centimetrosParaMilimetros(component.sillOverlapCm) } : {}),
@@ -72,9 +68,10 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
       id: saved?.components.some((entry) => entry.id === component.id) ? component.id : undefined,
       materialId: component.materialId || draft.materialId || undefined,
       label: component.label, componentType: component.componentType, orientation: component.orientation, shape: 'RECTANGLE' as const,
-      // Peitoril duplo: medida exata (sem arredondamento de "M² fechado") — o
-      // retângulo sintético garante que a área cobrada bata com a soma real das
-      // duas pedras em qualquer lugar do sistema que multiplique lengthMm × widthMm.
+      // Peitoril duplo: largura combinada (largura de cima + largura de baixo)
+      // exata (sem arredondamento de "M² fechado"), pro billableArea bater com a
+      // soma real das duas pedras em qualquer lugar do sistema que multiplique
+      // lengthMm × widthMm.
       ...(medidasEfetivasPeitorilDuplo(component, false) ?? { lengthMm: centimetrosParaMilimetros(component.lengthCm), widthMm: centimetrosParaMilimetros(component.widthCm) }),
       quantity: component.quantity,
       appliedTotal: component.appliedTotal === undefined ? undefined : currency(component.appliedTotal), sortOrder,
