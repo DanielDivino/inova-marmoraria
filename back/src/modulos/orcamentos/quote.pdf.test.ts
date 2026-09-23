@@ -47,8 +47,8 @@ describe('Opções e agrupamento comercial do PDF', () => {
     const quick = { ...item, projectName: 'Cozinha rápida', drawingData: { entryMode: 'QUICK', detailingStatus: 'PENDING' }, components: [{ id: 'top', label: 'Bancada', lengthMm: 2400, widthMm: 600, quantity: 1, billableArea: 1.44, edges: [] }] };
     const result = await render(1008, [quick], 'orcamento-rapido');
     const texts = result.calls.map(([text]) => text);
-    expect(texts).toContain('VALOR DO ORÇAMENTO TOTAL');
-    expect(texts).toContain('TOTAL COM DESCONTO NO PIX (5%)');
+    expect(texts).toContain('À VISTA');
+    expect(texts).toContain('CARTÃO');
     expect(texts).not.toContain('ORDEM DE SERVIÇO');
     expect(result.pages).toBe(0);
     const detailed = { ...quick, projectName: 'Banheiro detalhado', drawingData: { entryMode: 'DETAILED', detailingStatus: 'COMPLETED' } };
@@ -70,12 +70,12 @@ describe('Opções e agrupamento comercial do PDF', () => {
     expect(texts).not.toContain('ACABAMENTOS E SERVIÇOS POR METRO LINEAR · TOTAL DO ORÇAMENTO');
     expect(texts.includes('VALOR TOTAL')).toBe(options.individualPrices);
     expect(texts.includes('R$ 160,00')).toBe(options.individualPrices);
-    expect(texts.includes('DESCONTO GERAL')).toBe(options.individualPrices);
+    expect(texts.includes('DESCONTO FINAL')).toBe(true);
     expect(texts.includes('ORDEM DE SERVIÇO')).toBe(options.drawings);
     expect(texts.some(text => text.includes('Acabamento 45° no lado Inferior'))).toBe(options.drawings);
     expect(texts.some(text => text.includes('Conferir medidas antes de produzir.'))).toBe(true);
     expect(texts).toContain('R$ 1.060,00');
-    expect(texts).toContain('R$ 1.007,00');
+    expect(texts).toContain('R$ 1.166,00');
     expect(result.pages + 1).toBe(options.drawings ? 2 : 1);
   });
 });
@@ -191,22 +191,22 @@ describe('Paginação final da ordem de serviço', () => {
 });
 
 describe('Condição de pagamento Pix no PDF', () => {
-  it.each([[1440, 'R$ 1.368,00'], [100.10, 'R$ 95,10'], [0, 'R$ 0,00']])('mostra 5%% abaixo do total de %s sem alterar o orçamento', async (total, expected) => {
+  it.each([[1440, 'R$ 1.584,00'], [100.10, 'R$ 110,11'], [0, 'R$ 0,00']])('mostra o cartão com 10%% sobre o valor à vista de %s sem alterar o orçamento', async (total, expected) => {
     const result = await render(total);
-    const normalIndex = result.calls.findIndex(([text]) => text === 'VALOR DO ORÇAMENTO TOTAL');
-    const pixIndex = result.calls.findIndex(([text]) => text === 'TOTAL COM DESCONTO NO PIX (5%)');
+    const normalIndex = result.calls.findIndex(([text]) => text === 'À VISTA');
+    const pixIndex = result.calls.findIndex(([text]) => text === 'CARTÃO');
     expect(pixIndex).toBeGreaterThan(normalIndex);
     expect(result.calls[pixIndex + 1][0].replaceAll('\u00a0', ' ')).toBe(expected);
     expect(result.calls.some(([text]) => text.includes('50% do valor deve ser pago antecipadamente para iniciar o trabalho.'))).toBe(true);
     expect(result.calls[pixIndex][2]).toBe(Number(result.calls[normalIndex][2]) + 19);
-    expect(result.calls.filter(([text]) => text === 'TOTAL COM DESCONTO NO PIX (5%)')).toHaveLength(1);
+    expect(result.calls.filter(([text]) => text === 'CARTÃO')).toHaveLength(1);
     expect(result.quote.netTotal).toBe(total);
     expect(result.quote.discountAmount).toBe(100);
   });
   it('reserva espaço para os dois totais e assinaturas ao terminar uma página cheia', async () => {
     const result = await render(1440, Array.from({ length: 7 }, () => item));
-    const normal = result.calls.find(([text]) => text === 'VALOR DO ORÇAMENTO TOTAL')!;
-    const pix = result.calls.find(([text]) => text === 'TOTAL COM DESCONTO NO PIX (5%)')!;
+    const normal = result.calls.find(([text]) => text === 'À VISTA')!;
+    const pix = result.calls.find(([text]) => text === 'CARTÃO')!;
     expect(normal[2]).toBeGreaterThan(120);
     expect(pix[2]).toBeCloseTo(Number(normal[2]) + 19, 5);
     expect(result.pages).toBeGreaterThanOrEqual(2);

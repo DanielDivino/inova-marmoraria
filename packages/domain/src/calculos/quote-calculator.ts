@@ -58,7 +58,14 @@ export function calcularTotalOrcamento(subtotals: number[], discount = 0): numbe
   return roundCurrency(gross - validDiscount);
 }
 
-export function calcularTotalPix(total: number): number {
+export type PixDiscountPercent = 5 | 10 | 15 | 20 | 25;
+export function calcularTotalPix(total: number, discountPercent: PixDiscountPercent = 5): number {
+  if (![5, 10, 15, 20, 25].includes(discountPercent)) throw new Error('Desconto Pix deve ser 5%, 10%, 15%, 20% ou 25%.');
   const cents = Math.round(nonNegative(total, 'Total') * 100);
-  return Math.round(cents * 95 / 100) / 100;
+  return Math.round(cents * (100 - discountPercent) / 100) / 100;
+}
+
+/** O orçamento usa o total à vista como base e acrescenta 10% no cartão. */
+export function calcularTotalCartao(total: number): number {
+  return Math.round((nonNegative(total, 'Total') * 1.1 + Number.EPSILON) * 100) / 100;
 }

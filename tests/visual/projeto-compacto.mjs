@@ -25,21 +25,22 @@ await page.route('**/api/**', async route => {
   if (path === '/api/quotes') return route.fulfill({ json: { data: [], total: 0 } });
   return route.fulfill({ status: 404, json: {} });
 });
-const root = index => page.locator('.component-editor > .component-card').nth(index);
-// O seletor de material deixou de existir por componente: agora há um único
-// seletor no topo da etapa, que segue o componente com foco/clique mais recente
-// (onFocusCapture/onClickCapture em cada .component-card). Por isso "escolher o
-// material do componente N" primeiro precisa de uma interação dentro dele.
-const material = async (index, name) => {
-  await root(index).getByLabel('Nome', { exact: true }).click();
-  await page.locator('.material-picker summary').click();
-  await page.locator('.material-picker-panel button').filter({ hasText: name }).click();
+// Material do projeto (topo) vs. material desta peça (dentro de "Detalhar",
+// sobrescreve o do projeto só para aquela peça).
+const projectMaterial = async name => {
+  await page.locator('.quick-project-fields .material-picker summary').click();
+  await page.locator('.quick-project-fields .material-picker-panel button').filter({ hasText: name }).click();
+};
+const rowMaterial = async name => {
+  await page.locator('.quick-services .quick-material-override .material-picker summary').click();
+  await page.locator('.quick-services .quick-material-override .material-picker-panel button').filter({ hasText: name }).click();
 };
 const step = number => page.locator('.project-step').nth(number - 1).getByRole('button').click();
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
-  // Um projeto novo começa em "Orçamento Rápido" (sem stepper de etapas); o editor
-  // detalhado com componentes por peça precisa ser selecionado explicitamente.
+  // Um projeto novo começa em "Orçamento Rápido" — é onde todo dado comercial
+  // (material, medidas, acabamentos, rodabanca) é sempre criado; "Detalhado" só
+  // divide as peças já orçadas em produção, nunca recalcula o valor.
   await expect(page.getByRole('button', { name: 'Orçamento Rápido' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('dialog')).toHaveCount(0);
   await expect(page.getByRole('tablist', { name: 'Projetos' }).getByRole('tab')).toHaveCount(1);
@@ -51,29 +52,29 @@ try {
   await page.getByRole('button', { name: 'Trocar cliente' }).click();
   await page.keyboard.press('Escape');
   await expect(page.locator('.compact-customer')).toContainText('João da Silva');
-  await page.getByRole('button', { name: 'Orçamento com Desenho / Detalhado' }).click();
-  await step(1);
-  await expect(page.locator('.project-step')).toHaveCount(3);
   await page.locator('#project-name').fill('Cozinha');
-  await material(0, 'Preto São Gabriel');
-  await root(0).getByLabel('Comprimento (cm)', { exact: true }).fill('200');
-  await root(0).getByLabel('Largura / altura (cm)', { exact: true }).fill('60');
-  await page.getByRole('button', { name: '+ Adicionar componente', exact: true }).click();
-  // O <select> de Tipo não usa exact:true: o nome acessível calculado para o
-  // <label>Tipo<select> implícito acaba incluindo o texto de todas as <option>
-  // (possível problema de acessibilidade real, não só do teste).
-  await root(1).getByLabel('Tipo').selectOption('THRESHOLD');
-  await material(1, 'Branco Itaúnas');
-  await root(1).getByLabel('Comprimento (cm)', { exact: true }).fill('100');
-  await root(1).getByLabel('Largura / altura (cm)', { exact: true }).fill('20');
-  await root(1).getByRole('button', { name: 'Editar acabamentos — Inferior', exact: true }).click();
-  await root(1).getByLabel('Adicionar acabamento — Inferior', { exact: true }).selectOption('vista');
-  await root(1).getByLabel('Largura da vista (cm)').fill('5');
+  await projectMaterial('Preto São Gabriel');
+  await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('2,00');
+  await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,60');
+  await page.getByRole('button', { name: '+ Adicionar item', exact: true }).click();
+  await expect(page.locator('[data-quick-row]')).toHaveCount(2);
+  await page.getByLabel('Tipo da peça 2', { exact: true }).selectOption('THRESHOLD');
+  await page.getByLabel('Comprimento da peça 2 (m)', { exact: true }).fill('1,00');
+  await page.getByLabel('Largura da peça 2 (m)', { exact: true }).fill('0,20');
+  await page.getByRole('button', { name: 'Detalhar', exact: true }).nth(1).click();
+  await rowMaterial('Branco Itaúnas');
+  await page.getByRole('button', { name: '+ Acabamentos desta peça', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.locator('fieldset').filter({ hasText: 'Vista' }).getByLabel('Inferior', { exact: true }).check();
+  await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
+  await page.locator('.quick-services .quick-edge').filter({ hasText: 'Vista' }).getByLabel(/Altura do acabamento/).fill('5');
   await expect(page.locator('.summary-grand-total')).toContainText('970,00');
-  // Previous request: backsplash in the same finish menu, independently drawn.
-  await root(1).getByLabel('Adicionar acabamento — Inferior', { exact: true }).selectOption({ label: 'Rodabanca' });
-  await root(1).getByLabel('Altura da rodabanca (cm)').fill('10');
+  // Rodabanca no mesmo menu de acabamentos, desenhada de forma independente.
+  await page.locator('.quick-services .quick-sides > div').filter({ hasText: 'Inferior' }).getByRole('button', { name: '+ Rodabanca', exact: true }).click();
+  await expect(page.locator('[data-quick-row]')).toHaveCount(3);
+  await page.getByLabel('Largura da peça 3 (m)', { exact: true }).fill('0,10');
   await expect(page.locator('.summary-grand-total')).toContainText('1.070,00');
+  await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
   await step(3);
   await expect(page.locator('.technical-drawing .drawing-description')).toHaveCount(3);
   await expect(page.locator('.technical-drawing')).toContainText('Branco Itaúnas');
@@ -83,44 +84,46 @@ try {
   await expect(page.getByRole('tablist', { name: 'Projetos' }).getByRole('tab')).toHaveCount(2);
   await expect(page.getByRole('tab', { name: 'Projeto 2', exact: true })).toHaveAttribute('aria-selected', 'true');
   // Um projeto novo começa em Orçamento Rápido, então o campo vazio a conferir é o
-  // do editor rápido (o editor detalhado com .component-editor ainda não existe).
+  // do editor rápido.
   await expect(page.locator('#project-name')).toHaveValue('');
   await page.getByRole('button', { name: 'Excluir Projeto 2', exact: true }).click();
   assert.equal(confirmations, 0);
   await expect(page.getByRole('tab', { name: 'Cozinha', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
-  await page.getByRole('button', { name: 'Orçamento com Desenho / Detalhado' }).click();
-  await step(1);
   await page.locator('#project-name').fill('Janela');
-  await material(0, 'Branco Itaúnas');
-  await root(0).getByLabel('Comprimento (cm)', { exact: true }).fill('100');
-  await root(0).getByLabel('Largura / altura (cm)', { exact: true }).fill('10');
+  await projectMaterial('Branco Itaúnas');
+  await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('1,00');
+  await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,10');
   await page.getByRole('tab', { name: 'Cozinha', exact: true }).click();
+  // Cozinha já está em Detalhado (produção) desde o passo anterior — a etapa 1
+  // agora mostra as peças de produção (medidas em cm), não mais o Orçamento
+  // Rápido; o valor comercial continua o mesmo, definido lá.
+  await step(1);
+  const root = index => page.locator('.component-editor > .component-card').nth(index);
   await expect(root(0).getByLabel('Comprimento (cm)', { exact: true })).toHaveValue('200');
   await expect(page.locator('.summary-grand-total')).toContainText('1.070,00');
   await page.getByRole('button', { name: 'Excluir Janela', exact: true }).click();
   assert.equal(confirmations, 1);
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
-  await page.getByRole('button', { name: 'Orçamento com Desenho / Detalhado' }).click();
-  await step(1);
   await page.locator('#project-name').fill('Banheiro');
-  await material(0, 'Branco Itaúnas');
-  await root(0).getByLabel('Comprimento (cm)', { exact: true }).fill('100');
-  await root(0).getByLabel('Largura / altura (cm)', { exact: true }).fill('10');
+  await projectMaterial('Branco Itaúnas');
+  await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('1,00');
+  await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,10');
   await page.getByRole('tab', { name: 'Cozinha', exact: true }).click();
   await page.reload();
   await expect(page.getByRole('tablist', { name: 'Projetos' }).getByRole('tab')).toHaveCount(2);
+  await step(1);
   await expect(root(0).getByLabel('Comprimento (cm)', { exact: true })).toHaveValue('200');
-  // O seletor de material é único por etapa, associado ao componente com foco mais
-  // recente; para conferir o material da peça 2, é preciso focá-la primeiro.
-  await root(1).getByLabel('Nome', { exact: true }).click();
-  await expect(page.locator('.material-picker summary')).toContainText('Branco Itaúnas');
+  // O material por peça (definido no Orçamento Rápido) aparece na legenda do
+  // desenho de cada peça de produção — a divisão nunca o altera.
+  await expect(root(1).locator('.map-caption')).toContainText('Branco Itaúnas');
   mkdirSync('.test-artifacts/projeto-compacto', { recursive: true });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.screenshot({ path: `.test-artifacts/projeto-compacto/componentes-${width}.png`, fullPage: true });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   }
+  await expect(page.locator('#project-step-1')).toBeVisible();
   await step(2);
   await expect(page.locator('#project-step-2')).toBeVisible();
   await step(3);
@@ -133,5 +136,5 @@ try {
   assert.equal(saved.items[0].environment, null);
   assert.equal(saved.customerId, 'customer');
   assert.deepEqual(errors, []);
-  console.log('OK: 3 etapas, cliente compacto, abas independentes, exclusão condicional, materiais e preços por componente, rodabanca no acabamento, desenho, rascunho e envio.');
+  console.log('OK: cliente compacto, abas independentes, exclusão condicional, materiais e preços por peça, rodabanca no acabamento, desenho por peça, rascunho e envio pelo Orçamento Rápido.');
 } finally { await browser.close(); }

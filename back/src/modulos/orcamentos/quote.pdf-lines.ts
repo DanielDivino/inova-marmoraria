@@ -9,6 +9,7 @@ export type QuotePdfLine = {
   quantity?: number;
   total: number;
   adjustment?: boolean;
+  discount?: boolean;
 };
 const amount = (line: any) => Number(line.appliedSubtotal ?? line.calculatedSubtotal ?? line.subtotal ?? 0);
 const cents = (value: number) => Math.round(value * 100);
@@ -40,13 +41,18 @@ export function montarLinhasPdf(items: any[]): { items: QuotePdfLine[][]; linear
       group.total = (cents(group.total) + cents(total)) / 100;
       areaFinishes.set(key, group);
     };
+    // Peitoril (SILL) não tem um "comprimento × largura" único e significativo
+    // nesta tabela resumo — o peitoril duplo, em especial, guarda um retângulo
+    // sintético (mesma área, mas sem corresponder a nenhuma pedra real) em
+    // lengthMm/widthMm só para o cálculo do valor. Deixa em branco pros dois casos.
+    const sillMm = (component: any, mm: number | undefined) => component.componentType === 'SILL' ? undefined : mm;
     for (const component of item.components ?? []) {
       const material = Number(component.subtotal ?? Number(component.billableArea ?? 0) * Number(component.unitPriceSnapshot ?? item.unitPriceSnapshot ?? 0));
       const name = nomeExibicaoComponente(component) + (mixed ? ` · ${materialLabel(component)}` : '');
       const isBacksplash = component.componentType === 'BACKSPLASH';
       const backsplashKey = component.materialId ?? materialLabel(component) ?? '';
       if (isBacksplash) {
-        const group = backsplashes.get(backsplashKey) ?? { line: { description: 'Rodabanca' + (mixed ? ` · ${materialLabel(component)}` : ''), measure: 0, quantity: 0, total: 0, unit: 'm²', lengthMm: component.lengthMm, widthMm: component.widthMm }, count: 0, adjustment: 0 };
+        const group = backsplashes.get(backsplashKey) ?? { line: { description: 'Rodabanca' + (mixed ? ` · ${materialLabel(component)}` : ''), measure: 0, quantity: 0, total: 0, unit: 'm²', lengthMm: sillMm(component, component.lengthMm), widthMm: sillMm(component, component.widthMm) }, count: 0, adjustment: 0 };
         group.count++;
         group.line.measure = Math.round(((group.line.measure ?? 0) + Number(component.billableArea ?? 0)) * 10000) / 10000;
         group.line.quantity = (group.line.quantity ?? 0) + Number(component.quantity ?? 1);
@@ -67,8 +73,8 @@ export function montarLinhasPdf(items: any[]): { items: QuotePdfLine[][]; linear
         } else {
           const line = {
             description: name,
-            lengthMm: component.lengthMm,
-            widthMm: component.widthMm,
+            lengthMm: sillMm(component, component.lengthMm),
+            widthMm: sillMm(component, component.widthMm),
             measure: Number(component.billableArea ?? 0),
             unit: 'm²',
             quantity: Number(component.quantity ?? 1),
@@ -121,8 +127,11 @@ export function montarLinhasPdf(items: any[]): { items: QuotePdfLine[][]; linear
     }
     if (!(item.components ?? []).length) result.push({ description: 'Material · área informada', measure: Number(item.billedQuantity), unit: unit(item.billingUnitSnapshot ?? 'SQUARE_METER'), total: Number(item.materialSubtotal ?? 0) });
     for (const service of item.services ?? []) {
-      if (service.billingUnitSnapshot === 'LINEAR_METER') addLinear(service.serviceNameSnapshot, Number(service.billedQuantity), amount(service));
-      else result.push({ description: service.serviceNameSnapshot, measure: Number(service.billedQuantity), unit: unit(service.billingUnitSnapshot), total: amount(service) });
+      const applied = amount(service);
+      const calculated = Number(service.calculatedSubtotal ?? applied);
+      if (/montagem/i.test(service.serviceNameSnapshot) && calculated > applied) result.push({ description: 'Desconto montagem', total: -(calculated - applied), discount: true });
+      if (service.billingUnitSnapshot === 'LINEAR_METER') addLinear(service.serviceNameSnapshot, Number(service.billedQuantity), applied);
+      else result.push({ description: service.serviceNameSnapshot, measure: Number(service.billedQuantity), unit: unit(service.billingUnitSnapshot), total: applied });
     }
     for (const cutout of item.cutouts ?? []) {
       const name = cutout.serviceNameSnapshot || cutout.label || (cutout.cutoutType === 'OVAL_SINK' ? 'Recorte para cuba oval' : 'Recorte');

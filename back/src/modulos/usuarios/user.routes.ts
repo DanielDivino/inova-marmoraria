@@ -5,15 +5,12 @@ import { prisma } from '../../config/prisma.js';
 import { AppError, idSchema } from '../../compartilhado/http.js';
 import { exigirPerfil } from '../autenticacao/auth.plugin.js';
 
-const workColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Escolha uma cor válida.');
-const createSchema = z.object({ name: z.string().min(2), email: z.string().email().transform((v) => v.toLowerCase()), password: z.string().min(8), role: z.enum(['SUPER_ADMIN', 'ADMIN']).default('ADMIN'), workColor: workColor.default('#607453'), maxDiscountPercent: z.number().min(0).max(100).default(0) });
+const createSchema = z.object({ name: z.string().min(2), email: z.string().email().transform((v) => v.toLowerCase()), password: z.string().min(8), role: z.enum(['SUPER_ADMIN', 'ADMIN']).default('ADMIN'), maxDiscountPercent: z.number().min(0).max(100).default(0) });
 const updateSchema = createSchema.partial().omit({ password: true }).extend({ password: z.string().min(8).optional(), isActive: z.boolean().optional() });
-const publicSelect = { id: true, name: true, email: true, role: true, isActive: true, workColor: true, maxDiscountPercent: true, createdAt: true } as const;
+const publicSelect = { id: true, name: true, email: true, role: true, isActive: true, maxDiscountPercent: true, createdAt: true } as const;
 
 export async function registrarRotasUsuarios(app: FastifyInstance) {
-  const authenticated = { preHandler: [app.authenticate] };
   const superOnly = { preHandler: [app.authenticate, exigirPerfil('SUPER_ADMIN')] };
-  app.get('/workers', authenticated, async () => prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, workColor: true }, orderBy: { name: 'asc' } }));
   app.get('/', superOnly, async () => prisma.user.findMany({ select: publicSelect, orderBy: { name: 'asc' } }));
   app.post('/', superOnly, async (request, reply) => {
     const input = createSchema.parse(request.body);

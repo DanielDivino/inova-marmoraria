@@ -48,7 +48,7 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
     const current = await prisma.quoteWorkerAssignment.findFirst({ where: { quoteId: id, releasedAt: null }, include: { worker: { select: { id: true, name: true, workColor: true } } }, orderBy: { assignedAt: 'desc' } });
     if (current?.workerId === workerId) return serializarOrcamento(await prisma.quote.findUniqueOrThrow({ where: { id }, include: quoteInclude }));
-    const worker = workerId ? await prisma.user.findFirst({ where: { id: workerId, isActive: true }, select: { id: true, name: true, workColor: true } }) : null;
+    const worker = workerId ? await prisma.worker.findFirst({ where: { id: workerId, isActive: true }, select: { id: true, name: true, workColor: true } }) : null;
     if (workerId && !worker) throw new AppError(422, 'Funcionário não está disponível.', 'WORKER_UNAVAILABLE');
     const updated = await prisma.$transaction(async (tx) => {
       const now = new Date();

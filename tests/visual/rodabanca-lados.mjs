@@ -31,68 +31,69 @@ try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
   await page.locator('#project-name').waitFor();
   // A "compact-customer" bar opens a modal dialog for picking the customer; a fresh
-  // project also starts in "Orçamento Rápido" mode, so the detailed editor (with the
-  // classic component/measurements flow) must be selected explicitly.
+  // project also starts in "Orçamento Rápido" mode, which is where all commercial
+  // data (material, measurements, finishes, rodabanca) is entered now.
   await page.getByRole('button', { name: 'Selecionar cliente' }).click();
   await page.locator('.customer-dialog .search').fill('Cliente');
   await page.locator('.customer-result').click();
-  await page.getByRole('button', { name: 'Orçamento com Desenho / Detalhado' }).click();
-  await page.locator('.project-step').nth(0).getByRole('button').click();
   await page.locator('#project-name').fill('Rodabancas por lado');
   await page.locator('.material-picker summary').click();
   await page.locator('.material-picker-panel button').click();
-  const root = page.locator('.component-editor > .component-card').first();
-  await root.getByLabel('Comprimento (cm)', { exact: true }).fill('70');
-  await root.getByLabel('Largura / altura (cm)', { exact: true }).fill('50');
-  await root.getByRole('button', { name: 'Editar acabamentos — Direito', exact: true }).click();
-  const right = root.getByLabel('Adicionar acabamento — Direito', { exact: true });
-  await right.selectOption({ label: 'Vista' });
-  await root.getByLabel('Largura da vista (cm)').fill('5');
-  await right.selectOption({ label: 'Acabamento 45°' });
-  await right.selectOption({ label: 'Rodabanca' });
-  await root.getByLabel('Altura da rodabanca (cm)').fill('10');
-  await expect(root.locator('.edge-finish')).toHaveCount(3);
-  await expect(root.locator('.attached-component')).toHaveCount(0);
-  await expect(root.getByLabel('Editar comprimento — Rodabanca')).toContainText('50 cm');
-  await expect(page.locator('.quote-summary-card')).toContainText('Rodabanca · Direito');
+  await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('0,70');
+  await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,50');
+  await page.getByRole('button', { name: '+ Acabamentos', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.locator('fieldset').filter({ hasText: 'Vista' }).getByLabel('Direito', { exact: true }).check();
+  await dialog.locator('fieldset').filter({ hasText: 'Acabamento 45°' }).getByLabel('Direito', { exact: true }).check();
+  await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
+  await page.getByRole('button', { name: 'Detalhar', exact: true }).first().click();
+  const sideGroup = label => page.locator('.quick-services .quick-sides > div').filter({ hasText: label });
+  await sideGroup('Direito').locator('.quick-edge').filter({ hasText: 'Vista' }).getByLabel(/Altura do acabamento/).fill('5');
+  await expect(sideGroup('Direito')).toContainText('Vista');
+  await expect(sideGroup('Direito')).toContainText('Acabamento 45°');
+  // "+ Rodabanca" anexa uma peça separada, com o comprimento copiado do lado
+  // escolhido — Direito copia a largura (0,50 m); cobrada de forma independente.
+  await sideGroup('Direito').getByRole('button', { name: '+ Rodabanca', exact: true }).click();
+  await expect(page.locator('[data-quick-row]')).toHaveCount(2);
+  await expect(page.getByLabel('Comprimento da peça 2 (m)', { exact: true })).toHaveValue('0,5');
+  await expect(page.locator('[data-quick-row]').nth(1)).toContainText('Peça principal');
+  await expect(page.locator('[data-quick-row]').nth(1)).toContainText('Direito');
+  await page.getByLabel('Largura da peça 2 (m)', { exact: true }).fill('0,10');
   await expect(page.locator('.quote-summary-card')).toContainText('R$ 35,00');
-  await root.getByRole('button', { name: 'Editar acabamentos — Superior', exact: true }).click();
-  await root.getByLabel('Adicionar acabamento — Superior', { exact: true }).selectOption({ label: 'Rodabanca' });
-  await root.getByLabel('Altura da rodabanca (cm)').fill('10');
-  await expect(root.getByLabel('Editar comprimento — Rodabanca')).toContainText('70 cm');
+  // Uma segunda rodabanca no lado Superior copia o comprimento (0,70 m).
+  await sideGroup('Superior').getByRole('button', { name: '+ Rodabanca', exact: true }).click();
+  await expect(page.getByLabel('Comprimento da peça 3 (m)', { exact: true })).toHaveValue('0,7');
+  await page.getByLabel('Largura da peça 3 (m)', { exact: true }).fill('0,10');
   await expect(page.locator('.quote-summary-card')).toContainText('R$ 49,00');
-  // The user can override the copied length without changing the countertop.
-  await root.getByLabel('Editar comprimento — Rodabanca').click();
-  await root.getByLabel('Comprimento da rodabanca (cm)').fill('65');
+  // O usuário pode sobrescrever o comprimento copiado sem alterar a bancada.
+  await page.getByLabel('Comprimento da peça 3 (m)', { exact: true }).fill('0,65');
   await expect(page.locator('.quote-summary-card')).toContainText('R$ 45,50');
-  await root.getByLabel('Comprimento da rodabanca (cm)').fill('70');
-  await root.getByRole('button', { name: 'Editar acabamentos — Direito', exact: true }).click();
+  await page.getByLabel('Comprimento da peça 3 (m)', { exact: true }).fill('0,70');
   mkdirSync('.test-artifacts/rodabanca-lados', { recursive: true });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    await root.locator('.component-edge-layout').first().screenshot({ path: `.test-artifacts/rodabanca-lados/editor-${width}.png` });
+    await page.locator('.quick-quote').screenshot({ path: `.test-artifacts/rodabanca-lados/editor-${width}.png` });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.reload();
   await page.locator('#project-name').waitFor();
-  await page.locator('.map-side-right').filter({ hasText: 'Rodabanca' }).waitFor();
-  // The last edited side reopens automatically after reload; only click if it collapsed.
-  if ((await root.locator('.map-side-right').getAttribute('aria-expanded')) !== 'true') {
-    await root.getByRole('button', { name: 'Editar acabamentos — Direito', exact: true }).click();
-  }
-  await expect(root.getByLabel('Altura da rodabanca (cm)')).toHaveValue('10');
-  await expect(root.getByLabel('Editar comprimento — Rodabanca')).toContainText('50 cm');
+  await expect(page.locator('[data-quick-row]')).toHaveCount(3);
+  await expect(page.getByLabel('Comprimento da peça 2 (m)', { exact: true })).toHaveValue('0,5');
+  await expect(page.getByLabel('Comprimento da peça 3 (m)', { exact: true })).toHaveValue('0,7');
+  // A ordem de serviço mostra cada peça separadamente, com material e desenho
+  // próprios, após o detalhamento (produção nunca altera o valor comercial).
+  await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Concluir detalhamento', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Concluir detalhamento', exact: true }).click();
   await page.locator('.project-step').nth(2).getByRole('button').click();
   await expect(page.locator('.technical-drawing .drawing-description')).toHaveCount(3);
-  await expect(page.locator('.manufacturing-description')).toContainText('50 × 10 cm');
-  await expect(page.locator('.manufacturing-description')).toContainText('70 × 10 cm');
   await page.locator('.technical-drawing').screenshot({ path: '.test-artifacts/rodabanca-lados/desenho.png' });
-  await page.locator('.project-step').nth(0).getByRole('button').click();
-  await root.getByRole('button', { name: 'Editar acabamentos — Superior', exact: true }).click();
-  await root.getByRole('button', { name: 'Remover Rodabanca — Superior', exact: true }).click();
-  await expect(page.locator('.quote-summary-card')).not.toContainText('Rodabanca · Superior');
-  await expect(page.locator('.quote-summary-card')).toContainText('Rodabanca · Direito');
+  await page.getByRole('button', { name: 'Orçamento Rápido', exact: true }).click();
+  // Remover a rodabanca do lado Superior mantém a do lado Direito intacta.
+  await page.locator('[data-quick-row]').nth(2).getByRole('button', { name: /^Remover peça/ }).click();
+  await expect(page.locator('[data-quick-row]')).toHaveCount(2);
+  await expect(page.locator('.quote-summary-card')).not.toContainText('R$ 49,00');
   await page.locator('.quote-summary-actions').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
   await page.waitForURL('**/orcamentos');
   assert.equal(saved.items[0].components.length, 2);
@@ -101,7 +102,7 @@ try {
   assert.equal(saved.items[0].components[1].lengthMm, 500);
   assert.equal(saved.items[0].components[1].widthMm, 100);
   assert.deepEqual(errors, []);
-  console.log('OK: rodabanca junto aos acabamentos, medidas editáveis, preços separados, desenho separado, rascunho, remoção e salvamento.');
+  console.log('OK: rodabanca anexada pelo Orçamento Rápido, comprimento copiado e editável, preços separados, remoção seletiva, desenho por peça e salvamento.');
 } finally {
   await browser.close();
 }

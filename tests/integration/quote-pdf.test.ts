@@ -41,6 +41,16 @@ async function render(input: ReturnType<typeof quote>, artifact?: string) {
 }
 
 describe('Desenho e observações do PDF', () => {
+  it('mostra comprimento e largura comerciais em metros com duas casas decimais', async () => {
+    const result = await render(quote([{ ...component(), lengthMm: 1150, widthMm: 600 }]));
+    expect(result.text).toContain('COMP. m');
+    expect(result.text).toContain('LARG. m');
+    expect(result.printed.some(([text]) => text === '1,15')).toBe(true);
+    expect(result.printed.some(([text]) => text === '0,60')).toBe(true);
+    expect(result.text).not.toContain('COMP. cm');
+    expect(result.text).not.toContain('LARG. cm');
+  });
+
   it('desenha vista e saia no mesmo lado e descreve suas medidas separadamente', async () => {
     const vista = { ...edge('FRONT', 'Vista'), heightMm: 50, billingUnitSnapshot: 'SQUARE_METER', billedQuantity: 0.1 };
     const result = await render(quote([component([vista, edge('FRONT', 'Saia'), edge('FRONT', 'Acabamento 45°')])]), 'os-vista');

@@ -41,48 +41,49 @@ await page.route('**/api/**', async route => {
   errors.push('API não prevista: ' + path);
   return route.fulfill({ status: 404, json: {} });
 });
-// O stepper agora tem só 3 etapas (Componentes, Valores, Desenho); cliente e nome do
-// projeto viraram cabeçalho/modal, fora do stepper.
+// Todo dado comercial (material, medidas, acabamentos, recortes, valores,
+// desconto) é criado no Orçamento Rápido; "Detalhado" só divide as peças já
+// orçadas em produção — nunca recalcula nem edita valores.
 const step = number => page.locator('.project-step').nth(number - 1).getByRole('button').click();
 const screenshot = name => page.screenshot({ path: resolve(output, name + '.png'), fullPage: true });
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
   await page.locator('#project-name').waitFor();
   assert.equal(await page.getByRole('button', { name: 'Orçamento Rápido' }).getAttribute('aria-pressed'), 'true', 'Novo projeto começa no orçamento rápido');
+  assert.equal(await page.getByLabel('Orientação', { exact: true }).count(), 0);
   await screenshot('01-inicial');
   await page.getByRole('button', { name: 'Selecionar cliente' }).click();
   await page.locator('.customer-dialog .search').fill('Cliente');
   await page.locator('.customer-result').click();
-  await page.getByRole('button', { name: 'Orçamento com Desenho / Detalhado' }).click();
-  await step(1);
   await page.locator('#project-name').fill('Bancada da cozinha');
   await page.locator('.material-picker summary').click();
   await page.locator('.material-picker-panel button').click();
-  const component = page.locator('.component-card').first();
-  assert.equal(await component.getByLabel('Orientação', { exact: true }).count(), 0);
-  await component.locator('.component-fields').first().getByLabel('Comprimento (cm)', { exact: true }).fill('250');
-  await component.getByLabel('Largura / altura (cm)', { exact: true }).fill('60');
-  await component.getByRole('button', { name: 'Editar acabamentos — Inferior', exact: true }).click();
-  const edge = component.getByRole('combobox', { name: 'Adicionar acabamento — Inferior', exact: true });
-  await edge.selectOption({ label: 'Acabamento 45°' });
-  await edge.selectOption({ label: 'Saia' });
-  await component.getByLabel('Altura da saia (cm)', { exact: true }).fill('10');
-  const finish = component.locator('.edge-finish').first();
-  await finish.locator('.edge-length-editor summary').click();
-  assert.equal(await finish.locator('small').count(), 0, 'Sem regras de cálculo no acabamento');
-  assert((await finish.getByLabel('Comprimento aplicado (cm)', { exact: true }).boundingBox()).width <= 80, 'Comprimento compacto');
-  await finish.getByLabel('Comprimento aplicado (cm)', { exact: true }).fill('200');
-  assert.match(await page.locator('.summary-grand-total').innerText(), /1\.190,00/);
-  await finish.getByLabel('Comprimento aplicado (cm)', { exact: true }).fill('');
-  await screenshot('02-acabamentos-compactos');
-  assert.match(await page.locator('.summary-grand-total').innerText(), /1\.225,00/);
-  await component.getByRole('button', { name: 'Fechar edição do lado', exact: true }).click();
+  await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('2,50');
+  await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,60');
+  await page.getByRole('button', { name: '+ Acabamentos', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.locator('fieldset').filter({ hasText: 'Acabamento 45°' }).getByLabel('Inferior', { exact: true }).check();
+  await dialog.locator('fieldset').filter({ hasText: 'Saia' }).getByLabel('Inferior', { exact: true }).check();
+  await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
+  await page.getByRole('button', { name: 'Detalhar', exact: true }).first().click();
+  const saiaEdge = page.locator('.quick-edge').filter({ hasText: 'Saia' });
+  await saiaEdge.getByLabel(/Altura do acabamento/).fill('10');
   await screenshot('02-medidas');
-  await component.locator('.component-card-title').click();
-  assert.equal(await component.locator('.component-fields').first().getByLabel('Comprimento (cm)', { exact: true }).isVisible(), false);
-  await component.locator('.component-card-title').click();
-  await component.getByRole('button', { name: '+ Adicionar recorte/cuba', exact: true }).click();
-  const cutout = component.locator('.cutout-row');
+  // Valor final por acabamento: uma sobrescrita monetária direta (o mecanismo
+  // do Orçamento Rápido), em vez do antigo "comprimento aplicado" do modo
+  // Detalhado — o efeito testado é o mesmo: preço independente e reversível.
+  const miterEdge = page.locator('.quick-edge').filter({ hasText: 'Acabamento 45°' });
+  await miterEdge.getByLabel('Valor final (R$)', { exact: true }).fill('50,00');
+  await assertTotalContains('1.100,00');
+  await miterEdge.getByLabel('Valor final (R$)', { exact: true }).fill('');
+  await assertTotalContains('1.225,00');
+  // Recolher/reabrir a peça (equivalente ao antigo "Fechar edição do lado").
+  await page.getByRole('button', { name: 'Detalhar', exact: true }).first().click();
+  assert.equal(await page.locator('.quick-services').count(), 0, 'Peça recolhida');
+  await page.getByRole('button', { name: 'Detalhar', exact: true }).first().click();
+  await page.getByRole('button', { name: '+ Recorte / cuba / furo', exact: true }).click();
+  const cutout = page.locator('.cutout-row');
+  await cutout.getByLabel('Definição das medidas do recorte', { exact: false }).selectOption('DEFINED');
   await cutout.getByLabel('Descrição', { exact: true }).fill('Recorte para cuba de embutir');
   await cutout.getByLabel('Comprimento (cm)', { exact: true }).fill('56');
   await cutout.getByLabel('Largura (cm)', { exact: true }).fill('34');
@@ -90,43 +91,37 @@ try {
   assert.equal(await cutout.locator('option').filter({ hasText: 'Cuba Grande 56 x 34' }).count(), 0);
   await cutout.getByLabel('Tipo de recorte ou cuba').selectOption({ label: 'Cuba oval' });
   assert.equal(await cutout.getByLabel('Serviço de recorte ou cuba').inputValue(), 'oval-cut');
-  assert.equal(await component.locator('.map-stone ellipse').count(), 1);
-  assert.match(await page.locator('.summary-grand-total').innerText(), /1\.375,00/);
-  await cutout.getByLabel('Tipo de recorte ou cuba').selectOption('SINK');
-  assert.equal(await component.locator('.map-stone ellipse').count(), 0);
-  assert.equal(await cutout.getByLabel('Serviço de recorte ou cuba').inputValue(), 'sink');
   await cutout.getByLabel('Tipo de recorte ou cuba').selectOption('OVAL_SINK');
   await page.getByLabel('Observações do orçamento', { exact: true }).fill('Conferir medidas antes de fabricar.');
   await screenshot('03-recortes');
-  await page.getByRole('button', { name: 'Revisar valores e serviços' }).click();
-  assert.equal(await page.locator('#project-step-2').isVisible(), true);
-  assert.equal(await page.locator('.general-services-menu').isVisible(), true);
-  assert.equal(await page.locator('.general-services-menu').getByText('Corte de cuba oval', { exact: true }).count(), 0);
-  const sinkProduct = page.locator('.general-services-menu .service-main').filter({ hasText: 'Cuba Grande 56 x 34' });
-  await sinkProduct.click();
-  await page.getByLabel('Quantidade — Cuba Grande 56 x 34', { exact: true }).fill('1');
-  assert.match(await page.locator('.summary-grand-total').innerText(), /1\.725,00/);
-  await sinkProduct.click();
-  assert.match(await page.locator('.summary-grand-total').innerText(), /1\.375,00/);
-  const installation = page.locator('.general-services-menu .service-main').filter({ hasText: 'Instalação' });
-  await installation.click();
-  assert.match(await page.locator('.summary-grand-total').innerText(), /1\.475,00/);
-  await installation.click();
-  // NOTA: no modo Detalhado o "Desconto autorizado" não é refletido no "Total do
-  // projeto" (esse card mostra o total do projeto individual sem desconto global;
-  // só o modo Rápido exibe um "Total do orçamento" com desconto aplicado). O valor
-  // é validado de ponta a ponta mais abaixo, conferindo saved.discountAmount.
-  await page.getByLabel('Desconto autorizado', { exact: true }).fill('25');
-  assert.equal(await page.getByLabel('Desconto autorizado', { exact: true }).inputValue(), '25');
+  // Cuba Grande (item, não recorte) e Instalação vivem em "+ Outros serviços",
+  // com quantidade por unidade (Instalação é valor fixo, sem quantidade).
+  await page.getByRole('button', { name: '+ Outros serviços', exact: true }).click();
+  const servicesDialog = page.getByRole('dialog', { name: 'Outros serviços' });
+  assert.equal(await servicesDialog.getByText('Corte de cuba oval', { exact: true }).count(), 0);
+  const sinkProduct = servicesDialog.locator('.quick-service-choice').filter({ hasText: 'Cuba Grande 56 x 34' });
+  await sinkProduct.locator('input[type="checkbox"]').check();
+  await assertTotalContains('1.725,00');
+  await sinkProduct.locator('input[type="checkbox"]').uncheck();
+  await assertTotalContains('1.375,00');
+  const installation = servicesDialog.locator('.quick-service-choice').filter({ hasText: 'Instalação' });
+  await installation.locator('input[type="checkbox"]').check();
+  await assertTotalContains('1.475,00');
+  await installation.locator('input[type="checkbox"]').uncheck();
+  await servicesDialog.getByRole('button', { name: 'Concluir', exact: true }).click();
+  await page.getByLabel('Desconto geral rápido', { exact: true }).fill('25');
+  assert.equal(await page.getByLabel('Desconto geral rápido', { exact: true }).inputValue(), '25');
   await screenshot('04-valores');
-  await page.getByRole('button', { name: 'Conferir desenho técnico' }).click();
+  await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
+  await step(3);
   assert.equal(await page.locator('#project-step-3').isVisible(), true);
   assert.equal(await page.locator('ellipse.drawing-cutout').count(), 1);
   assert.match(await page.locator('.manufacturing-description').innerText(), /Saia no lado Inferior/);
   assert.match(await page.locator('.manufacturing-description').innerText(), /56 × 34 cm/);
   await screenshot('05-desenho');
   await step(1);
-  assert.equal(await component.locator('.component-fields').first().getByLabel('Comprimento (cm)', { exact: true }).inputValue(), '250');
+  const root = page.locator('.component-editor > .component-card').first();
+  assert.equal(await root.getByLabel('Comprimento (cm)', { exact: true }).inputValue(), '250');
   await page.getByRole('button', { name: 'Ver tudo', exact: true }).click();
   for (const number of [1, 2, 3]) assert.equal(await page.locator('#project-step-' + number).isVisible(), true);
   await page.getByRole('button', { name: 'Ver por etapas', exact: true }).click();
@@ -138,16 +133,20 @@ try {
     }
     await screenshot('06-responsivo-' + width);
     await step(1);
-    await component.getByRole('button', { name: 'Editar acabamentos — Inferior', exact: true }).click();
+    const inferiorButton = root.getByRole('button', { name: 'Editar acabamentos — Inferior', exact: true });
+    // "Inferior" já abre sozinho, pois é o primeiro lado com acabamento
+    // (ComponentEdgeMap inicializa "active" com o lado do primeiro edge).
+    if ((await inferiorButton.getAttribute('aria-expanded')) !== 'true') await inferiorButton.click();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Acabamentos sem overflow em ' + width);
-    await component.locator('.component-edge-layout').screenshot({ path: resolve(output, 'acabamentos-' + width + '.png') });
-    await component.getByRole('button', { name: 'Fechar edição do lado', exact: true }).click();
+    await root.locator('.component-edge-layout').screenshot({ path: resolve(output, 'acabamentos-' + width + '.png') });
+    await root.getByRole('button', { name: 'Fechar edição do lado', exact: true }).click();
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await step(1);
+  await page.getByRole('button', { name: 'Orçamento Rápido', exact: true }).click();
   await page.reload();
   await page.locator('#project-name').waitFor();
-  assert.equal(await component.locator('.component-fields').first().getByLabel('Comprimento (cm)', { exact: true }).inputValue(), '250');
+  await page.getByRole('button', { name: 'Detalhar', exact: true }).first().click();
+  assert.equal(await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).inputValue(), '2,5');
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
   await page.locator('#project-name').fill('Segundo projeto');
   await page.locator('.quote-summary-actions').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
@@ -155,7 +154,7 @@ try {
   await page.locator('#project-name').waitFor();
   assert.equal(await page.locator('#project-name').inputValue(), 'Segundo projeto');
   await page.getByLabel('Projeto em edição', { exact: true }).selectOption('0');
-  assert.equal(await component.locator('.component-fields').first().getByLabel('Comprimento (cm)', { exact: true }).inputValue(), '250');
+  assert.equal(await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).inputValue(), '2,5');
   await page.getByLabel('Projeto em edição', { exact: true }).selectOption('1');
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Excluir Segundo projeto', exact: true }).click();
@@ -169,7 +168,12 @@ try {
   assert.equal(saved.discountAmount, 25);
   assert.equal(saved.notes, 'Conferir medidas antes de fabricar.');
   assert.deepEqual(errors, []);
-  console.log('OK: etapas, recolher componente, preços independentes, recorte, desconto, desenho, Ver tudo, rascunho, salvamento e 4 larguras sem overflow e sem campo Orientação. Nenhuma API real chamada.');
+  console.log('OK: Orçamento Rápido, acabamentos, valores independentes, recolher peça, recorte, outros serviços, desconto, desenho, Ver tudo, rascunho, salvamento e 4 larguras sem overflow e sem campo Orientação. Nenhuma API real chamada.');
 } finally {
   await browser.close();
+}
+
+async function assertTotalContains(text) {
+  const total = await page.locator('.quote-summary-card .summary-grand-total').innerText();
+  assert(total.includes(text), `Esperava "${text}" em "${total}"`);
 }

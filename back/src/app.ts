@@ -12,7 +12,9 @@ import { registrarRotasOrcamentos } from './modulos/orcamentos/quote.routes.js';
 import { registrarRotasAuditoria } from './modulos/auditoria/audit.routes.js';
 import { registrarRotasNotificacoes } from './modulos/notificacoes/notification.routes.js';
 import { registrarRotasDesenhos } from './modulos/desenhos/design.routes.js';
+import { registrarRotasFuncionarios } from './modulos/funcionarios/worker.routes.js';
 import { AppError } from './compartilhado/http.js';
+import { registrarRotasRemontagem } from './modulos/remontagem/remount.routes.js';
 
 export async function criarAplicacao() {
   const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
@@ -25,10 +27,12 @@ export async function criarAplicacao() {
   app.register(registrarRotasCatalogo, { prefix: '/catalog' });
   app.register(registrarRotasClientes, { prefix: '/customers' });
   app.register(registrarRotasOrcamentos, { prefix: '/quotes' });
+  app.register(registrarRotasRemontagem, { prefix: '/quotes' });
   app.register(registrarRotasUsuarios, { prefix: '/users' });
   app.register(registrarRotasAuditoria, { prefix: '/audit' });
   app.register(registrarRotasNotificacoes, { prefix: '/notifications' });
   app.register(registrarRotasDesenhos);
+  app.register(registrarRotasFuncionarios, { prefix: '/workers' });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof ZodError) {

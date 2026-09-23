@@ -38,19 +38,25 @@ export function rotuloLadoBorda(side: string): string {
 }
 
 export const componentTypeLabels: Record<ComponentType, string> = { TOP: 'Tampo', COUNTER: 'Bancada', BASE: 'Base', VISTA: 'Vista', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', SIDE_LEFT: `Lateral — ${edgeSideLabels.LEFT}`, SIDE_RIGHT: `Lateral — ${edgeSideLabels.RIGHT}`, SILL: 'Peitoril', THRESHOLD: 'Soleira', STEP: 'Degrau', OTHER: 'Componente' };
-export type ComponentDrawingDetail = { parentComponentIndex?: number; parentSide?: Exclude<EdgeSide, 'CUSTOM'>; sillDetailMm?: number; sillDetailHeightMm?: number };
+export type ComponentDrawingDetail = { parentComponentIndex?: number; parentSide?: Exclude<EdgeSide, 'CUSTOM'>; sillDetailMm?: number; sillDetailHeightMm?: number;
+  /** Peitoril de duas pedras sobrepostas (Orçamento Rápido) — comprimento é o
+   * normal do componente (lengthMm), compartilhado pelas duas pedras. */
+  sillTopWidthMm?: number; sillBottomWidthMm?: number; sillFinalWidthMm?: number; sillOverlapMm?: number };
+const sillDuploNumericFields = ['sillTopWidthMm', 'sillBottomWidthMm', 'sillFinalWidthMm', 'sillOverlapMm'] as const;
 
 /** Indexes follow the persisted component sort order, so recreated IDs are safe. */
 export function detalheDesenhoComponente(data: unknown, index: number): ComponentDrawingDetail {
   if (!data || typeof data !== 'object' || !('componentDetails' in data) || !Array.isArray(data.componentDetails)) return {};
   const detail = data.componentDetails[index];
   if (!detail || typeof detail !== 'object') return {};
-  return {
+  const result: ComponentDrawingDetail = {
     ...(Number.isInteger(detail.parentComponentIndex) && detail.parentComponentIndex >= 0 && detail.parentComponentIndex < index ? { parentComponentIndex: detail.parentComponentIndex } : {}),
     ...(['BACK', 'FRONT', 'LEFT', 'RIGHT'].includes(detail.parentSide) ? { parentSide: detail.parentSide } : {}),
     ...(Number.isInteger(detail.sillDetailMm) && detail.sillDetailMm > 0 ? { sillDetailMm: detail.sillDetailMm } : {}),
     ...(Number.isInteger(detail.sillDetailHeightMm) && detail.sillDetailHeightMm > 0 ? { sillDetailHeightMm: detail.sillDetailHeightMm } : {}),
   };
+  for (const field of sillDuploNumericFields) if (Number.isInteger(detail[field]) && detail[field] > 0) result[field] = detail[field];
+  return result;
 }
 
 export function nomeExibicaoComponente(component: { label?: string; componentType?: string }): string {

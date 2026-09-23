@@ -1,5 +1,6 @@
 import { centimetrosParaMilimetros, descricaoProducaoComponente, descricaoProducaoRecorte, tituloComponenteProducao, type ManufacturingCutout, type ManufacturingLine } from '@inova/domain';
 import type { DraftComponent, DraftCutout } from '../componentes/orcamento/types';
+import { medidasEfetivasPeitorilDuplo } from './quick-quote';
 
 export const drawingMm = (value?: string) => { try { return centimetrosParaMilimetros(value ?? ''); } catch { return undefined; } };
 const position = (value?: string) => {
@@ -15,9 +16,12 @@ export function descricaoProducaoRascunho(components: DraftComponent[], cutouts:
   });
   const sections: { title: string; lines: ManufacturingLine[] }[] = components.map((component, index) => {
     const parentIndex = components.findIndex((entry) => entry.id === component.parentComponentId);
+    const peitorilDuplo = medidasEfetivasPeitorilDuplo(component, false);
     return { title: tituloComponenteProducao(component, index), lines: descricaoProducaoComponente({ ...component,
-      lengthMm: drawingMm(component.lengthCm) ?? 0, widthMm: drawingMm(component.widthCm) ?? 0,
+      lengthMm: peitorilDuplo?.lengthMm ?? drawingMm(component.lengthCm) ?? 0, widthMm: peitorilDuplo?.widthMm ?? drawingMm(component.widthCm) ?? 0,
       sillDetailMm: drawingMm(component.sillDetailCm), sillDetailHeightMm: drawingMm(component.sillDetailHeightCm),
+      sillTopWidthMm: drawingMm(component.sillTopWidthCm), sillBottomWidthMm: drawingMm(component.sillBottomWidthCm),
+      sillFinalWidthMm: drawingMm(component.sillFinalWidthCm), sillOverlapMm: drawingMm(component.sillOverlapCm),
       edges: component.edges.map((edge) => ({ ...edge, lengthMm: drawingMm(edge.lengthCm), heightMm: drawingMm(edge.heightCm), serviceName: services.find((service) => service.id === edge.serviceId)?.name ?? 'Acabamento' })),
     }, cutouts.filter((cutout) => cutout.componentIndex === index).map(normalizeCutout),
     parentIndex >= 0 ? tituloComponenteProducao(components[parentIndex], parentIndex) : undefined,

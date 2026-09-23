@@ -1,0 +1,21 @@
+CREATE TABLE "Remount" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "quoteId" TEXT NOT NULL UNIQUE REFERENCES "Quote"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  "version" INTEGER NOT NULL DEFAULT 1,
+  "input" JSONB NOT NULL,
+  "items" JSONB NOT NULL,
+  "assembly" DECIMAL(12,2) NOT NULL CHECK ("assembly" >= 0),
+  "disassembly" DECIMAL(12,2) NOT NULL CHECK ("disassembly" >= 0),
+  "assemblyDiscount" DECIMAL(12,2) NOT NULL CHECK ("assemblyDiscount" >= 0),
+  "disassemblyDiscount" DECIMAL(12,2) NOT NULL CHECK ("disassemblyDiscount" >= 0),
+  "itemsTotal" DECIMAL(12,2) NOT NULL CHECK ("itemsTotal" >= 0),
+  "subtotal" DECIMAL(12,2) NOT NULL CHECK ("subtotal" >= 0),
+  "cardOverride" DECIMAL(12,2) CHECK ("cardOverride" >= 0),
+  "cardTotal" DECIMAL(12,2) NOT NULL CHECK ("cardTotal" >= 0),
+  "pixPercent" INTEGER NOT NULL DEFAULT 5 CHECK ("pixPercent" IN (5, 10, 15, 20, 25)),
+  "pixTotal" DECIMAL(12,2) NOT NULL CHECK ("pixTotal" >= 0),
+  "notes" TEXT NOT NULL DEFAULT '',
+  "itemNotes" JSONB NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);

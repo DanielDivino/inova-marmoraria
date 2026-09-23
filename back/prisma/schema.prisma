@@ -102,7 +102,6 @@ model User {
   passwordHash         String
   role                 Role       @default(ADMIN)
   isActive             Boolean    @default(true)
-  workColor            String     @default("#607453")
   commercialAccess     Boolean    @default(true)
   designEdit           Boolean    @default(false)
   designReview         Boolean    @default(false)
@@ -112,11 +111,26 @@ model User {
   updatedAt            DateTime   @updatedAt
   createdQuotes        Quote[]    @relation("QuoteCreator")
   auditLogs            AuditLog[]
-  workerAssignments    QuoteWorkerAssignment[]
   editedDesignDrafts   DesignDraft[]       @relation("DesignDraftEditor")
   createdDesignRevisions DesignRevision[]  @relation("DesignRevisionCreator")
   revisionDecisions    RevisionDecision[]  @relation("RevisionDecisionMaker")
   productionReleases   ProductionRelease[] @relation("ProductionReleaseMaker")
+}
+
+/** Funcionário da oficina — pessoa atribuída a uma OS para acompanhar o
+ * trabalho. Sem relação com login: não acessa o sistema, só aparece nas
+ * telas de atribuição e no histórico da OS. Nenhum campo é obrigatório além
+ * do id; a equipe pode ser cadastrada aos poucos. */
+model Worker {
+  id                String   @id @default(cuid())
+  name              String?
+  cpf               String?
+  phone             String?
+  workColor         String   @default("#607453")
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workerAssignments QuoteWorkerAssignment[]
 }
 
 model Customer {
@@ -233,6 +247,7 @@ model Quote {
   createdBy       User        @relation("QuoteCreator", fields: [createdById], references: [id])
   items           QuoteItem[]
   workerAssignments QuoteWorkerAssignment[]
+  remount         Remount?
   @@index([customerId, status, createdAt])
   @@index([status, dueDate])
   @@index([status, executionStatus, deliveryDeadline])
@@ -401,7 +416,7 @@ model QuoteWorkerAssignment {
   assignedAt    DateTime @default(now())
   releasedAt    DateTime?
   quote         Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  worker        User     @relation(fields: [workerId], references: [id], onDelete: Restrict)
+  worker        Worker   @relation(fields: [workerId], references: [id], onDelete: Restrict)
 
   @@index([quoteId, releasedAt])
   @@index([workerId, releasedAt])
@@ -414,6 +429,31 @@ model QuoteSequence {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   @@id([year, month])
+}
+
+// Complemento independente: preços e itens não alteram o orçamento de origem.
+model Remount {
+  id String @id @default(cuid())
+  quoteId String @unique
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  version Int @default(1)
+  input Json
+  items Json
+  assembly Decimal @db.Decimal(12, 2)
+  disassembly Decimal @db.Decimal(12, 2)
+  assemblyDiscount Decimal @db.Decimal(12, 2)
+  disassemblyDiscount Decimal @db.Decimal(12, 2)
+  itemsTotal Decimal @db.Decimal(12, 2)
+  subtotal Decimal @db.Decimal(12, 2)
+  cardOverride Decimal? @db.Decimal(12, 2)
+  cardTotal Decimal @db.Decimal(12, 2)
+  cashDiscount Decimal @db.Decimal(12, 2)
+  pixPercent Int @default(5)
+  pixTotal Decimal @db.Decimal(12, 2)
+  notes String @default("")
+  itemNotes Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model QuoteItem {
