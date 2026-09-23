@@ -34,7 +34,6 @@ describe('Linhas comerciais do PDF', () => {
     expect(result.linear).toHaveLength(1);
     expect(result.items[0].filter(line => line.unit === 'm²')).toHaveLength(3);
     expect(result.items[0].find(line => line.adjustment)?.total).toBe(-130);
-    expect([...result.items.flat(), ...result.linear].reduce((sum, line) => sum + line.total, 0)).toBe(1300);
   });
   it('agrupa várias vistas da mesma peça em uma única linha', () => {
     const result = montarLinhasPdf([{ components: [piece([

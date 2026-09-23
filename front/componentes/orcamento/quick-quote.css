@@ -17,6 +17,11 @@
 .quick-table input,.quick-table select { width:100%; min-width:60px; }
 .quick-table td:first-child { min-width:160px; }
 .quick-table td:first-child input { margin-top:4px; }
+.type-description-field { display:grid; gap:4px; min-width:0; }
+.type-description-field > span { color:var(--muted); font-size:inherit; }
+.type-description-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:4px; margin-top:4px; }
+.type-description-form input { min-width:0; margin:0 !important; }
+.type-description-form button { min-height:33px; padding:5px 7px; white-space:nowrap; }
 .quick-service-launcher { display:block; margin-top:6px; width:100%; text-align:left; color:#795318 !important; font-size:11px; font-weight:600; }
 .quick-services-modal-backdrop { position:fixed; inset:0; z-index:40; display:grid; place-items:center; padding:20px; background:#29221955; }
 .quick-services-modal { width:min(540px,100%); max-height:min(680px,calc(100vh - 40px)); overflow:auto; border:1px solid #dfd3c0; border-radius:12px; background:#fffdf9; box-shadow:0 18px 60px #33251440; padding:18px; }
@@ -51,12 +56,8 @@
 .quick-row-actions { display:flex; gap:4px; flex-wrap:wrap; }
 .quick-row-actions button { white-space:nowrap; font-size:11px; }
 .quick-services { background:#faf9f6; padding:12px; display:grid; gap:12px; }
-.quick-sill-cell button { width:100%; text-align:left; }
-.quick-sill-duplo { display:grid; gap:10px; padding-bottom:12px; border-bottom:1px solid #e8e4dd; }
-.quick-sill-duplo .sill-detail-duplo { width:420px; max-width:100%; }
-.quick-sill-duplo-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-.quick-sill-duplo-fields label { display:grid; gap:4px; font-size:11px; color:#625644; }
-@media(max-width:800px) { .quick-sill-duplo-fields { grid-template-columns:repeat(2,minmax(0,1fr)); } .quick-sill-duplo .sill-detail-duplo { width:100%; max-width:340px; } }
+.quick-material-override { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding-bottom:12px; border-bottom:1px solid #e8e4dd; font-size:11px; color:#625644; }
+.quick-sill-hint { margin:0 0 12px; padding-bottom:12px; border-bottom:1px solid #e8e4dd; font-size:11px; color:#625644; }
 .quick-sides { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .quick-sides b { display:block; margin-bottom:6px; }
 .quick-edge { display:grid; gap:4px; padding:6px 0; }

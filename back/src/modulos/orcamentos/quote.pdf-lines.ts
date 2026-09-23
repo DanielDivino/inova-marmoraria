@@ -9,6 +9,7 @@ export type QuotePdfLine = {
   quantity?: number;
   total: number;
   adjustment?: boolean;
+  discount?: boolean;
 };
 const amount = (line: any) => Number(line.appliedSubtotal ?? line.calculatedSubtotal ?? line.subtotal ?? 0);
 const cents = (value: number) => Math.round(value * 100);
@@ -126,8 +127,11 @@ export function montarLinhasPdf(items: any[]): { items: QuotePdfLine[][]; linear
     }
     if (!(item.components ?? []).length) result.push({ description: 'Material · área informada', measure: Number(item.billedQuantity), unit: unit(item.billingUnitSnapshot ?? 'SQUARE_METER'), total: Number(item.materialSubtotal ?? 0) });
     for (const service of item.services ?? []) {
-      if (service.billingUnitSnapshot === 'LINEAR_METER') addLinear(service.serviceNameSnapshot, Number(service.billedQuantity), amount(service));
-      else result.push({ description: service.serviceNameSnapshot, measure: Number(service.billedQuantity), unit: unit(service.billingUnitSnapshot), total: amount(service) });
+      const applied = amount(service);
+      const calculated = Number(service.calculatedSubtotal ?? applied);
+      if (/montagem/i.test(service.serviceNameSnapshot) && calculated > applied) result.push({ description: 'Desconto montagem', total: -(calculated - applied), discount: true });
+      if (service.billingUnitSnapshot === 'LINEAR_METER') addLinear(service.serviceNameSnapshot, Number(service.billedQuantity), applied);
+      else result.push({ description: service.serviceNameSnapshot, measure: Number(service.billedQuantity), unit: unit(service.billingUnitSnapshot), total: applied });
     }
     for (const cutout of item.cutouts ?? []) {
       const name = cutout.serviceNameSnapshot || cutout.label || (cutout.cutoutType === 'OVAL_SINK' ? 'Recorte para cuba oval' : 'Recorte');

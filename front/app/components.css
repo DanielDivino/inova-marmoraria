@@ -30,6 +30,23 @@
 .sill-drawing-detail { display: inline-grid; gap: 6px; margin: 12px 20px 16px 0; font-size: 12px; }
 .sill-detail-editor > label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; }
 .sill-detail-editor input { width: 160px; max-width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
+.sill-detail-editor-duplo { align-items: flex-start; }
+.sill-detail-editor-duplo > strong { width: 100%; }
+.sill-detail-editor-duplo > small { width: 100%; color: var(--muted); font-size: 11px; }
+.sill-detail-duplo { width: 210px; }
+.sill-overlap-choice { display: grid; gap: 6px; }
+.sill-overlap-choice > span { color: var(--muted); font-size: 11px; }
+.sill-overlap-choice > small { color: #a33d3d; font-size: 11px; }
+.sill-overlap-buttons { display: flex; gap: 8px; }
+.sill-overlap-buttons button { min-width: 52px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); font-size: 12px; font-weight: 600; cursor: pointer; }
+.sill-overlap-buttons button:hover { border-color: #a07a3e; }
+.sill-overlap-buttons button[aria-pressed="true"] { border-color: #ae7719; background: #fff3dc; color: #7c5718; }
+.sill-balance { display: grid; gap: 6px; }
+.sill-balance > span { color: var(--muted); font-size: 11px; }
+.sill-balance-slider { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+.sill-balance-slider small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.sill-balance-slider strong { color: var(--ink); }
+.sill-balance-slider input[type="range"] { width: 100%; accent-color: #ae7719; }
 .quote-component { display: grid; gap: 3px; padding: 8px 0 2px; border-top: 1px dashed var(--line); }
 
 .edge-menu,

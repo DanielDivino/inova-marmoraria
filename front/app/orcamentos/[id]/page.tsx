@@ -37,7 +37,7 @@ export default function QuoteDetailPage() {
   const [savingWorker, setSavingWorker] = useState(false);
   const [trackingTab, setTrackingTab] = useState<TrackingTab>('GENERAL');
   const [openingDesign, setOpeningDesign] = useState(false);
-  useEffect(() => { api<Quote>(`/quotes/${id}`).then(setQuote).catch((cause) => setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o orçamento.')); api<Worker[]>('/users/workers').then(setWorkers).catch(() => setWorkers([])); }, [id]);
+  useEffect(() => { api<Quote>(`/quotes/${id}`).then(setQuote).catch((cause) => setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o orçamento.')); api<Worker[]>('/workers?active=true').then(setWorkers).catch(() => setWorkers([])); }, [id]);
   if (error && !quote) return <main className="list-page"><p className="form-error">{error}</p></main>;
   if (!quote) return <main className="list-page"><p className="empty">Carregando orçamento…</p></main>;
   const individualDiscount = descontosIndividuais(quote.items);
@@ -71,7 +71,7 @@ export default function QuoteDetailPage() {
   async function changeWorkerColor(worker: Worker, workColor: string) {
     setSavingWorker(true); setError('');
     try {
-      const updated = await api<Worker>(`/users/${worker.id}`, { method: 'PATCH', body: JSON.stringify({ workColor }) });
+      const updated = await api<Worker>(`/workers/${worker.id}`, { method: 'PATCH', body: JSON.stringify({ workColor }) });
       setWorkers((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
       setQuote((current) => current ? { ...current, workerAssignments: current.workerAssignments?.map((assignment) => assignment.worker.id === updated.id ? { ...assignment, worker: updated } : assignment) } : current);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar a cor do funcionário.'); }
@@ -90,12 +90,18 @@ export default function QuoteDetailPage() {
   const situacaoPrazoInterno = obterStatusPrazo(quote);
   const activeWorker = quote.workerAssignments?.find((assignment) => !assignment.releasedAt);
   return <main className="list-page">
-    <header className="list-header"><Link href="/orcamentos">← Orçamentos</Link><h1>{quote.number}</h1><StatusOrcamento quote={quote} /><ExportarPdfOrcamento quoteId={id} quoteNumber={quote.number} customerName={quote.customerNameSnapshot} hasDrawings={quote.items.some(item => projetoTemDesenho(item.drawingData))} /></header>
+    <header className="quote-detail-header">
+      <div className="quote-detail-heading"><Link href="/orcamentos">← Orçamentos</Link><h1>{quote.number}</h1><StatusOrcamento quote={quote} /></div>
+      <div className="quote-detail-header-actions">
+        <button className="secondary-button" disabled={openingDesign} onClick={() => void openTechnicalDesign()}>{openingDesign ? 'Abrindo desenho…' : 'Desenho técnico'}</button>
+        <ExportarPdfOrcamento quoteId={id} quoteNumber={quote.number} customerName={quote.customerNameSnapshot} hasDrawings={quote.items.some(item => projetoTemDesenho(item.drawingData))} />
+      </div>
+    </header>
     {error && <p role="alert" className="form-error">{error}</p>}
     <div className="detail-actions">
       {podeEditarOrcamento(quote) && <Link className="secondary-button" href={`/orcamentos/${id}/editar`}>Editar orçamento</Link>}
-      <button className="secondary-button" disabled={openingDesign} onClick={() => void openTechnicalDesign()}>{openingDesign ? 'Abrindo desenho…' : 'Desenho técnico'}</button>
       <Link className="secondary-button" href={`/?parent=${id}`}>+ Vincular complemento</Link>
+      <Link className="secondary-button" href={`/orcamentos/${id}/remontagem`}>Desmontagem / Remontagem</Link>
       {['DRAFT', 'SENT'].includes(quote.status) && <>
         <button disabled={updating} className="primary-button" onClick={() => changeStatus({ status: 'APPROVED' })}>Confirmar aprovação</button>
         <button disabled={updating} className="text-button" onClick={() => changeStatus({ status: 'REJECTED', reason: 'Cliente não aprovou' })}>Marcar como não aprovado</button>

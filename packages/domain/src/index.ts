@@ -12,4 +12,6 @@ export * from './orcamentos/manufacturing-description.js';
 export * from './orcamentos/edge-finishes.js';
 export * from './orcamentos/cutout-shape.js';
 export * from './orcamentos/detailing.js';
+export * from './orcamentos/production-plan.js';
 export * from './orcamentos/arquivo-pdf.js';
+export * from './orcamentos/remontagem.js';

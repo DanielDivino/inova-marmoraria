@@ -29,7 +29,7 @@ export function DetalhePeitorilDuplo({ topWidth, bottomWidth, finalWidth, overla
       </g>
       {mostrar(topWidth) && <text x="115" y="22" textAnchor="middle" fill="#635948" fontSize="10">{rotulo(topWidth)} cm</text>}
       {mostrar(overlap) && <text x="115" y="107" fill="#7c531e" fontSize="9" fontWeight="700">{rotulo(overlap)} cm</text>}
-      {mostrar(bottomWidth) && <text x="205" y="149" textAnchor="middle" fill="#635948" fontSize="10">{rotulo(bottomWidth)} cm</text>}
+      {mostrar(bottomWidth) && <text x="205" y="166" textAnchor="middle" fill="#635948" fontSize="10">{rotulo(bottomWidth)} cm</text>}
       {mostrar(finalWidth) && <text x="170" y="195" textAnchor="middle" fill="#635948" fontSize="10">{rotulo(finalWidth)} cm total</text>}
     </svg>
   </figure>;

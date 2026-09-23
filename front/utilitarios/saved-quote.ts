@@ -1,6 +1,5 @@
 import { centimetrosParaMilimetros, detalheDesenhoComponente, itemSalvoParaEntrada, type SavedQuoteItem } from '@inova/domain';
 import type { DraftItem } from '../componentes/orcamento/types';
-import { medidasEfetivasPeitorilDuplo } from './quick-quote';
 
 const cm = (value?: number) => value === undefined ? undefined : String(value / 10);
 const price = (value?: number) => value === undefined ? undefined : value.toFixed(2).replace('.', ',');
@@ -31,7 +30,7 @@ export function itemSalvoParaRascunho(saved: SavedQuoteItem): DraftItem {
 }
 
 const decimal = (value: string) => Number(value.replace(',', '.'));
-const currency = (value: string) => {
+export const currency = (value: string) => {
   const parsed = Number(value.includes(',') ? value.replace(/\./g, '').replace(',', '.') : value);
   if (!value.trim() || !Number.isFinite(parsed) || parsed < 0) throw new Error('Informe um valor monetário válido, maior ou igual a zero.');
   return Math.round(parsed * 100) / 100;
@@ -65,14 +64,18 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
     manualJustification: draft.calculationMode === 'MANUAL_M2' ? draft.manualJustification : undefined,
     billedQuantity: draft.calculationMode === 'MANUAL_M2' ? decimal(draft.manualM2) : undefined, quantity: saved?.quantity ?? 1,
     components: draft.calculationMode === 'DIMENSIONS' ? draft.components.map((component, sortOrder) => ({
-      id: saved?.components.some((entry) => entry.id === component.id) ? component.id : undefined,
+      // Sempre envia o id gerado no cliente (crypto.randomUUID, sem risco de
+      // colisão) para que ele vire o id definitivo já na primeira gravação —
+      // isso é o que permite drawingData.productionPlan referenciar o
+      // componente comercial (sourceComponentId) sem precisar reconciliar IDs
+      // depois do primeiro salvamento.
+      id: component.id,
       materialId: component.materialId || draft.materialId || undefined,
       label: component.label, componentType: component.componentType, orientation: component.orientation, shape: 'RECTANGLE' as const,
-      // Peitoril duplo: largura combinada (largura de cima + largura de baixo)
-      // exata (sem arredondamento de "M² fechado"), pro billableArea bater com a
-      // soma real das duas pedras em qualquer lugar do sistema que multiplique
-      // lengthMm × widthMm.
-      ...(medidasEfetivasPeitorilDuplo(component, false) ?? { lengthMm: centimetrosParaMilimetros(component.lengthCm), widthMm: centimetrosParaMilimetros(component.widthCm) }),
+      // Cobrança sempre por comprimento × largura informados no Orçamento
+      // Rápido, mesmo para peitoril — o detalhe de duas pedras (se houver) só
+      // existe no desenho/produção e nunca influencia o valor.
+      lengthMm: centimetrosParaMilimetros(component.lengthCm), widthMm: centimetrosParaMilimetros(component.widthCm),
       quantity: component.quantity,
       appliedTotal: component.appliedTotal === undefined ? undefined : currency(component.appliedTotal), sortOrder,
       edges: component.edges.map((edge) => ({ id: edge.id, side: edge.side, customLabel: edge.customLabel,
@@ -81,7 +84,9 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
       })),
     })) : [],
     cutouts: draft.cutouts.map((cutout, sortOrder) => ({
-      id: saved?.cutouts.some((entry) => entry.id === cutout.id) ? cutout.id : undefined,
+      // Mesmo raciocínio dos componentes: id do cliente vira definitivo desde a
+      // primeira gravação (productionPlan.cutouts referencia sourceCutoutId).
+      id: cutout.id,
       componentIndex: cutout.componentIndex, cutoutType: cutout.cutoutType, sizePending: cutout.sizePending ?? false, label: cutout.label,
       lengthMm: optionalMm(cutout.lengthCm), widthMm: optionalMm(cutout.widthCm), diameterMm: optionalMm(cutout.diameterCm),
       positionX: positionMm(cutout.positionXCm), positionY: positionMm(cutout.positionYCm), quantity: cutout.quantity, serviceId: cutout.serviceId, sortOrder,

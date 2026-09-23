@@ -1,0 +1,14 @@
+.remount-fieldset { min-width:0; margin:0; padding:0; border:0; }
+.remount-page .quote-form-column { display:grid; gap:14px; }
+.remount-piece-info { display:grid; grid-template-columns:minmax(0,1fr) minmax(160px,1fr); align-items:center; gap:12px; }
+.remount-piece-info label, .remount-notes, .remount-document-actions > label { display:grid; gap:6px; font-size:12px; color:var(--muted); }
+.remount-document-actions { margin-top:20px; }
+.remount-document-actions > label { max-width:320px; }
+.remount-page .quote-summary-card p, .remount-document-actions p { color:var(--muted); font-size:12px; }
+.remount-individual-values { display:grid; gap:8px; margin:8px 0; padding:9px; border:1px solid #e8e1d6; border-radius:6px; background:#fffdf9; }
+.remount-individual-values > strong { font-size:12px; }
+.remount-individual-values label { display:grid; grid-template-columns:minmax(0,1fr) 110px; gap:4px 8px; align-items:center; font-size:12px; }
+.remount-individual-values input { width:100%; min-width:0; }
+.remount-individual-values small { grid-column:1 / -1; color:var(--muted); font-size:10px; }
+.remount-notes textarea { width:100%; resize:vertical; }
+@media (max-width:620px) { .remount-piece-info { grid-template-columns:1fr; } }

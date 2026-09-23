@@ -5,13 +5,22 @@ import type { SavedQuoteItem } from '@inova/domain';
 import { projetoTemDesenho } from '@inova/domain';
 import { api } from '../../utilitarios/api';
 import { itemSalvoParaRascunho } from '../../utilitarios/saved-quote';
+import { lerPlanoDeProducao, planoParaDesenho } from '../../utilitarios/production-plan';
 import { DesenhoTecnico } from './TechnicalDrawing';
 
 export function SavedItemDrawing({ item, notes }: { item: SavedQuoteItem; notes?: string | null }) {
   if (!projetoTemDesenho(item.drawingData)) return <small>Desenho pendente — orçamento calculado.</small>;
   const draft = itemSalvoParaRascunho(item);
+  const plan = lerPlanoDeProducao(item.drawingData);
+  // Orçamentos detalhados com peças de produção mostram o desenho pelas peças
+  // já divididas; orçamentos antigos/sem detalhamento caem no componente
+  // comercial direto (mesmo desenho de sempre, nada muda para eles).
+  const { components, cutouts } = plan && plan.pieces.length ? planoParaDesenho(plan) : { components: draft.components, cutouts: draft.cutouts };
+  const materialNames = plan && plan.pieces.length
+    ? Object.fromEntries(plan.pieces.map((piece) => { const origin = item.components.find((component) => component.id === piece.sourceComponentId); return [piece.id, origin?.materialNameSnapshot ?? item.materialNameSnapshot]; }))
+    : Object.fromEntries(item.components.map(component => [component.id, component.materialNameSnapshot ?? item.materialNameSnapshot]));
   const services = [...item.services.map((service) => ({ id: service.serviceId, name: service.serviceNameSnapshot })), ...item.cutouts.flatMap((cutout) => cutout.serviceId && cutout.serviceNameSnapshot ? [{ id: cutout.serviceId, name: cutout.serviceNameSnapshot }] : [])];
-  return <DesenhoTecnico components={draft.components} cutouts={draft.cutouts} materialName={item.materialNameSnapshot} materialNames={Object.fromEntries(item.components.map(component => [component.id, component.materialNameSnapshot ?? item.materialNameSnapshot]))} linearServices={item.components.flatMap((component) => component.edges.map((edge) => ({ id: edge.serviceId, name: edge.serviceNameSnapshot })))} services={services} additionalServices={item.services.map((service) => ({ name: service.serviceNameSnapshot, quantity: service.billingUnitSnapshot === 'UNIT' ? String(service.billedQuantity) : undefined }))} notes={notes} />;
+  return <DesenhoTecnico components={components} cutouts={cutouts} materialName={item.materialNameSnapshot} materialNames={materialNames} linearServices={item.components.flatMap((component) => component.edges.map((edge) => ({ id: edge.serviceId, name: edge.serviceNameSnapshot })))} services={services} additionalServices={item.services.map((service) => ({ name: service.serviceNameSnapshot, quantity: service.billingUnitSnapshot === 'UNIT' ? String(service.billedQuantity) : undefined }))} notes={notes} />;
 }
 
 export function DesenhosSalvos({ quoteId }: { quoteId: string }) {

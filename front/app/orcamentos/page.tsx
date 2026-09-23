@@ -32,6 +32,8 @@ export default function QuotesPage() {
   const [responsibleId, setResponsibleId] = useState('');
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const activeFilterCount = [search, workStatus, situacaoPrazoInterno, responsibleId].filter(Boolean).length;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -50,7 +52,7 @@ export default function QuotesPage() {
     }, search ? 300 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [search, page, isHistory, attempt, workStatus, situacaoPrazoInterno, responsibleId]);
-  useEffect(() => { api<Worker[]>('/users/workers').then(setWorkers).catch(() => setWorkers([])); }, []);
+  useEffect(() => { api<Worker[]>('/workers?active=true').then(setWorkers).catch(() => setWorkers([])); }, []);
   const chooseWork = (value: WorkStatus | '') => { setWorkStatus(value); setPage(1); };
   const chooseDeadline = (value: CustomerDeadlineStatus | '') => { setDeadlineStatus(value); setPage(1); };
   const clearFilters = () => { setSearch(''); chooseWork(''); chooseDeadline(''); setResponsibleId(''); };
@@ -62,17 +64,29 @@ export default function QuotesPage() {
 
   return <main className="list-page">
     <header className="list-header"><Link href="/">← Novo Projeto</Link><h1>{isHistory ? 'Histórico' : 'Orçamentos'}</h1><Link href={isHistory ? '/orcamentos' : '/historico'}>{isHistory ? 'Orçamentos' : 'Histórico'}</Link></header>
-    <section className="quote-filter-panel" aria-label="Filtros de orçamentos">
-      <header><div><span>FILTROS</span><strong>Acompanhe a produção</strong></div><button type="button" className="text-button" disabled={!search && !workStatus && !situacaoPrazoInterno && !responsibleId} onClick={clearFilters}>Limpar filtros</button></header>
-      <input className="search" aria-label="Buscar orçamentos" placeholder="Buscar por número, cliente ou telefone" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
-      <div className="material-filter-bar" role="group" aria-label="Filtrar por status">
-        <span>Visão geral</span>
-        <button type="button" aria-pressed={!workStatus && !situacaoPrazoInterno && !responsibleId} className={!workStatus && !situacaoPrazoInterno && !responsibleId ? 'selected' : ''} onClick={() => { chooseWork(''); chooseDeadline(''); setResponsibleId(''); }}>Todos <b>{counts.ALL ?? 0}</b></button>
-        <button type="button" aria-pressed={situacaoPrazoInterno === 'OVERDUE'} className={situacaoPrazoInterno === 'OVERDUE' ? 'selected overdue' : 'overdue'} onClick={() => chooseDeadline(situacaoPrazoInterno === 'OVERDUE' ? '' : 'OVERDUE')}>Atrasados <b>{counts.OVERDUE ?? 0}</b></button>
-        {statusGroups.map(group => <Fragment key={group.label}><i className="material-filter-separator" aria-hidden="true" /><span>{group.label}</span>{group.statuses.map(status => <button type="button" key={status} aria-pressed={workStatus === status} className={workStatus === status ? 'selected' : ''} onClick={() => chooseWork(workStatus === status ? '' : status)}>{WORK_STATUS_LABELS[status]} <b>{counts[status] ?? 0}</b></button>)}</Fragment>)}
-      </div>
-      <div className="quote-filter-row"><label>Funcionário<select value={responsibleId} onChange={(event) => { setResponsibleId(event.target.value); setPage(1); }}><option value="">Todos os funcionários</option>{workers.map(worker => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select></label><label>Status<select value={workStatus} onChange={(event) => chooseWork(event.target.value as WorkStatus | '')}><option value="">Todos os status</option>{WORK_STATUSES.map(status => <option key={status} value={status}>{WORK_STATUS_LABELS[status]}</option>)}</select></label><label>Prazo<select value={situacaoPrazoInterno} onChange={(event) => chooseDeadline(event.target.value as CustomerDeadlineStatus | '')}><option value="">Todos os prazos</option>{Object.entries(DEADLINE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
-      <StatusLegend />
+    <section className={`quote-filter-panel${filtrosAbertos ? '' : ' quote-filter-panel-collapsed'}`} aria-label="Filtros de orçamentos">
+      <header>
+        <div><span>FILTROS</span><strong>Acompanhe a produção</strong></div>
+        <div className="quote-filter-actions">
+          {filtrosAbertos && <button type="button" className="text-button" disabled={!activeFilterCount} onClick={clearFilters}>Limpar filtros</button>}
+          <button type="button" className="quote-filter-toggle" aria-expanded={filtrosAbertos} onClick={() => setFiltrosAbertos((value) => !value)}>
+            <span>{filtrosAbertos ? 'Ocultar filtros' : 'Mostrar filtros'}</span>
+            {!filtrosAbertos && activeFilterCount > 0 && <small className="quote-filter-active-count">{activeFilterCount} ativo{activeFilterCount > 1 ? 's' : ''}</small>}
+            <i className="quote-filter-chevron" aria-hidden="true">⌄</i>
+          </button>
+        </div>
+      </header>
+      <input className="search quote-filter-search" aria-label="Buscar orçamentos" placeholder="Buscar por número, cliente ou telefone" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+      {filtrosAbertos && <>
+        <div className="material-filter-bar" role="group" aria-label="Filtrar por status">
+          <span>Visão geral</span>
+          <button type="button" aria-pressed={!workStatus && !situacaoPrazoInterno && !responsibleId} className={!workStatus && !situacaoPrazoInterno && !responsibleId ? 'selected' : ''} onClick={() => { chooseWork(''); chooseDeadline(''); setResponsibleId(''); }}>Todos <b>{counts.ALL ?? 0}</b></button>
+          <button type="button" aria-pressed={situacaoPrazoInterno === 'OVERDUE'} className={situacaoPrazoInterno === 'OVERDUE' ? 'selected overdue' : 'overdue'} onClick={() => chooseDeadline(situacaoPrazoInterno === 'OVERDUE' ? '' : 'OVERDUE')}>Atrasados <b>{counts.OVERDUE ?? 0}</b></button>
+          {statusGroups.map(group => <Fragment key={group.label}><i className="material-filter-separator" aria-hidden="true" /><span>{group.label}</span>{group.statuses.map(status => <button type="button" key={status} aria-pressed={workStatus === status} className={workStatus === status ? 'selected' : ''} onClick={() => chooseWork(workStatus === status ? '' : status)}>{WORK_STATUS_LABELS[status]} <b>{counts[status] ?? 0}</b></button>)}</Fragment>)}
+        </div>
+        <div className="quote-filter-row"><label>Funcionário<select value={responsibleId} onChange={(event) => { setResponsibleId(event.target.value); setPage(1); }}><option value="">Todos os funcionários</option>{workers.map(worker => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select></label><label>Status<select value={workStatus} onChange={(event) => chooseWork(event.target.value as WorkStatus | '')}><option value="">Todos os status</option>{WORK_STATUSES.map(status => <option key={status} value={status}>{WORK_STATUS_LABELS[status]}</option>)}</select></label><label>Prazo<select value={situacaoPrazoInterno} onChange={(event) => chooseDeadline(event.target.value as CustomerDeadlineStatus | '')}><option value="">Todos os prazos</option>{Object.entries(DEADLINE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
+        <StatusLegend />
+      </>}
     </section>
     {error && <p className="form-error" role="alert">{error} <button className="text-button" onClick={() => setAttempt((value) => value + 1)}>Tentar novamente</button></p>}
     {loading && <p role="status" className="customer-help">Carregando registros…</p>}

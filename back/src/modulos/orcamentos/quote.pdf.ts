@@ -1,10 +1,8 @@
 import PDFDocument from 'pdfkit';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { cabecalhoEmpresaPdf as header, assinaturasPdf } from './pdf-layout.js';
 import { montarLinhasPdf, type QuotePdfLine } from './quote.pdf-lines.js';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
-import { projetoTemDesenho, calcularTotalPix } from '@inova/domain';
+import { projetoTemDesenho, calcularTotalCartao, planoDeProducao } from '@inova/domain';
 import { formatoRecorte, detalheDesenhoComponente, descricaoProducaoComponente, descricaoProducaoRecorte, tituloComponenteProducao, escalasDesenhoTecnico, isMiterFinish, miterJointPath, posicaoMarcadorMeiaEsquadria, acabamentoBordaPedra, faixasBordaPedra, rotuloMedidaDesenho, posicaoMedidaFaixa, type ManufacturingLine } from '@inova/domain';
 
 type PdfDocument = InstanceType<typeof PDFDocument>;
@@ -12,21 +10,7 @@ type PdfDocument = InstanceType<typeof PDFDocument>;
 const money = (value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const number = (value: number, digits = 2) => value.toLocaleString('pt-BR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 const date = (value: Date | string | null | undefined) => value ? new Date(value).toLocaleDateString('pt-BR') : 'Não definida';
-const cm = (value: number) => number(value / 10, 1);
-const logoPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../assets/inova-logo.png');
-const line = (pdf: PdfDocument, y: number) => pdf.moveTo(36, y).lineTo(559, y).stroke('#b8b2a8');
-const header = (pdf: PdfDocument, title: string, quote: any) => {
-  pdf.fillColor('#b6811e').rect(36, 34, 523, 5).fill();
-  if (fs.existsSync(logoPath)) pdf.image(logoPath, 36, 42, { fit: [64, 49] });
-  pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(14).text('INOVA MARMORARIA', 112, 47);
-  pdf.font('Helvetica').fontSize(8).fillColor('#5f5a52')
-    .text('Av. Visconde de Itiúba, Nº 224 - Flores - Manaus AM', 112, 65, { width: 280 })
-    .text('Contatos: (92) 98181-7980 / 93994-1402', 112, 77, { width: 280 })
-    .text('CNPJ: 32.298.601/0001-19', 112, 89, { width: 280 });
-  pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(13).text(title, 385, 49, { width: 174, align: 'right' });
-  pdf.font('Helvetica-Bold').fontSize(9).fillColor('#b6811e').text(quote.number, 385, 67, { width: 174, align: 'right' });
-  line(pdf, 114);
-};
+const meters = (value: number) => number(value / 1000, 2);
 const finishName = (edge: any) => String(edge.serviceNameSnapshot ?? '').trim().toLocaleLowerCase('pt-BR');
 const hasMiterFinish = (component: any) => (component.edges ?? []).some((edge: any) => isMiterFinish(finishName(edge)));
 const materialTitleFontSize = 13;
@@ -202,6 +186,48 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   return pdf.y + 12;
 };
 
+/**
+ * A ordem de serviço mostra cada peça física de produção separadamente quando
+ * o item foi detalhado (drawingData.productionPlan): a divisão de bancadas,
+ * rodabancas seguindo a divisão etc. viram desenhos/descrições próprios, sem
+ * nunca tocar em valores comerciais. Itens sem plano (a maioria, só passou
+ * pelo Orçamento Rápido) continuam usando os componentes comerciais direto —
+ * mesmo comportamento de sempre para orçamentos antigos.
+ */
+function pecasParaOrdemDeServico(item: any): { components: any[]; cutouts: any[]; production: boolean } {
+  const plan = planoDeProducao(item.drawingData);
+  if (!plan || !plan.pieces.length) {
+    return {
+      components: item.components.map((component: any, index: number) => ({ ...component, ...detalheDesenhoComponente(item.drawingData, index) })),
+      cutouts: item.cutouts ?? [],
+      production: false,
+    };
+  }
+  const base = plan.pieces.map((piece: any) => {
+    const origin = item.components.find((component: any) => component.id === piece.sourceComponentId);
+    return {
+      id: piece.id, label: piece.label, componentType: piece.componentType, orientation: piece.orientation,
+      lengthMm: piece.lengthMm, widthMm: piece.widthMm, quantity: piece.quantity,
+      materialNameSnapshot: origin?.materialNameSnapshot ?? item.materialNameSnapshot,
+      edges: piece.edges.map((edge: any) => ({ side: edge.side, serviceNameSnapshot: edge.serviceName, lengthMm: edge.lengthMm, heightMm: edge.heightMm, quantity: edge.quantity })),
+      sillDetailMm: piece.sillDetailMm, sillDetailHeightMm: piece.sillDetailHeightMm,
+      sillTopWidthMm: piece.sillTopWidthMm, sillBottomWidthMm: piece.sillBottomWidthMm,
+      sillFinalWidthMm: piece.sillFinalWidthMm, sillOverlapMm: piece.sillOverlapMm,
+      parentPieceId: piece.parentPieceId, parentSide: piece.parentSide,
+    };
+  });
+  const components = base.map((component: any) => ({
+    ...component,
+    parentComponentIndex: component.parentPieceId ? base.findIndex((entry: any) => entry.id === component.parentPieceId) : undefined,
+  }));
+  const cutouts = plan.cutouts.map((cutout: any) => ({
+    id: cutout.id, componentId: cutout.pieceId, cutoutType: cutout.cutoutType, label: cutout.label, sizePending: cutout.sizePending,
+    lengthMm: cutout.lengthMm, widthMm: cutout.widthMm, diameterMm: cutout.diameterMm,
+    positionX: cutout.positionXMm, positionY: cutout.positionYMm, quantity: cutout.quantity,
+  }));
+  return { components, cutouts, production: true };
+}
+
 export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: QuotePdfOptions = { individualPrices: false, drawings: true }) {
   header(pdf, 'ORÇAMENTO', quote);
   pdf.font('Helvetica-Bold').fontSize(8).fillColor('#17251f').text('CLIENTE:', 36, 124).font('Helvetica').text(quote.customerNameSnapshot, 92, 124);
@@ -220,8 +246,8 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
   // it as a separate linear-meter service line in the PDF.
   const linearByItem = quote.items.map((item: any) => montarLinhasPdf([item]).linear.filter((entry) => !(/^vista(?:\s|$)/i.test(entry.description) || /^vista\s*[·-]/i.test(entry.description))));
   const columns = options.individualPrices
-    ? [{ label: 'DESCRIÇÃO', x: 40, width: 167 }, { label: 'COMP. cm', x: 210, width: 44 }, { label: 'LARG. cm', x: 258, width: 44 }, { label: 'MEDIDA', x: 306, width: 75 }, { label: 'QTDE', x: 385, width: 60 }, { label: 'VALOR TOTAL', x: 449, width: 106 }]
-    : [{ label: 'DESCRIÇÃO', x: 40, width: 205 }, { label: 'COMP. cm', x: 250, width: 55 }, { label: 'LARG. cm', x: 310, width: 55 }, { label: 'MEDIDA', x: 370, width: 70 }, { label: 'QTDE', x: 445, width: 100 }];
+    ? [{ label: 'DESCRIÇÃO', x: 40, width: 167 }, { label: 'COMP. m', x: 210, width: 44 }, { label: 'LARG. m', x: 258, width: 44 }, { label: 'MEDIDA', x: 306, width: 75 }, { label: 'QTDE', x: 385, width: 60 }, { label: 'VALOR TOTAL', x: 449, width: 106 }]
+    : [{ label: 'DESCRIÇÃO', x: 40, width: 205 }, { label: 'COMP. m', x: 250, width: 55 }, { label: 'LARG. m', x: 310, width: 55 }, { label: 'MEDIDA', x: 370, width: 70 }, { label: 'QTDE', x: 445, width: 100 }];
   const commercialSpace = (height: number) => {
     if (y + height <= 690) return false;
     // Continuation pages stay clean and compact. The full commercial header is
@@ -236,13 +262,16 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     y += 17;
   };
   const commercialRow = (entry: QuotePdfLine) => {
-    if (entry.adjustment && !options.individualPrices) return;
+    // O PDF comercial mostra os componentes e os totais do projeto. O delta
+    // de uma negociação manual já está incorporado no total da peça e não
+    // deve aparecer como uma linha comercial separada.
+    if (entry.adjustment) return;
     // Serviços cobrados por metro linear são apresentados como "ml" no PDF.
     // Mantemos a unidade de domínio como "m" para não alterar cálculos ou
     // integrações; a conversão é apenas visual nesta tabela.
     const displayUnit = entry.unit === 'm' ? 'ml' : (entry.unit ?? '');
     const measure = entry.measure == null || !Number.isFinite(entry.measure) ? '' : entry.measure.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' ' + displayUnit;
-    const cells = [entry.description.toUpperCase(), entry.lengthMm ? cm(entry.lengthMm) : '', entry.widthMm ? cm(entry.widthMm) : '', measure, entry.quantity ? String(entry.quantity) : ''];
+    const cells = [entry.description.toUpperCase(), entry.lengthMm ? meters(entry.lengthMm) : '', entry.widthMm ? meters(entry.widthMm) : '', measure, entry.quantity ? String(entry.quantity) : ''];
     if (options.individualPrices) cells.push(money(entry.total));
     pdf.font('Helvetica').fontSize(7.5);
     const height = Math.max(16, ...cells.map((value, index) => pdf.heightOfString(value, { width: columns[index].width }) + 8));
@@ -317,7 +346,8 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     footerSignatureY - y + 20,
   );
   if (y + closingHeight > 770) { pdf.addPage(); y = 52; }
-  const pixTotal = calcularTotalPix(Number(quote.netTotal));
+  const cashTotal = Number(quote.netTotal);
+  const cardTotal = calcularTotalCartao(cashTotal);
   const leftX = 36;
   const leftWidth = 270;
   const totalsX = 285;
@@ -335,23 +365,21 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     pdf.font('Helvetica').fontSize(7.5).fillColor('#5f5a52').text(`Observação: ${notes}`, leftX, observationsTop + 13, { width: leftWidth });
   }
   let totalsY = blockTop;
-  if (options.individualPrices && Number(quote.discountAmount) > 0) {
+  if (Number(quote.discountAmount) > 0) {
     pdf.font('Helvetica').fontSize(8).fillColor('#5f5a52')
-      .text('DESCONTO GERAL', totalsX, totalsY, { width: totalsLabelWidth, align: 'right' })
+      .text('DESCONTO FINAL', totalsX, totalsY, { width: totalsLabelWidth, align: 'right' })
       .text('- ' + money(Number(quote.discountAmount)), totalsValueX, totalsY, { width: totalsValueWidth, align: 'right' });
     totalsY += 19;
   }
   pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(10)
-    .text('VALOR DO ORÇAMENTO TOTAL', totalsX, totalsY, { width: totalsLabelWidth, align: 'right' })
-    .text(money(Number(quote.netTotal)), totalsValueX, totalsY, { width: totalsValueWidth, align: 'right' });
+    .text('À VISTA', totalsX, totalsY, { width: totalsLabelWidth, align: 'right' })
+    .text(money(cashTotal), totalsValueX, totalsY, { width: totalsValueWidth, align: 'right' });
   pdf.fontSize(9)
-    .text('TOTAL COM DESCONTO NO PIX (5%)', totalsX, totalsY + 19, { width: totalsLabelWidth, align: 'right' })
-    .text(money(pixTotal), totalsValueX, totalsY + 19, { width: totalsValueWidth, align: 'right' });
+    .text('CARTÃO', totalsX, totalsY + 19, { width: totalsLabelWidth, align: 'right' })
+    .text(money(cardTotal), totalsValueX, totalsY + 19, { width: totalsValueWidth, align: 'right' });
   // The signatures belong to the footer of the commercial sheet, regardless
   // of how much content the closing block has above them.
-  const signatureY = footerSignatureY;
-  pdf.strokeColor('#8f887c').lineWidth(0.7).moveTo(76, signatureY).lineTo(284, signatureY).moveTo(311, signatureY).lineTo(519, signatureY).stroke();
-  pdf.fillColor('#5f5a52').font('Helvetica').fontSize(8).text('Assinatura do cliente', 76, signatureY + 5, { width: 208, align: 'center' }).text('Responsável Inova Marmoraria', 311, signatureY + 5, { width: 208, align: 'center' });
+  assinaturasPdf(pdf, footerSignatureY);
 
   const drawnItems = quote.items.filter((item: any) => projetoTemDesenho(item.drawingData));
   if (!options.drawings || !drawnItems.length) return;
@@ -447,19 +475,17 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     // Separate projects without charging the final project for an unused gap.
     // That trailing space could push a short observation onto its own sheet.
     if (itemIndex > 0) y += 12;
-    const components = item.components.map((component: any, index: number) => {
-      const detail = detalheDesenhoComponente(item.drawingData, index);
-      return { ...component, ...detail, drawingNumber: index + 1, drawingTitle: tituloComponenteProducao(component, index) };
-    });
+    const { components: pieceComponents, cutouts: cutoutsForDrawing, production } = pecasParaOrdemDeServico(item);
+    const components = pieceComponents.map((component: any, index: number) => ({ ...component, drawingNumber: index + 1, drawingTitle: tituloComponenteProducao(component, index) }));
     const drawingHeight = (component: any) => {
       const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialTitleFontSize).heightOfString(`${component.drawingNumber}. ${component.materialNameSnapshot ?? item.materialNameSnapshot}`, { width: 250 });
       return materialHeight + 188 + (hasMiterFinish(component) ? 14 : 0) + (component.componentType === 'SILL' ? 108 : 0);
     };
     const descriptions = components.map((component: any) => {
-      const lines = descricaoProducaoComponente({ ...component, edges: (component.edges ?? []).map((edge: any) => ({ ...edge,
+      const lines = descricaoProducaoComponente({ ...component, edges: (component.edges ?? []).map((edge: any) => production ? { ...edge, serviceName: edge.serviceNameSnapshot } : ({ ...edge,
         serviceName: edge.serviceNameSnapshot,
         quantity: Math.max(1, Math.round(Number(edge.billedQuantity ?? 0) / (component.quantity * edge.lengthMm * (edge.heightMm ? edge.heightMm / 1_000_000 : 1 / 1000)))) || 1,
-      })) }, (item.cutouts ?? []).filter((cutout: any) => cutout.componentId === component.id).map(cutoutDetail),
+      })) }, cutoutsForDrawing.filter((cutout: any) => cutout.componentId === component.id).map(cutoutDetail),
       component.parentComponentIndex === undefined ? undefined : components[component.parentComponentIndex].drawingTitle,
       components.filter((child: any) => child.parentComponentIndex === components.indexOf(component)).map((child: any) => child.drawingTitle));
       return { title: component.drawingTitle, rows: descriptionRows(component.drawingTitle, lines) };
@@ -479,17 +505,17 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
       ensureSpace(rowReservation(componentIndex));
       const rowTop = y;
       const left = components[componentIndex];
-      const leftCutouts = (item.cutouts ?? []).filter((cutout: any) => cutout.componentId === left.id);
+      const leftCutouts = cutoutsForDrawing.filter((cutout: any) => cutout.componentId === left.id);
       let rowBottom = technicalComponent(pdf, left, leftCutouts, left.materialNameSnapshot ?? item.materialNameSnapshot, rowTop, 0);
       const right = components[componentIndex + 1];
       if (right) {
-        const rightCutouts = (item.cutouts ?? []).filter((cutout: any) => cutout.componentId === right.id);
+        const rightCutouts = cutoutsForDrawing.filter((cutout: any) => cutout.componentId === right.id);
         rowBottom = Math.max(rowBottom, technicalComponent(pdf, right, rightCutouts, right.materialNameSnapshot ?? item.materialNameSnapshot, rowTop, 1));
       }
       y = rowBottom;
       writeComponentColumns(descriptions.slice(componentIndex, componentIndex + 2));
     }
-    writeDescription('Recortes sem componente vinculado', (item.cutouts ?? []).filter((cutout: any) => !components.some((component: any) => component.id === cutout.componentId)).flatMap((cutout: any) => descricaoProducaoRecorte(cutoutDetail(cutout))));
+    writeDescription('Recortes sem componente vinculado', cutoutsForDrawing.filter((cutout: any) => !components.some((component: any) => component.id === cutout.componentId)).flatMap((cutout: any) => descricaoProducaoRecorte(cutoutDetail(cutout))));
     writeDescription('Serviços e detalhes do projeto', (item.services ?? []).map((service: any) => ({ label: 'Serviço', text: `${service.serviceNameSnapshot}${service.billingUnitSnapshot === 'UNIT' ? ` · quantidade: ${number(Number(service.billedQuantity), 0)}` : ''}` })));
   });
   pdf.font('Helvetica').fontSize(9);

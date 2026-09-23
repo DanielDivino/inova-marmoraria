@@ -16,6 +16,7 @@ function NavigationIcon({ name }: { name: string }) {
     quotes: <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z" /><path d="M14 3v6h6M8 13h8m-8 4h5" /></>,
     materials: <><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>,
     customers: <><circle cx="9" cy="8" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3m1-16a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v3" /></>,
+    workers: <><path d="M4 15a8 8 0 0 1 16 0" /><rect x="3" y="15" width="18" height="3" rx="1" /><path d="M12 6v3" /></>,
     history: <><path d="M3 11a9 9 0 1 1 2.6 7.4M3 4v7h7" /><path d="M12 7v5l3 2" /></>,
   };
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
@@ -82,6 +83,7 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
     { href: '/orcamentos', label: 'Orçamentos', icon: 'quotes' },
     ...(user.role === 'SUPER_ADMIN' ? [{ href: '/administracao', label: 'Materiais e serviços', icon: 'materials' }] : []),
     { href: '/clientes', label: 'Clientes', icon: 'customers' },
+    ...(user.role === 'SUPER_ADMIN' ? [{ href: '/funcionarios', label: 'Funcionários', icon: 'workers' }] : []),
     { href: '/historico', label: 'Histórico', icon: 'history' },
   ];
   return <SessionContext.Provider value={user}><div className="application-frame">
