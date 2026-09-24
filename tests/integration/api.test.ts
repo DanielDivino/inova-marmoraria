@@ -375,10 +375,22 @@ describe('Plano de produção (drawingData) nunca altera o comercial', () => {
     const pdf = await request('GET', `/quotes/${q.id}/pdf?drawings=true`);
     expect(pdf.statusCode).toBe(200);
     const text = execFileSync('pdftotext', ['-', '-'], { input: pdf.rawPayload, encoding: 'utf8' });
-    expect(text).toContain('ORDEM DE SERVIÇO');
+    expect(text).toMatch(/\bOS\b/);
     expect(text).toContain('Bancada 1');
     expect(text).toContain('Bancada 2');
     expect(text).toContain('Bancada 3');
+    // Prazo acordado deve acompanhar alterações salvas na OS, sem ficar preso ao automático.
+    for (const [deliveryDeadline, expected] of [['2026-10-20', '20/10/2026'], ['2026-10-22', '22/10/2026']]) {
+      const tracking = await request('PATCH', `/quotes/${q.id}/tracking`, { deliveryDeadline });
+      expect(tracking.statusCode, tracking.body).toBe(200);
+      const updatedPdf = await request('GET', `/quotes/${q.id}/pdf?drawings=true`);
+      expect(updatedPdf.statusCode).toBe(200);
+      const pages = execFileSync('pdftotext', ['-layout', '-', '-'], { input: updatedPdf.rawPayload, encoding: 'utf8' }).split('\f');
+      const drawingPages = pages.filter(page => /\bOS\b/.test(page));
+      expect(pages[0]).toContain(`ENTREGA: ${expected}`);
+      expect(drawingPages.length).toBeGreaterThan(0);
+      for (const page of drawingPages) expect(page).toContain(expected);
+    }
   });
 });
 

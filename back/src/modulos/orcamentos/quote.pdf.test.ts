@@ -6,8 +6,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
 
 const item = { materialNameSnapshot: 'Branco Dallas', productType: { name: 'Bancada' }, billedQuantity: 1, services: [], components: [], cutouts: [] };
-async function render(netTotal: number, items: any[] = [item], artifact?: string, notes?: string, options?: QuotePdfOptions) {
-  const quote = { number: 'TESTE-PIX', customerNameSnapshot: 'Cliente', netTotal, grossTotal: 2000, discountAmount: 100, items, notes };
+async function render(netTotal: number, items: any[] = [item], artifact?: string, notes?: string, options?: QuotePdfOptions, details?: { customerNameSnapshot?: string; dueDate?: string; deliveryDeadline?: string | null }) {
+  const quote = { number: 'TESTE-PIX', customerNameSnapshot: 'Cliente', netTotal, grossTotal: 2000, discountAmount: 100, items, notes, ...details };
   const pdf = new PDFDocument({ margin: 36 });
   const printed = vi.spyOn(pdf, 'text');
   // Observe actual rendered lines, not just the text passed to PDFKit.
@@ -51,11 +51,11 @@ describe('Opções e agrupamento comercial do PDF', () => {
     const texts = result.calls.map(([text]) => text);
     expect(texts).toContain('À VISTA');
     expect(texts).toContain('CARTÃO');
-    expect(texts).not.toContain('ORDEM DE SERVIÇO');
+    expect(texts).not.toContain('OS');
     expect(result.pages).toBe(0);
     const detailed = { ...quick, projectName: 'Banheiro detalhado', drawingData: { entryMode: 'DETAILED', detailingStatus: 'COMPLETED' } };
     const mixed = await render(2016, [quick, detailed]);
-    const start = mixed.calls.findIndex(([text]) => text === 'ORDEM DE SERVIÇO');
+    const start = mixed.calls.findIndex(([text]) => text === 'OS');
     expect(start).toBeGreaterThan(0);
     expect(mixed.calls.slice(start).some(([text]) => text.includes('Cozinha rápida'))).toBe(false);
     expect(mixed.calls.slice(start).some(([text]) => text.includes('Banheiro detalhado'))).toBe(true);
@@ -77,7 +77,7 @@ describe('Opções e agrupamento comercial do PDF', () => {
     const detail = { sillTopWidthMm: 50, sillBottomWidthMm: 110, sillOverlapMm: 20, sillFinalWidthMm: 140 };
     const result = await render(1000, [{ ...item, materialNameSnapshot: 'Verde Ubatuba', drawingData: { componentDetails: [detail, detail] }, components: [component, { ...component, id: 'sill-2' }] }], 'peitoril-duplo', undefined, { individualPrices: false, drawings: true });
     const texts = result.calls.map(([text]) => text);
-    for (const label of ['5 cm', '11 cm', '2 cm', '14 cm total']) expect(texts.filter(text => text === label)).toHaveLength(2);
+    for (const label of ['0,14 m', '5 cm', '11 cm', '2 cm', '14 cm total']) expect(texts.filter(text => text === label)).toHaveLength(2);
     expect(texts).not.toContain('Detalhe do peitoril — duas pedras');
     expect(texts).not.toContain('104,0 × 5,0 cm');
     const main = result.rectangles.filter(([, , width]) => Math.abs(width - 120) < 0.01);
@@ -106,7 +106,7 @@ describe('Opções e agrupamento comercial do PDF', () => {
     expect(texts.includes('VALOR TOTAL')).toBe(options.individualPrices);
     expect(texts.includes('R$ 160,00')).toBe(options.individualPrices);
     expect(texts.includes('DESCONTO FINAL')).toBe(true);
-    expect(texts.includes('ORDEM DE SERVIÇO')).toBe(options.drawings);
+    expect(texts.includes('OS')).toBe(options.drawings);
     expect(texts.some(text => text.includes('Acabamento 45° no lado Inferior'))).toBe(options.drawings);
     expect(texts.some(text => text.includes('Conferir medidas antes de produzir.'))).toBe(true);
     expect(texts).toContain('R$ 1.060,00');
@@ -156,7 +156,7 @@ describe('Precisão e medidas das saias no desenho PDF', () => {
       ];
     }) };
     const result = await render(1440, [{ ...item, components: [component] }], `os-cotas-${widthMm}`);
-    const start = result.calls.findIndex(([text]) => text === 'ORDEM DE SERVIÇO');
+    const start = result.calls.findIndex(([text]) => text === 'OS');
     const drawing = result.calls.slice(start);
     expect(drawing.some(([text]) => text === '0,08 m')).toBe(false);
     expect(drawing.filter(([text]) => text === '45°')).toHaveLength(3);
@@ -171,11 +171,54 @@ describe('Precisão e medidas das saias no desenho PDF', () => {
 });
 
 describe('Paginação final da ordem de serviço', () => {
+  it.each([
+    ['2026-10-20T00:00:00.000Z', '2026-10-15T00:00:00.000Z', '20/10/2026'],
+    ['2026-10-22T00:00:00.000Z', '2026-10-15T00:00:00.000Z', '22/10/2026'],
+    [null, '2026-10-15T00:00:00.000Z', '15/10/2026'],
+    [null, undefined, 'A definir'],
+  ])('prioriza a data acordada %s sobre o prazo automático %s', async (deliveryDeadline, dueDate, expected) => {
+    const components = [{ id: 'top', label: 'Tampo', lengthMm: 1040, widthMm: 140, quantity: 1, edges: [] }];
+    const result = await render(1000, [{ ...item, components }], deliveryDeadline?.startsWith('2026-10-22') ? 'os-data-acordada' : undefined, undefined, undefined, { deliveryDeadline, dueDate });
+    const start = result.calls.findIndex(([text]) => text === 'OS');
+    const headerDate = result.calls.slice(start).find(([, x, y]) => x === 36 && y === 52);
+    expect(headerDate?.[0]).toBe(expected);
+    const commercialDate = result.calls.find(([text]) => text.startsWith('PRAZO DE EXECUÇÃO:'));
+    expect(commercialDate?.[0]).toContain(`ENTREGA: ${expected}`);
+  });
+  it.each(['Cliente Inova', 'Maria Aparecida de Oliveira dos Santos e Silva'])('identifica todas as folhas de desenhos sem invadir as colunas: %s', async (customer) => {
+    const components = Array.from({ length: 10 }, (_, index) => ({ id: `piece-${index}`, label: `Peça ${index + 1}`, componentType: 'TOP', lengthMm: 1200, widthMm: 600, quantity: 1, billableArea: .72, edges: [] }));
+    const result = await render(1000, [{ ...item, components }], customer === 'Cliente Inova' ? 'os-cabecalho-compacto' : 'os-cliente-longo', undefined, undefined, { customerNameSnapshot: customer, dueDate: '2026-10-05T00:00:00.000Z' });
+    const pages = result.calls.reduce<[string, number?, number?, unknown?][][]>((list, call) => {
+      if (call[0] === 'OS') list.push([]);
+      list.at(-1)?.push(call);
+      return list;
+    }, []);
+    expect(pages.length).toBeGreaterThan(1);
+    expect(result.calls.filter(([text]) => text === 'INOVA MARMORARIA')).toHaveLength(1);
+    for (const page of pages) {
+      expect(page.find(([text]) => text === 'OS')?.[1]).toBeGreaterThan(440);
+      expect(page.find(([text]) => text === 'DATA DE ENTREGA')?.[1]).toBe(36);
+      expect(page.some(([text]) => text === '05/10/2026')).toBe(true);
+      const name = page.find(([text]) => text === customer)!;
+      expect(name[1]).toBe(156);
+      expect(name[3]).toMatchObject({ width: 283, align: 'center' });
+      expect(page.some(([text]) => /PEDIDO |ENDEREÇO:|CNPJ:/.test(text))).toBe(false);
+    }
+    const shapes = result.rectangles.filter(([x, , width]) => x > 36 && width === 170);
+    expect(shapes).toHaveLength(10);
+    for (const [x, y, width, height] of shapes) {
+      expect(x + width).toBeLessThanOrEqual(559);
+      expect(y).toBeGreaterThan(84);
+      expect(y + height).toBeLessThan(700);
+    }
+    expect(shapes[0][1]).toBeLessThan(200);
+    for (let i = 1; i <= 10; i++) expect(result.calls.some(([text]) => text === `${i}. Peça ${i}`)).toBe(true);
+  });
   it('mantém a observação com as três peças de 70 cm do ORC-2026-20', async () => {
     const components = [30, 5, 2].map((quantity, index) => ({ id: `walkway-${index}`, label: ['Calçada', 'calçada 3,30', 'calçada 2,70'][index], componentType: index === 1 ? 'OTHER' : 'TOP', orientation: index === 1 ? 'VERTICAL' : 'HORIZONTAL', lengthMm: 700, widthMm: 700, quantity, billableArea: .49 * quantity, edges: [] }));
     const result = await render(10878, [{ ...item, projectName: 'Calçada 10,25', materialNameSnapshot: 'Cinza Corumbazinho', components }], 'observacao-calcada', 'Pagamento em dinheiro, metade no inicio da obra, metade no fim');
     expect(result.pages + 1).toBe(2);
-    const lastHeader = result.calls.map(([text]) => text).lastIndexOf('ORDEM DE SERVIÇO');
+    const lastHeader = result.calls.map(([text]) => text).lastIndexOf('OS');
     const lastPage = result.calls.slice(lastHeader);
     expect(lastPage.some(([text]) => text === '3. calçada 2,70')).toBe(true);
     expect(lastPage.some(([text]) => text.includes('Pagamento em dinheiro'))).toBe(true);
@@ -199,7 +242,7 @@ describe('Paginação final da ordem de serviço', () => {
   it('mantém a legenda na terceira folha quando todos os detalhes já couberam', async () => {
     const result = await render(1440, items, 'os-sem-folha-extra');
     expect(result.pages + 1).toBe(3);
-    const lastHeader = result.calls.map(([text]) => text).lastIndexOf('ORDEM DE SERVIÇO');
+    const lastHeader = result.calls.map(([text]) => text).lastIndexOf('OS');
     const lastPage = result.calls.slice(lastHeader);
     expect(lastPage.some(([text]) => text === '3. rodabanca 2')).toBe(true);
     expect(lastPage.some(([text]) => text === 'Serviço: Instalação/Montagem')).toBe(true);
@@ -212,7 +255,7 @@ describe('Paginação final da ordem de serviço', () => {
     const result = await render(1440, items, undefined, notes);
     expect(result.pages + 1).toBeGreaterThan(3);
     for (let index = 1; index <= 70; index++) expect(result.calls.some(([text]) => text === `Instrução ${index}: conferir medida.`)).toBe(true);
-    const lastHeader = result.calls.map(([text]) => text).lastIndexOf('ORDEM DE SERVIÇO');
+    const lastHeader = result.calls.map(([text]) => text).lastIndexOf('OS');
     expect(result.calls.slice(lastHeader).some(([text]) => text === 'Instrução 70: conferir medida.')).toBe(true);
     expect(result.calls.at(-1)?.[0]).toBe('Desenho ilustrativo, sem escala · X vermelho = acabamento simples · Área tracejada = recorte');
   });

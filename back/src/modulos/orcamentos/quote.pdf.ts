@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { cabecalhoEmpresaPdf as header, assinaturasPdf, normalizarNomeMaterial } from './pdf-layout.js';
+import { cabecalhoEmpresaPdf as header, assinaturasPdf, normalizarNomeMaterial, pdfDate } from './pdf-layout.js';
 import { montarLinhasPdf, type QuotePdfLine } from './quote.pdf-lines.js';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
 import { projetoTemDesenho, calcularTotalCartao, planoDeProducao } from '@inova/domain';
@@ -100,7 +100,7 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
     ['RIGHT', right, y, right, bottom, right + 6, (y + bottom) / 2],
   ] as const;
 
-  // No peitoril duplo, as larguras são identificadas no perfil lateral.
+  // A largura da pedra principal acompanha as medidas do perfil lateral.
   pdf.save();
   pdf.strokeColor(dimColor).fillColor(dimColor).lineWidth(0.8);
   // Horizontal dimension, kept well away from the rectangle.
@@ -111,8 +111,14 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   pdf.moveTo(right, dimensionY - 27).lineTo(right, dimensionY - 13).stroke();
   const dimensionWidth = Math.max(width, 48);
   pdf.font('Helvetica-Bold').fontSize(10).text(rotuloMedidaDesenho(lengthMm), x + width / 2 - dimensionWidth / 2, dimensionY - 39, { width: dimensionWidth, align: 'center' });
-  // Vertical dimension, outside the left edge and rotated like the web drawing.
-  if (!peitorilDuplo) {
+  // O peitoril usa o espaço entre a pedra e o perfil para preservar as margens.
+  if (peitorilDuplo) {
+    pdf.moveTo(right + 8, y).lineTo(right + 8, bottom)
+      .moveTo(right + 5, y).lineTo(right + 11, y)
+      .moveTo(right + 5, bottom).lineTo(right + 11, bottom).stroke();
+    pdf.save().font('Helvetica-Bold').fontSize(8).translate(right + 18, (y + bottom) / 2).rotate(-90)
+      .text(rotuloMedidaDesenho(component.sillFinalWidthMm ?? widthMm), -35, -4, { width: 70, align: 'center' }).restore();
+  } else {
     pdf.moveTo(dimensionX - 28, y).lineTo(dimensionX - 28, bottom).stroke();
     pdf.moveTo(dimensionX - 35, y).lineTo(dimensionX - 21, y).stroke();
     pdf.moveTo(dimensionX - 35, bottom).lineTo(dimensionX - 21, bottom).stroke();
@@ -255,13 +261,15 @@ function pecasParaOrdemDeServico(item: any): { components: any[]; cutouts: any[]
 }
 
 export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: QuotePdfOptions = { individualPrices: false, drawings: true }) {
+  const deliveryDate = quote.deliveryDeadline ?? quote.dueDate;
+  const deliveryLabel = deliveryDate ? pdfDate(deliveryDate) : 'A definir';
   header(pdf, 'ORÇAMENTO', quote);
   pdf.font('Helvetica-Bold').fontSize(8).fillColor('#17251f').text('CLIENTE:', 36, 124).font('Helvetica').text(quote.customerNameSnapshot, 92, 124);
   pdf.font('Helvetica-Bold').text('ENDEREÇO:', 36, 137).font('Helvetica').text(quote.workAddressSnapshot ?? 'Não informado', 92, 137);
   pdf.font('Helvetica-Bold').text('FONE:', 36, 150).font('Helvetica').text(quote.customerPhoneSnapshot ?? 'Não informado', 92, 150);
   pdf.font('Helvetica').text(`DATA DE EMISSÃO: ${date(quote.createdAt)}`, 330, 150, { width: 229, align: 'right' });
   pdf.fontSize(7.5).text(`VÁLIDO ATÉ: ${date(quote.validUntil)}  ·  APROVAÇÃO: ${date(quote.approvedAt)}`, 36, 164, { width: 523, align: 'right' });
-  pdf.text(`PRAZO DE EXECUÇÃO: ${quote.estimatedBusinessDays ? `${quote.estimatedBusinessDays} dias úteis após aprovação` : 'A definir'}  ·  ENTREGA: ${date(quote.dueDate)}`, 36, 175, { width: 523, align: 'right' });
+  pdf.text(`PRAZO DE EXECUÇÃO: ${quote.estimatedBusinessDays ? `${quote.estimatedBusinessDays} dias úteis após aprovação` : 'A definir'}  ·  ENTREGA: ${deliveryLabel}`, 36, 175, { width: 523, align: 'right' });
   let y = 190;
   const commercial = montarLinhasPdf(quote.items);
   // Keep linear services in the same project table as the other commercial
@@ -411,18 +419,28 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
 
   const drawnItems = quote.items.filter((item: any) => projetoTemDesenho(item.drawingData));
   if (!options.drawings || !drawnItems.length) return;
-  pdf.addPage(); header(pdf, 'ORDEM DE SERVIÇO', quote);
-  // The service-order sheet is intentionally spacious: the drawing is the
-  // primary production reference and the order number is easy to locate.
-  pdf.fillColor('#b6811e').font('Helvetica-Bold').fontSize(16).text(`PEDIDO ${quote.number}`, 36, 117, { width: 523, align: 'center' });
-  pdf.font('Helvetica').fontSize(9).fillColor('#17251f').text(`CLIENTE: ${quote.customerNameSnapshot}`, 36, 144).text(`ENDEREÇO: ${quote.workAddressSnapshot ?? 'Não informado'}`, 36, 158);
-  y = 179;
+  // Every drawing sheet can be identified independently in the workshop.
+  // Keep the three header columns separate, including for long customer names.
+  const newDrawingPage = () => {
+    pdf.addPage();
+    pdf.font('Helvetica-Bold').fontSize(10).fillColor('#17251f').text('OS', 451, 36, { width: 108, align: 'right' });
+    const orderHeight = pdf.fontSize(10).heightOfString(quote.number, { width: 108 });
+    pdf.text(quote.number, 451, 52, { width: 108, align: 'right' });
+    pdf.fontSize(8).text('DATA DE ENTREGA', 36, 36, { width: 108 });
+    pdf.fontSize(10).text(deliveryLabel, 36, 52, { width: 108 });
+    const customer = normalizarNomeMaterial(quote.customerNameSnapshot);
+    const customerSize = materialFontSize(pdf, customer, 283, 18, 14);
+    pdf.font('Helvetica-Bold').fontSize(customerSize);
+    const customerHeight = pdf.heightOfString(customer, { width: 283 });
+    pdf.text(customer, 156, 36, { width: 283, align: 'center' });
+    const headerBottom = Math.max(72, 36 + customerHeight + 12, 52 + orderHeight + 12);
+    pdf.lineWidth(0.7).moveTo(36, headerBottom).lineTo(559, headerBottom).stroke('#b8b2a8');
+    y = headerBottom + 12;
+  };
+  newDrawingPage();
   const ensureSpace = (height: number) => {
     if (y + height <= 700) return;
-    // Only the first service-order page carries the full PDF header. Later
-    // sheets are reserved for drawings and descriptions, which keeps them
-    // visually lighter and gives the content more usable vertical space.
-    pdf.addPage(); y = 52;
+    newDrawingPage();
   };
   const writeDescription = (title: string, lines: ManufacturingLine[]) => {
     if (!lines.length) return;
@@ -487,7 +505,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
       });
       y = bottom + 8;
       if (columns.some((column, index) => cursors[index] < column.rows.length)) {
-        pdf.addPage(); y = 52;
+        newDrawingPage();
         let headerHeight = 0;
         columns.forEach((column, index) => {
           if (cursors[index] >= column.rows.length) return;
