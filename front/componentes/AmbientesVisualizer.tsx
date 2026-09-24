@@ -93,11 +93,11 @@ export function VisualizadorAmbientes({ material, materiais, selecionarMaterial 
         <label className="ambientes-search">Buscar pedra<input type="search" placeholder="Nome do material" value={busca} onChange={(event) => setBusca(event.target.value)} /></label>
         <div className="ambientes-swatches" role="group" aria-label="Materiais">
           {filtrados.map((item) => <button type="button" key={item.id} aria-pressed={material?.id === item.id} onClick={() => { selecionarMaterial(item.id); setOriginal(false); }}>
-            <img className="material-sample-image" src={imagemDaPedra(item)} alt="" loading="lazy" /><span>{item.name}</span><small>{exibirPrecoMaterial(item.currentPrice, item.billingUnit)}</small>
+            <img className="material-sample-image" src={imagemDaPedra(item) ?? '/stone-placeholder.svg'} alt="" loading="lazy" /><span>{item.name}</span><small>{imagemDaPedra(item) ? exibirPrecoMaterial(item.currentPrice, item.billingUnit) : 'Foto pendente'}</small>
           </button>)}
           {!filtrados.length && <p>Nenhuma pedra encontrada.</p>}
         </div>
-        <p className="ambientes-feedback" role="status">{imagemComErro === pedra && pedra ? 'Não foi possível carregar esta amostra.' : pedra && !pronta ? 'Carregando amostra…' : ''}</p>
+        <p className="ambientes-feedback" role="status">{material && !pedra ? 'Esta pedra ainda não tem foto para a simulação.' : imagemComErro === pedra && pedra ? 'Não foi possível carregar esta amostra.' : pedra && !pronta ? 'Carregando amostra…' : ''}</p>
       </aside>
     </div>
     <p className="ambientes-note">Simulação ilustrativa. Tonalidade, escala e veios podem variar na pedra natural.</p>
