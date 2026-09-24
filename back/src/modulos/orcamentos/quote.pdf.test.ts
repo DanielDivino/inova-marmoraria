@@ -10,6 +10,8 @@ async function render(netTotal: number, items: any[] = [item], artifact?: string
   const quote = { number: 'TESTE-PIX', customerNameSnapshot: 'Cliente', netTotal, grossTotal: 2000, discountAmount: 100, items, notes };
   const pdf = new PDFDocument({ margin: 36 });
   const printed = vi.spyOn(pdf, 'text');
+  // Observe actual rendered lines, not just the text passed to PDFKit.
+  const fragments = vi.spyOn(pdf as any, '_fragment');
   const pages = vi.spyOn(pdf, 'addPage');
   const rectangles = vi.spyOn(pdf, 'rect');
   const ellipses = vi.spyOn(pdf, 'ellipse');
@@ -20,7 +22,7 @@ async function render(netTotal: number, items: any[] = [item], artifact?: string
   await buffer;
   if (artifact) { mkdirSync('.test-artifacts/pdf', { recursive: true }); writeFileSync(`.test-artifacts/pdf/${artifact}.pdf`, Buffer.concat(chunks)); }
   // PDFKit's last overload omits coordinates, but these calls use text(text, x, y, options).
-  return { quote, calls: printed.mock.calls as unknown as [string, number?, number?, unknown?][], pages: pages.mock.calls.length, rectangles: rectangles.mock.calls, ellipses: ellipses.mock.calls };
+  return { quote, fragments: fragments.mock.calls as [string, number, number][], calls: printed.mock.calls as unknown as [string, number?, number?, unknown?][], pages: pages.mock.calls.length, rectangles: rectangles.mock.calls, ellipses: ellipses.mock.calls };
 }
 
 describe('Opções e agrupamento comercial do PDF', () => {
@@ -58,22 +60,38 @@ describe('Opções e agrupamento comercial do PDF', () => {
     expect(mixed.calls.slice(start).some(([text]) => text.includes('Cozinha rápida'))).toBe(false);
     expect(mixed.calls.slice(start).some(([text]) => text.includes('Banheiro detalhado'))).toBe(true);
   });
-  it('mantém o nome da pedra em uma única linha no comercial e nos desenhos', async () => {
+  it.each(['Verde Ubatuba', 'Verde\nUbatuba'])('mantém %s em uma linha efetivamente renderizada no comercial e nos desenhos', async (materialNameSnapshot) => {
     const component = { id: 'top', label: 'Bancada', lengthMm: 2000, widthMm: 600, quantity: 1, billableArea: 1.2, edges: [] };
-    const result = await render(1000, [{ ...item, materialNameSnapshot: 'Verde\nUbatuba', components: [component] }], undefined, undefined, { individualPrices: false, drawings: true });
+    const result = await render(1000, [{ ...item, materialNameSnapshot, components: [component] }], 'nome-material-verde', undefined, { individualPrices: false, drawings: true });
     const texts = result.calls.map(([text]) => text);
     expect(texts).toContain('VERDE UBATUBA');
     expect(texts).toContain('1. Verde Ubatuba');
     expect(texts.filter(text => text.includes('VERDE') || text.includes('Verde')).every(text => !text.includes('\n'))).toBe(true);
+    const materialLines = result.fragments.filter(([text]) => /VERDE|UBATUBA/.test(text));
+    expect(materialLines).toHaveLength(1);
+    expect(materialLines[0][0]).toBe('VERDE UBATUBA');
+    expect(materialLines[0][2]).toBe(result.fragments.find(([text]) => text === 'MATERIAL: ')?.[2]);
   });
-  it('desenha o peitoril duplo com as medidas reais das duas pedras', async () => {
+  it('mantém o perfil pequeno ao lado de cada peitoril, com as quatro medidas', async () => {
     const component = { id: 'sill', label: 'Peitoril', componentType: 'SILL', lengthMm: 1040, widthMm: 140, quantity: 1, billableArea: 0.1456, edges: [] };
-    const result = await render(1000, [{ ...item, drawingData: { componentDetails: [{ sillTopWidthMm: 50, sillBottomWidthMm: 110, sillOverlapMm: 20, sillFinalWidthMm: 140 }] }, components: [component] }], 'peitoril-duplo', undefined, { individualPrices: false, drawings: true });
+    const detail = { sillTopWidthMm: 50, sillBottomWidthMm: 110, sillOverlapMm: 20, sillFinalWidthMm: 140 };
+    const result = await render(1000, [{ ...item, materialNameSnapshot: 'Verde Ubatuba', drawingData: { componentDetails: [detail, detail] }, components: [component, { ...component, id: 'sill-2' }] }], 'peitoril-duplo', undefined, { individualPrices: false, drawings: true });
     const texts = result.calls.map(([text]) => text);
-    expect(texts).toContain('104,0 × 5,0 cm');
-    expect(texts).toContain('104,0 × 11,0 cm');
-    expect(texts).toContain('Largura final: 14,0 cm · encaixe: 2,0 cm');
-    expect(result.rectangles.some(([x, y, width, height]) => Number(x) > 36 && Number(y) > 200 && Number(width) > 90 && Number(height) > 10)).toBe(true);
+    for (const label of ['5 cm', '11 cm', '2 cm', '14 cm total']) expect(texts.filter(text => text === label)).toHaveLength(2);
+    expect(texts).not.toContain('Detalhe do peitoril — duas pedras');
+    expect(texts).not.toContain('104,0 × 5,0 cm');
+    const main = result.rectangles.filter(([, , width]) => Math.abs(width - 120) < 0.01);
+    const profiles = result.rectangles.filter(([, , width]) => Math.abs(width - 42) < 0.01);
+    expect(main).toHaveLength(2);
+    expect(profiles).toHaveLength(2);
+    profiles.forEach(([x, y, width], index) => {
+      const [mainX, mainY, mainWidth, mainHeight] = main[index];
+      expect(x).toBeGreaterThan(mainX + mainWidth);
+      expect(width).toBeLessThan(mainWidth / 2);
+      expect(Math.abs(y - (mainY + mainHeight / 2))).toBeLessThan(20);
+      expect(x + width).toBeLessThan(36 + index * 263 + 250);
+    });
+    expect(result.pages + 1).toBe(2);
   });
   it.each([
     { individualPrices: false, drawings: false }, { individualPrices: false, drawings: true },

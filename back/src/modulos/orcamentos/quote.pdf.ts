@@ -32,20 +32,49 @@ const cross = (pdf: PdfDocument, x: number, y: number, size = 4) => {
     .moveTo(x - size, y + size).lineTo(x + size, y - size).stroke().restore();
 };
 
+/** Mesmo perfil esquemático do editor, em miniatura ao lado da pedra. */
+const sillDetail = (pdf: PdfDocument, component: any, x: number, y: number) => {
+  const scale = 0.28;
+  const px = (value: number) => x + value * scale;
+  const py = (value: number) => y + value * scale;
+  const label = (value: number | undefined, cx: number, top: number, suffix = '') => {
+    if (!value) return;
+    const text = `${rotuloMedidaDesenho(value, 'cm')}${suffix}`;
+    pdf.font('Helvetica').fontSize(6.5).fillColor('#635948');
+    pdf.text(text, px(cx) - pdf.widthOfString(text) / 2, py(top), { lineBreak: false });
+  };
+  pdf.save().lineWidth(0.6);
+  pdf.rect(px(40), py(40), 150 * scale, 50 * scale).fillAndStroke('#fff', '#6e5830');
+  pdf.rect(px(110), py(90), 190 * scale, 55 * scale).fillAndStroke('#e7ebe0', '#6e5830');
+  for (const [from, to, at] of [[40, 190, 30], [110, 300, 155], [40, 300, 200]]) {
+    pdf.moveTo(px(from), py(at)).lineTo(px(to), py(at))
+      .moveTo(px(from), py(at - 5)).lineTo(px(from), py(at + 5))
+      .moveTo(px(to), py(at - 5)).lineTo(px(to), py(at + 5)).stroke('#8d816e');
+  }
+  label(component.sillTopWidthMm, 115, -3);
+  label(component.sillBottomWidthMm, 205, 160);
+  label(component.sillFinalWidthMm, 170, 210, ' total');
+  if (component.sillOverlapMm) pdf.font('Helvetica-Bold').fontSize(6).fillColor('#7c531e')
+    .text(rotuloMedidaDesenho(component.sillOverlapMm, 'cm'), px(115), py(97), { lineBreak: false });
+  pdf.restore();
+  return py(210) + 8;
+};
+
 /** Renders the same simple technical drawing language used by the web SVG.
  * All dimensions are real millimetres; the scale is only visual and never
  * participates in the quote calculation.
  */
 const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], materialName: string, top: number, column = 0) => {
-  const cellW = 250;
+  const peitorilDuplo = component.componentType === 'SILL' && component.sillTopWidthMm && component.sillBottomWidthMm;
+  const cellW = peitorilDuplo ? 150 : 250;
   const areaX = 36 + column * 263;
-  const areaW = cellW;
+  const areaW = 250;
   const materialTitle = `${component.drawingNumber}. ${normalizarNomeMaterial(materialName)}`;
   const materialSize = materialFontSize(pdf, materialTitle, areaW);
   const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialSize).heightOfString(materialTitle, { width: areaW, lineBreak: false });
   const drawingTop = top + materialHeight + 8;
   // The minimum visual thickness keeps narrow pieces readable; labels retain real measurements.
-  const maxW = 170;
+  const maxW = peitorilDuplo ? 120 : 170;
   const maxH = 100;
   const lengthMm = Math.max(1, Number(component.lengthMm));
   const widthMm = Math.max(1, Number(component.widthMm));
@@ -61,7 +90,8 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   const y = drawingTop + 46 + (maxH - totalHeight) / 2 + topExtra * scaleY;
   const right = x + width;
   const bottom = y + height;
-  pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(materialSize).text(materialTitle, areaX, y - topExtra * scaleY - 39 - materialDimensionGap - materialHeight, { width: areaW, align: 'center', lineBreak: false });
+  pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(materialSize)
+    .text(materialTitle, areaX + (areaW - pdf.widthOfString(materialTitle)) / 2, y - topExtra * scaleY - 39 - materialDimensionGap - materialHeight, { lineBreak: false });
   const dimColor = '#80776a';
   const sides = [
     ['BACK', x, y, right, y, (x + right) / 2, y - 4],
@@ -70,12 +100,7 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
     ['RIGHT', right, y, right, bottom, right + 6, (y + bottom) / 2],
   ] as const;
 
-  // Peitoril duplo: lengthMm é o comprimento real (compartilhado pelas duas
-  // pedras, mostrado normalmente); widthMm é a largura de cima + largura de
-  // baixo somadas — real, mas não corresponde a nenhuma pedra sozinha, então o
-  // rótulo de largura não é desenhado aqui (as duas larguras reais saem no
-  // bloco "Detalhe do peitoril" mais abaixo).
-  const peitorilDuplo = component.componentType === 'SILL' && component.sillTopWidthMm && component.sillBottomWidthMm;
+  // No peitoril duplo, as larguras são identificadas no perfil lateral.
   pdf.save();
   pdf.strokeColor(dimColor).fillColor(dimColor).lineWidth(0.8);
   // Horizontal dimension, kept well away from the rectangle.
@@ -87,11 +112,13 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   const dimensionWidth = Math.max(width, 48);
   pdf.font('Helvetica-Bold').fontSize(10).text(rotuloMedidaDesenho(lengthMm), x + width / 2 - dimensionWidth / 2, dimensionY - 39, { width: dimensionWidth, align: 'center' });
   // Vertical dimension, outside the left edge and rotated like the web drawing.
-  pdf.moveTo(dimensionX - 28, y).lineTo(dimensionX - 28, bottom).stroke();
-  pdf.moveTo(dimensionX - 35, y).lineTo(dimensionX - 21, y).stroke();
-  pdf.moveTo(dimensionX - 35, bottom).lineTo(dimensionX - 21, bottom).stroke();
-  if (!peitorilDuplo) pdf.save().font('Helvetica-Bold').fontSize(10).translate(dimensionX - 43, (y + bottom) / 2).rotate(-90)
-    .text(rotuloMedidaDesenho(widthMm), -35, -5, { width: 70, align: 'center' }).restore();
+  if (!peitorilDuplo) {
+    pdf.moveTo(dimensionX - 28, y).lineTo(dimensionX - 28, bottom).stroke();
+    pdf.moveTo(dimensionX - 35, y).lineTo(dimensionX - 21, y).stroke();
+    pdf.moveTo(dimensionX - 35, bottom).lineTo(dimensionX - 21, bottom).stroke();
+    pdf.save().font('Helvetica-Bold').fontSize(10).translate(dimensionX - 43, (y + bottom) / 2).rotate(-90)
+      .text(rotuloMedidaDesenho(widthMm), -35, -5, { width: 70, align: 'center' }).restore();
+  }
   pdf.restore();
 
   pdf.save().fillColor('#fff7e5').strokeColor('#b6811e').lineWidth(1.4)
@@ -161,42 +188,8 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   const detailY = bottom + bottomExtra * scaleY + (hasMiter ? 36 : 22);
   pdf.y = detailY;
   if (component.componentType === 'SILL' && peitorilDuplo) {
-    // Peitoril de duas pedras: repete no PDF o esquema em degrau usado no
-    // editor, com as medidas reais de cada pedra e do encaixe.
-    const detailTop = pdf.y + 12;
-    pdf.font('Helvetica-Bold').fontSize(9).text('Detalhe do peitoril — duas pedras', areaX, detailTop, { width: areaW, align: 'center' });
-    const diagramY = detailTop + 28;
-    const topX = areaX + 18;
-    const topW = 98;
-    const topH = 14;
-    const bottomX = topX + 62;
-    const bottomW = 154;
-    const bottomY = diagramY + topH;
-    const bottomH = 21;
-    const topLabel = `${number(component.lengthMm / 10, 1)} × ${number(component.sillTopWidthMm / 10, 1)} cm`;
-    const bottomLabel = `${number(component.lengthMm / 10, 1)} × ${number(component.sillBottomWidthMm / 10, 1)} cm`;
-    const dimensionLine = (x1: number, x2: number, lineY: number, label: string, labelY: number) => {
-      pdf.strokeColor('#8d816e').lineWidth(0.7)
-        .moveTo(x1, lineY).lineTo(x2, lineY)
-        .moveTo(x1, lineY - 4).lineTo(x1, lineY + 4)
-        .moveTo(x2, lineY - 4).lineTo(x2, lineY + 4).stroke();
-      pdf.fillColor('#635948').font('Helvetica-Bold').fontSize(7.5)
-        .text(label, (x1 + x2) / 2 - 58, labelY, { width: 116, align: 'center', lineBreak: false });
-    };
-    dimensionLine(topX, topX + topW, diagramY - 8, topLabel, diagramY - 20);
-    pdf.save().fillColor('#fff').strokeColor('#6e5830').lineWidth(1.1).rect(topX, diagramY, topW, topH).fillAndStroke().restore();
-    pdf.save().fillColor('#e7ebe0').strokeColor('#6e5830').lineWidth(1.1).rect(bottomX, bottomY, bottomW, bottomH).fillAndStroke().restore();
-    dimensionLine(bottomX, bottomX + bottomW, bottomY + bottomH + 8, bottomLabel, bottomY + bottomH + 12);
-    if (component.sillOverlapMm) {
-      pdf.fillColor('#7c531e').font('Helvetica-Bold').fontSize(7)
-        .text(`${number(component.sillOverlapMm / 10, 1)} cm`, bottomX - 2, bottomY + 3, { width: 42, align: 'center', lineBreak: false });
-    }
-    const finalLabel = [
-      component.sillFinalWidthMm ? `Largura final: ${number(component.sillFinalWidthMm / 10, 1)} cm` : '',
-      component.sillOverlapMm ? `encaixe: ${number(component.sillOverlapMm / 10, 1)} cm` : '',
-    ].filter(Boolean).join(' · ');
-    if (finalLabel) pdf.fillColor('#635948').font('Helvetica').fontSize(7.5).text(finalLabel, areaX, bottomY + bottomH + 28, { width: areaW, align: 'center', lineBreak: false });
-    pdf.y = Math.max(pdf.y, bottomY + bottomH + 40);
+    const profileBottom = sillDetail(pdf, component, areaX + 155, y + height / 2 - 28);
+    pdf.y = Math.max(detailY, profileBottom);
   } else if (component.componentType === 'SILL') {
     const detailTop = pdf.y + 12;
     const detailX = areaX + (cellW - 170) / 2;
@@ -321,20 +314,21 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     const height = Math.max(16, pdf.font('Helvetica-Bold').fontSize(titleSize).heightOfString(title, { width: 515, lineBreak: false }) + 8);
     commercialSpace(height + 45);
     pdf.fillColor('#aaa7a4').rect(36, y, 523, height).fill();
-    // Keep the project name neutral and give the selected material a subtle
-    // mustard highlight so the stone is immediately identifiable.
+    // PDFKit still wraps when width is supplied, even with lineBreak:false.
+    // Position each coloured fragment explicitly without a wrapping width.
+    pdf.font('Helvetica-Bold').fontSize(titleSize);
     const contentWidth = pdf.widthOfString(title);
     let titleX = 36 + (523 - contentWidth) / 2;
     pdf.fillColor('#111').font('Helvetica-Bold').fontSize(titleSize)
-      .text(prefix, titleX, y + 4, { width: pdf.widthOfString(prefix), lineBreak: false });
+      .text(prefix, titleX, y + 4, { lineBreak: false });
     titleX += pdf.widthOfString(prefix);
     if (normalizedHeading.startsWith('MATERIAL: ')) {
       const label = 'MATERIAL: ';
-      pdf.fillColor('#111').text(label, titleX, y + 4, { width: pdf.widthOfString(label), lineBreak: false });
+      pdf.fillColor('#111').text(label, titleX, y + 4, { lineBreak: false });
       titleX += pdf.widthOfString(label);
-      pdf.fillColor('#c9473c').text(normalizedHeading.slice(label.length), titleX, y + 4, { width: pdf.widthOfString(normalizedHeading.slice(label.length)), lineBreak: false });
+      pdf.fillColor('#c9473c').text(normalizedHeading.slice(label.length), titleX, y + 4, { lineBreak: false });
     } else {
-      pdf.fillColor('#c9473c').text(normalizedHeading, titleX, y + 4, { width: pdf.widthOfString(normalizedHeading), lineBreak: false });
+      pdf.fillColor('#c9473c').text(normalizedHeading, titleX, y + 4, { lineBreak: false });
     }
     y += height + 2;
     commercialHeader();
@@ -515,7 +509,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
       const materialTitle = `${component.drawingNumber}. ${normalizarNomeMaterial(component.materialNameSnapshot ?? item.materialNameSnapshot)}`;
       const materialSize = materialFontSize(pdf, materialTitle, 250);
       const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialSize).heightOfString(materialTitle, { width: 250, lineBreak: false });
-      const sillDetailHeight = component.componentType === 'SILL' && component.sillTopWidthMm && component.sillBottomWidthMm ? 148 : component.componentType === 'SILL' ? 108 : 0;
+      const sillDetailHeight = component.componentType === 'SILL' && !(component.sillTopWidthMm && component.sillBottomWidthMm) ? 108 : 0;
       return materialHeight + 188 + (hasMiterFinish(component) ? 14 : 0) + sillDetailHeight;
     };
     const descriptions = components.map((component: any) => {
