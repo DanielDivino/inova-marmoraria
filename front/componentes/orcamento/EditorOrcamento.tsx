@@ -148,7 +148,7 @@ export default function EditorOrcamento() {
   useEffect(() => {
     if (quoteId) return;
     try {
-      const stored = localStorage.getItem(quoteDraftStorageKey) ?? localStorage.getItem(legacyQuoteDraftStorageKey);
+      const stored = localStorage.getItem(quoteDraftStorageKey) ?? (currentUser?.role === 'SUPER_ADMIN' ? localStorage.getItem(legacyQuoteDraftStorageKey) : null);
       if (stored) {
         const draft = JSON.parse(stored) as Partial<{ customer: Customer | null; customerMode: 'NEW' | 'EXISTING' | null; customerForm: typeof customerForm; items: DraftItem[]; activeIndex: number; discount: string; validUntil: string; notes: string; parentQuote: QuoteLink | null; componentNamesVersion: number; workspaces: Partial<ClientWorkspace>[]; activeClientIndex: number }>;
         const normalizeItems = (entries: DraftItem[] | undefined) => entries?.length ? restaurarNomesComponentes(entries, draft.componentNamesVersion).map((entry) => ({ ...entry, projectName: entry.projectName ?? '', components: entry.components.map(component => ({ ...component, materialId: component.materialId ?? entry.materialId })), serviceAppliedValues: entry.serviceAppliedValues ?? {} })) : [newItem()];

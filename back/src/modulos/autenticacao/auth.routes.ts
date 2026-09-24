@@ -5,7 +5,7 @@ import { prisma } from '../../config/prisma.js';
 import { AppError, type AuthUser } from '../../compartilhado/http.js';
 
 const loginSchema = z.object({ email: z.string().email().transform((value) => value.toLowerCase()), password: z.string().min(8) });
-function usuarioPublico(user: { id: string; name: string; role: 'SUPER_ADMIN' | 'ADMIN'; maxDiscountPercent: unknown }) { return { id: user.id, name: user.name, role: user.role, maxDiscountPercent: Number(user.maxDiscountPercent) }; }
+function usuarioPublico(user: { id: string; name: string; role: AuthUser['role']; maxDiscountPercent: unknown }) { return { id: user.id, name: user.name, role: user.role, maxDiscountPercent: Number(user.maxDiscountPercent) }; }
 
 export async function registrarRotasAutenticacao(app: FastifyInstance) {
   app.post('/login', async (request, reply) => {

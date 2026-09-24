@@ -1,11 +1,12 @@
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { Fragment, Suspense, useEffect, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { podeEditarOrcamento, DEADLINE_LABELS, obterStatusPrazo, WORK_STATUS_LABELS, WORK_STATUSES, type QuoteProgress, type WorkStatus, type CustomerDeadlineStatus } from '@inova/domain';
+import { temPermissao, podeEditarOrcamento, DEADLINE_LABELS, obterStatusPrazo, WORK_STATUS_LABELS, WORK_STATUSES, type QuoteProgress, type WorkStatus, type CustomerDeadlineStatus } from '@inova/domain';
 import { StatusOrcamento, StatusLegend } from '../../componentes/QuoteStatus';
 import { DesenhosSalvos } from '../../componentes/orcamento/SavedDrawings';
+import { useSession } from '../../componentes/ApplicationShell';
 import { api } from '../../utilitarios/api';
 
 type Quote = QuoteProgress & {
@@ -18,7 +19,18 @@ type Worker = { id: string; name: string; workColor: string };
 import { formatarMoeda } from '../../utilitarios/formatadores';
 const date = (value: string | Date) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
-export default function QuotesPage() {
+export default function QuotesPage() { return <Suspense fallback={<main className="list-page">Carregando orçamentos…</main>}><QuotesList /></Suspense>; }
+function QuotesList() {
+  const user = useSession();
+  const canManage = !!user && temPermissao(user.role, 'administration');
+  const canTeam = !!user && temPermissao(user.role, 'team');
+  const params = useSearchParams();
+  const [sellerId, setSellerId] = useState(params.get('sellerId') ?? '');
+  const [from, setFrom] = useState(params.get('from') ?? '');
+  const [to, setTo] = useState(params.get('to') ?? '');
+  const [allQuotes, setAllQuotes] = useState(params.get('scope') === 'all');
+  const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => { if (canManage) api<typeof sellers>('/users').then(setSellers).catch(() => setSellers([])); }, [canManage]);
   const isHistory = usePathname() === '/historico';
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [search, setSearch] = useState('');
@@ -33,16 +45,19 @@ export default function QuotesPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
-  const activeFilterCount = [search, workStatus, situacaoPrazoInterno, responsibleId].filter(Boolean).length;
+  const activeFilterCount = [search, workStatus, situacaoPrazoInterno, responsibleId, sellerId, from, to].filter(Boolean).length;
 
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError('');
-      const query = new URLSearchParams({ search, page: String(page), scope: isHistory ? 'history' : 'active' });
+      const query = new URLSearchParams({ search, page: String(page), ...(allQuotes ? {} : { scope: isHistory ? 'history' : 'active' }) });
+      if (sellerId && canManage) query.set('sellerId', sellerId);
+      if (from) query.set('from', from);
+      if (to) query.set('to', to);
       if (workStatus) query.set('workStatus', workStatus);
-      if (situacaoPrazoInterno) query.set('deadlineStatus', situacaoPrazoInterno);
+      if (situacaoPrazoInterno) query.set('situacaoPrazoInterno', situacaoPrazoInterno);
       if (responsibleId) query.set('responsibleId', responsibleId);
       api<QuotePage>(`/quotes?${query}`, { signal: controller.signal }).then((result) => {
         if (!controller.signal.aborted) { setQuotes(result.data); setPages(result.meta.pages); setCounts(result.counts ?? {}); }
@@ -51,11 +66,11 @@ export default function QuotesPage() {
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, search ? 300 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [search, page, isHistory, attempt, workStatus, situacaoPrazoInterno, responsibleId]);
-  useEffect(() => { api<Worker[]>('/workers?active=true').then(setWorkers).catch(() => setWorkers([])); }, []);
+  }, [search, page, isHistory, attempt, workStatus, situacaoPrazoInterno, responsibleId, sellerId, from, to, allQuotes, canManage]);
+  useEffect(() => { if (canTeam) api<Worker[]>('/workers?active=true').then(setWorkers).catch(() => setWorkers([])); }, [canTeam]);
   const chooseWork = (value: WorkStatus | '') => { setWorkStatus(value); setPage(1); };
   const chooseDeadline = (value: CustomerDeadlineStatus | '') => { setDeadlineStatus(value); setPage(1); };
-  const clearFilters = () => { setSearch(''); chooseWork(''); chooseDeadline(''); setResponsibleId(''); };
+  const clearFilters = () => { setSearch(''); chooseWork(''); chooseDeadline(''); setResponsibleId(''); setSellerId(''); setFrom(''); setTo(''); };
   const statusGroups: { label: string; statuses: WorkStatus[] }[] = [
     { label: 'Comercial', statuses: ['PENDING_APPROVAL', 'APPROVED', 'REJECTED'] },
     { label: 'Produção', statuses: ['IN_PRODUCTION', 'WAITING_MATERIAL', 'PENDING_WORK', 'REWORK', 'READY'] },
@@ -84,7 +99,8 @@ export default function QuotesPage() {
           <button type="button" aria-pressed={situacaoPrazoInterno === 'OVERDUE'} className={situacaoPrazoInterno === 'OVERDUE' ? 'selected overdue' : 'overdue'} onClick={() => chooseDeadline(situacaoPrazoInterno === 'OVERDUE' ? '' : 'OVERDUE')}>Atrasados <b>{counts.OVERDUE ?? 0}</b></button>
           {statusGroups.map(group => <Fragment key={group.label}><i className="material-filter-separator" aria-hidden="true" /><span>{group.label}</span>{group.statuses.map(status => <button type="button" key={status} aria-pressed={workStatus === status} className={workStatus === status ? 'selected' : ''} onClick={() => chooseWork(workStatus === status ? '' : status)}>{WORK_STATUS_LABELS[status]} <b>{counts[status] ?? 0}</b></button>)}</Fragment>)}
         </div>
-        <div className="quote-filter-row"><label>Funcionário<select value={responsibleId} onChange={(event) => { setResponsibleId(event.target.value); setPage(1); }}><option value="">Todos os funcionários</option>{workers.map(worker => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select></label><label>Status<select value={workStatus} onChange={(event) => chooseWork(event.target.value as WorkStatus | '')}><option value="">Todos os status</option>{WORK_STATUSES.map(status => <option key={status} value={status}>{WORK_STATUS_LABELS[status]}</option>)}</select></label><label>Prazo<select value={situacaoPrazoInterno} onChange={(event) => chooseDeadline(event.target.value as CustomerDeadlineStatus | '')}><option value="">Todos os prazos</option>{Object.entries(DEADLINE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
+        <div className="quote-filter-row">{canTeam && <label>Funcionário<select value={responsibleId} onChange={(event) => { setResponsibleId(event.target.value); setPage(1); }}><option value="">Todos os funcionários</option>{workers.map(worker => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select></label>}<label>Status<select value={workStatus} onChange={(event) => chooseWork(event.target.value as WorkStatus | '')}><option value="">Todos os status</option>{WORK_STATUSES.map(status => <option key={status} value={status}>{WORK_STATUS_LABELS[status]}</option>)}</select></label><label>Prazo<select value={situacaoPrazoInterno} onChange={(event) => chooseDeadline(event.target.value as CustomerDeadlineStatus | '')}><option value="">Todos os prazos</option>{Object.entries(DEADLINE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
+        <div className="quote-filter-row">{canManage && <label>Vendedor<select value={sellerId} onChange={event => { setSellerId(event.target.value); setPage(1); }}><option value="">Todos os responsáveis</option>{sellers.map(seller => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>}<label>Emissão de<input type="date" value={from} onChange={event => { setFrom(event.target.value); setPage(1); }} /></label><label>Emissão até<input type="date" min={from || undefined} value={to} onChange={event => { setTo(event.target.value); setPage(1); }} /></label><label>Exibir<select value={allQuotes ? 'all' : 'current'} onChange={event => { setAllQuotes(event.target.value === 'all'); setPage(1); }}><option value="current">{isHistory ? 'Encerrados' : 'Em andamento'}</option><option value="all">Todos, incluindo entregues e cancelados</option></select></label></div>
         <StatusLegend />
       </>}
     </section>

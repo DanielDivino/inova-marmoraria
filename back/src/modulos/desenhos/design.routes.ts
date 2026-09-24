@@ -1,3 +1,4 @@
+import { exigirPermissao } from '../../compartilhado/acesso.js';
 import { createHash } from 'node:crypto';
 import PDFDocument from 'pdfkit';
 import type { FastifyInstance } from 'fastify';
@@ -31,7 +32,7 @@ async function getDesign(id: string) {
 }
 
 export async function registrarRotasDesenhos(app: FastifyInstance) {
-  const authenticated = { preHandler: [app.authenticate] };
+  const authenticated = { preHandler: [app.authenticate, exigirPermissao('technical')] };
 
   app.post('/jobs', authenticated, async (request, reply) => {
     const input = createJobSchema.parse(request.body);

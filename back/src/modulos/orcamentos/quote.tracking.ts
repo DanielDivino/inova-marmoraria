@@ -17,7 +17,7 @@ export const historySchema = schemaConsultaPaginada({
   scope: z.enum(['active', 'history']).optional(), search: z.string().trim().max(200).optional(),
   status: z.enum(['DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED']).optional(),
   workStatus: z.enum(WORK_STATUSES).optional(), situacaoPrazoInterno: z.enum(DEADLINE_STATUSES).optional(),
-  customerId: z.string().cuid().optional(), responsibleId: z.string().cuid().optional(),
+  sellerId: z.string().cuid().optional(), customerId: z.string().cuid().optional(), responsibleId: z.string().cuid().optional(),
   from: calendarDateSchema.optional(), to: calendarDateSchema.optional(),
   approvedFrom: calendarDateSchema.optional(), approvedTo: calendarDateSchema.optional(),
   deliveryFrom: calendarDateSchema.optional(), deliveryTo: calendarDateSchema.optional(),
@@ -56,6 +56,7 @@ export function montarFiltrosOrcamento(query: QuoteFilters, now = new Date()): P
   if (query.workStatus) conditions.push(filtroStatusTrabalho(query.workStatus));
   if (query.status) conditions.push({ status: query.status });
   if (query.situacaoPrazoInterno) conditions.push(filtroPrazo(query.situacaoPrazoInterno, now));
+  if (query.sellerId) conditions.push({ createdById: query.sellerId });
   if (query.customerId) conditions.push({ customerId: query.customerId });
   if (query.responsibleId) conditions.push({ workerAssignments: { some: { workerId: query.responsibleId, releasedAt: null } } });
   if (query.search) conditions.push({ OR: [

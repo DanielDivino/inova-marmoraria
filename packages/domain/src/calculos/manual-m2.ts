@@ -1,4 +1,4 @@
-export type ManualM2Role = 'SUPER_ADMIN' | 'ADMIN';
+export type ManualM2Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER';
 
 export function podeUsarM2Manual(role: ManualM2Role, billedQuantity: number | undefined, justification: string | undefined) {
   return role === 'SUPER_ADMIN'

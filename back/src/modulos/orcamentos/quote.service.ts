@@ -1,3 +1,4 @@
+import { escopoClientes, escopoOrcamentos } from '../../compartilhado/acesso.js';
 import type { Prisma } from '@prisma/client';
 import { podeEditarOrcamento, itemSalvoParaEntrada, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularSubtotalMaterial, calcularAreaRetangularM2, calcularTotalOrcamento, podeUsarM2Manual, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
 import { AppError, type AuthUser } from '../../compartilhado/http.js';
@@ -12,6 +13,10 @@ type BuiltItem = any;
 
 const quoteInclude = { parentQuote: { select: { id: true, number: true } }, complements: { select: { id: true, number: true, netTotal: true, status: true } }, customer: true, createdBy: { select: { id: true, name: true, email: true } }, workerAssignments: { include: { worker: { select: { id: true, name: true, workColor: true } } }, orderBy: { assignedAt: 'desc' as const } }, items: { include: { productType: true, material: { include: { images: { orderBy: { isPrimary: 'desc' as const } } } }, services: { include: { service: true } }, components: { include: { edges: true }, orderBy: { sortOrder: 'asc' as const } }, cutouts: { orderBy: { sortOrder: 'asc' as const } } }, orderBy: { id: 'asc' as const } } } as const satisfies Prisma.QuoteInclude;
 export { quoteInclude };
+export const incluirOrcamento = (user: AuthUser) => ({ ...quoteInclude,
+  parentQuote: { ...quoteInclude.parentQuote, where: escopoOrcamentos(user) },
+  complements: { ...quoteInclude.complements, where: escopoOrcamentos(user) },
+});
 
 function validarDesconto(user: AuthUser, gross: number, discount: number) { const allowed = user.role === 'SUPER_ADMIN' ? gross : gross * (user.maxDiscountPercent / 100); if (discount > allowed + 0.001) throw new AppError(403, `Desconto acima do limite permitido (${user.role === 'SUPER_ADMIN' ? '100' : user.maxDiscountPercent}%).`, 'DISCOUNT_NOT_ALLOWED'); }
 function comprimentoBorda(component: z.infer<typeof import('./quote.schema.js').quoteComponentSchema>, edge: z.infer<typeof import('./quote.schema.js').quoteEdgeSchema>) { if (edge.lengthMm) return edge.lengthMm; return edge.side === 'FRONT' || edge.side === 'BACK' ? component.lengthMm : component.widthMm; }
@@ -130,9 +135,9 @@ async function persistirItem(tx: Tx, quoteId: string, item: BuiltItem, existingI
 }
 
 export async function criarOrcamento(tx: Tx, input: QuoteInput, user: AuthUser) {
-  const customer = await tx.customer.findUnique({ where: { id: input.customerId } }); if (!customer) throw new AppError(422, 'Cliente não encontrado.', 'CUSTOMER_NOT_FOUND');
+  const customer = await tx.customer.findUnique({ where: { id: input.customerId, ...escopoClientes(user) } }); if (!customer) throw new AppError(422, 'Cliente não encontrado.', 'CUSTOMER_NOT_FOUND');
   if (input.parentQuoteId) {
-    const parent = await tx.quote.findUnique({ where: { id: input.parentQuoteId } });
+    const parent = await tx.quote.findUnique({ where: { id: input.parentQuoteId, ...escopoOrcamentos(user) } });
     if (!parent || parent.customerId !== input.customerId) throw new AppError(422, 'O complemento deve pertencer ao mesmo cliente do orçamento vinculado.', 'INVALID_PARENT_QUOTE');
   }
   const items = []; for (const item of input.items) items.push(await montarItem(tx, item, user)); const grossTotal = items.reduce((sum, item) => sum + item.total, 0); validarDesconto(user, grossTotal, input.discountAmount);
@@ -142,7 +147,7 @@ export async function criarOrcamento(tx: Tx, input: QuoteInput, user: AuthUser) 
   const number = formatarNumeroOrcamento(createdAt, sequence.lastNumber);
   const quote = await tx.quote.create({ data: { number, createdAt, parentQuoteId: input.parentQuoteId, customerId: input.customerId, customerNameSnapshot: customer.name, customerPhoneSnapshot: customer.phone, workAddressSnapshot: customer.address, createdById: user.id, validUntil: input.validUntil, notes: input.notes, deliveryDeadline: input.deliveryDeadline ? new Date(input.deliveryDeadline + 'T00:00:00.000Z') : null, installationDeadline: input.installationDeadline ? new Date(input.installationDeadline + 'T00:00:00.000Z') : null, deadlineConfirmed: input.deadlineConfirmed ?? false, deadlineNote: input.deadlineNote, discountAmount: input.discountAmount, grossTotal, netTotal: calcularTotalOrcamento([grossTotal], input.discountAmount) } });
   for (const item of items) await persistirItem(tx, quote.id, item);
-  return tx.quote.findUniqueOrThrow({ where: { id: quote.id }, include: quoteInclude });
+  return tx.quote.findUniqueOrThrow({ where: { id: quote.id }, include: incluirOrcamento(user) });
 }
 
 export async function adicionarItemOrcamento(tx: Tx, quoteId: string, input: QuoteItemInput, user: AuthUser) {
@@ -150,17 +155,18 @@ export async function adicionarItemOrcamento(tx: Tx, quoteId: string, input: Quo
   const item = await montarItem(tx, input, user); const grossTotal = Number(quote.grossTotal) + item.total; const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); const created = await persistirItem(tx, quoteId, item); await tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) } }); return created;
 }
 
-export async function recalcularOrcamento(tx: Tx, quoteId: string, user: AuthUser) { const quote = await tx.quote.findUnique({ where: { id: quoteId }, include: { items: true } }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND'); const grossTotal = quote.items.reduce((sum, item) => sum + Number(item.total), 0); const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); return tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) }, include: quoteInclude }); }
+export async function recalcularOrcamento(tx: Tx, quoteId: string, user: AuthUser) { const quote = await tx.quote.findUnique({ where: { id: quoteId }, include: { items: true } }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND'); const grossTotal = quote.items.reduce((sum, item) => sum + Number(item.total), 0); const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); return tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) }, include: incluirOrcamento(user) }); }
 
 export async function editarOrcamento(tx: Tx, id: string, input: z.infer<typeof editQuoteSchema>, user: AuthUser) {
-  const before = await tx.quote.findUnique({ where: { id }, include: quoteInclude });
+  // Internal validation must also account for complements created by administrators.
+  const before = await tx.quote.findUnique({ where: { id, ...escopoOrcamentos(user) }, include: quoteInclude });
   if (!before) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
   if (!podeEditarOrcamento(before)) throw new AppError(409, 'Este registro está encerrado. Crie um complemento ou reabra como retrabalho.', 'QUOTE_NOT_EDITABLE');
   const claimed = await tx.quote.updateMany({ where: { id, updatedAt: new Date(input.expectedUpdatedAt) }, data: { updatedAt: new Date() } });
   if (!claimed.count) throw new AppError(409, 'Este orçamento foi alterado em outra sessão. Reabra antes de salvar.', 'QUOTE_CONFLICT');
   if (before.parentQuoteId && before.customerId !== input.customerId) throw new AppError(422, 'Não é possível trocar o cliente de um complemento vinculado.', 'INVALID_PARENT_QUOTE');
   if (before.complements.length && before.customerId !== input.customerId) throw new AppError(422, 'Este orçamento possui complementos vinculados ao cliente atual.', 'INVALID_PARENT_QUOTE');
-  const customer = await tx.customer.findUnique({ where: { id: input.customerId } });
+  const customer = await tx.customer.findUnique({ where: { id: input.customerId, ...escopoClientes(user) } });
   if (!customer) throw new AppError(422, 'Cliente não encontrado.', 'CUSTOMER_NOT_FOUND');
   const ids = input.items.map((item) => item.id).filter(Boolean);
   if (new Set(ids).size !== ids.length) throw new AppError(422, 'Projetos repetidos no envio.', 'DUPLICATE_ITEMS');
@@ -187,7 +193,7 @@ export async function editarOrcamento(tx: Tx, id: string, input: z.infer<typeof 
     validUntil: input.validUntil, notes: input.notes, ...(input.deliveryDeadline !== undefined ? { deliveryDeadline: input.deliveryDeadline ? new Date(input.deliveryDeadline + 'T00:00:00.000Z') : null } : {}), ...(input.installationDeadline !== undefined ? { installationDeadline: input.installationDeadline ? new Date(input.installationDeadline + 'T00:00:00.000Z') : null } : {}), ...(input.deadlineConfirmed !== undefined ? { deadlineConfirmed: input.deadlineConfirmed } : {}), ...(input.deadlineNote !== undefined ? { deadlineNote: input.deadlineNote } : {}), discountAmount: input.discountAmount, grossTotal,
     netTotal: calcularTotalOrcamento([grossTotal], input.discountAmount),
     ...(before.status === 'DRAFT' ? { status: 'SENT' as const } : {}),
-  }, include: quoteInclude });
+  }, include: incluirOrcamento(user) });
   await tx.auditLog.create({ data: { userId: user.id, entityType: 'QUOTE', entityId: id, action: 'UPDATED',
     previous: JSON.parse(JSON.stringify(before)), current: JSON.parse(JSON.stringify(result)) } });
   return result;

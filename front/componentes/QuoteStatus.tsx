@@ -3,7 +3,7 @@ import { DEADLINE_LABELS, DEADLINE_TONES, obterStatusPrazo, obterStatusTrabalho,
 export function StatusOrcamento({ quote }: { quote: QuoteProgress }) {
   const work = obterStatusTrabalho(quote);
   const deadline = obterStatusPrazo(quote);
-  return <div className="status-badges"><span className={`status status-${WORK_STATUS_TONES[work]}`}>{WORK_STATUS_LABELS[work]}</span><span className={`status status-${DEADLINE_TONES[deadline]}`}>{DEADLINE_LABELS[deadline]}</span></div>;
+  return <div className="status-badges"><span className={`status status-${WORK_STATUS_TONES[work]}`}>{quote.status === 'CANCELLED' ? 'Cancelado' : quote.status === 'EXPIRED' ? 'Expirado' : WORK_STATUS_LABELS[work]}</span><span className={`status status-${DEADLINE_TONES[deadline]}`}>{DEADLINE_LABELS[deadline]}</span></div>;
 }
 
 export function StatusLegend() {

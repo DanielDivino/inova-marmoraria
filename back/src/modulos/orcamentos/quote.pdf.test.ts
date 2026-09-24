@@ -58,6 +58,14 @@ describe('Opções e agrupamento comercial do PDF', () => {
     expect(mixed.calls.slice(start).some(([text]) => text.includes('Cozinha rápida'))).toBe(false);
     expect(mixed.calls.slice(start).some(([text]) => text.includes('Banheiro detalhado'))).toBe(true);
   });
+  it('mantém o nome da pedra em uma única linha no comercial e nos desenhos', async () => {
+    const component = { id: 'top', label: 'Bancada', lengthMm: 2000, widthMm: 600, quantity: 1, billableArea: 1.2, edges: [] };
+    const result = await render(1000, [{ ...item, materialNameSnapshot: 'Verde\nUbatuba', components: [component] }], undefined, undefined, { individualPrices: false, drawings: true });
+    const texts = result.calls.map(([text]) => text);
+    expect(texts).toContain('VERDE UBATUBA');
+    expect(texts).toContain('1. Verde Ubatuba');
+    expect(texts.filter(text => text.includes('VERDE') || text.includes('Verde')).every(text => !text.includes('\n'))).toBe(true);
+  });
   it.each([
     { individualPrices: false, drawings: false }, { individualPrices: false, drawings: true },
     { individualPrices: true, drawings: false }, { individualPrices: true, drawings: true },

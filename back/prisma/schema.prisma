@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum Role {
+  SELLER
   SUPER_ADMIN
   ADMIN
 }
@@ -109,6 +110,7 @@ model User {
   maxDiscountPercent   Decimal    @default(0) @db.Decimal(5, 2)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
+  ownedCustomers       Customer[]
   createdQuotes        Quote[]    @relation("QuoteCreator")
   auditLogs            AuditLog[]
   editedDesignDrafts   DesignDraft[]       @relation("DesignDraftEditor")
@@ -134,6 +136,9 @@ model Worker {
 }
 
 model Customer {
+  ownerId     String?
+  owner       User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  @@index([ownerId, name])
   id          String   @id @default(cuid())
   name        String
   phone       String   @unique

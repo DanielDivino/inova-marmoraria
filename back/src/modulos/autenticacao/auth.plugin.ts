@@ -1,3 +1,4 @@
+import { prisma } from '../../config/prisma.js';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
 import type { FastifyInstance } from 'fastify';
@@ -12,6 +13,9 @@ export async function registrarAutenticacao(app: FastifyInstance) {
   await app.register(jwt, { secret: process.env.JWT_SECRET ?? 'inova-dev-only-change-me', sign: { expiresIn: '15m' } });
   app.decorate('authenticate', async (request: import('fastify').FastifyRequest) => {
     try { await request.jwtVerify(); if (request.user.tokenUse === 'refresh') throw new Error('Token de renovação não concede acesso à API.'); } catch { throw new AppError(401, 'Sessão inválida ou expirada.', 'UNAUTHORIZED'); }
+    const current = await prisma.user.findUnique({ where: { id: request.user.id }, select: { id: true, name: true, role: true, isActive: true, maxDiscountPercent: true } });
+    if (!current?.isActive) throw new AppError(401, 'Sessão inválida ou expirada.', 'UNAUTHORIZED');
+    request.user = { id: current.id, name: current.name, role: current.role, maxDiscountPercent: Number(current.maxDiscountPercent), tokenUse: 'access' };
   });
 }
 

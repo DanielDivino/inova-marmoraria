@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import { registrarRotasDashboard } from './modulos/dashboard/dashboard.routes.js';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { join } from 'node:path';
@@ -29,6 +30,7 @@ export async function criarAplicacao() {
   app.register(registrarRotasOrcamentos, { prefix: '/quotes' });
   app.register(registrarRotasRemontagem, { prefix: '/quotes' });
   app.register(registrarRotasUsuarios, { prefix: '/users' });
+  app.register(registrarRotasDashboard, { prefix: '/dashboard' });
   app.register(registrarRotasAuditoria, { prefix: '/audit' });
   app.register(registrarRotasNotificacoes, { prefix: '/notifications' });
   app.register(registrarRotasDesenhos);

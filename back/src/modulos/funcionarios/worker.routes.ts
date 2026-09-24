@@ -1,3 +1,4 @@
+import { exigirPermissao } from '../../compartilhado/acesso.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
@@ -18,7 +19,7 @@ const updateSchema = workerSchema.partial();
 const select = { id: true, name: true, cpf: true, phone: true, workColor: true, isActive: true, createdAt: true } as const;
 
 export async function registrarRotasFuncionarios(app: FastifyInstance) {
-  const authenticated = { preHandler: [app.authenticate] };
+  const authenticated = { preHandler: [app.authenticate, exigirPermissao('team')] };
   const superOnly = { preHandler: [app.authenticate, exigirPerfil('SUPER_ADMIN')] };
 
   app.get('/', authenticated, async (request) => {

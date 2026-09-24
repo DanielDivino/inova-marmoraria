@@ -1,3 +1,4 @@
+import { exigirOrcamentoProprio } from '../../compartilhado/acesso.js';
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import PDFDocument from 'pdfkit';
@@ -9,7 +10,7 @@ import { buscarOrigemRemontagem, calcularRemontagem, salvarRemontagem, serializa
 import { renderizarRemontagemPdf } from './remount.pdf.js';
 
 export async function registrarRotasRemontagem(app: FastifyInstance) {
-  const authenticated = { preHandler: [app.authenticate] };
+  const authenticated = { preHandler: [app.authenticate, exigirOrcamentoProprio] };
   app.get('/:id/remontagem', authenticated, async request => {
     const { id } = idSchema.parse(request.params);
     const quote = await buscarOrigemRemontagem(prisma, id);

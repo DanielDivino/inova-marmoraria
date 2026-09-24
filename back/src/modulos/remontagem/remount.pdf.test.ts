@@ -21,7 +21,8 @@ async function render(delivery: boolean, individualPrices: boolean, data = docum
   const buffer = await done;
   mkdirSync('.test-artifacts/remontagem', { recursive: true });
   writeFileSync(`.test-artifacts/remontagem/${delivery ? 'entrega' : individualPrices ? 'detalhada' : 'total'}${data === document ? '' : '-longa'}.pdf`, buffer);
-  return { text: printed.mock.calls.map(([text]) => text).join('\n'), pages: pages.mock.calls.length + 1 };
+  const texts = printed.mock.calls.map(([text]) => text);
+  return { text: texts.join('\n'), texts, pages: pages.mock.calls.length + 1 };
 }
 describe('Documentos de remontagem', () => {
   it('G: proposta detalhada contém valores individuais e pagamentos finais', async () => {
@@ -40,6 +41,15 @@ describe('Documentos de remontagem', () => {
     const result = await render(true, true);
     for (const expected of ['NOTA DE ENTREGA E CONFERÊNCIA', 'ENT-00215', 'Bancada cozinha', 'Granito Preto São Gabriel', '1,15 × 0,60 m', 'Conferido', 'Observações de entrega', 'Declaro que recebi', 'CPF ou documento:', 'Assinatura do cliente/recebedor:']) expect(result.text).toContain(expected);
     expect(result.text).not.toMatch(/R\$|Pix|Cartão|Subtotal|Unitário/); expect(result.pages).toBe(1);
+  });
+  it('normaliza quebras de linha do nome da pedra em proposta e entrega', async () => {
+    const input = { ...document, items: [{ ...document.items[0], materialNameSnapshot: 'Verde\nUbatuba', components: [{ ...document.items[0].components[0], materialNameSnapshot: 'Verde\nUbatuba' }] }] };
+    const proposal = await render(false, true, input);
+    const delivery = await render(true, false, input);
+    expect(proposal.text).toContain('Verde Ubatuba');
+    expect(delivery.text).toContain('Verde Ubatuba');
+    expect(proposal.texts.some(text => text.includes('Verde\nUbatuba'))).toBe(false);
+    expect(delivery.texts.some(text => text.includes('Verde\nUbatuba'))).toBe(false);
   });
   it('pagina uma entrega extensa preservando todas as peças e o recebimento', async () => {
     const input = { ...document, items: Array.from({ length: 40 }, (_, index) => ({ ...document.items[0], projectName: `Projeto ${index + 1}` })) };

@@ -40,7 +40,7 @@ describe('Remontagem persistida e independente', () => {
     const preview = await request('POST', `${path}/calculate`, body());
     expect(preview.statusCode, preview.body).toBe(200);
     expect(preview.json()).toMatchObject({ assemblyDiscount: 50, disassemblyDiscount: 0, cardTotal: 5500, pixTotal: 1528, cashDiscount: 3972 });
-    expect((await prisma.remount.count())).toBe(0);
+    expect((await prisma.remount.count({ where: { quoteId: quote.id } }))).toBe(0);
     const response = await request('PUT', path, body());
     expect(response.statusCode, response.body).toBe(200);
     const saved = response.json();

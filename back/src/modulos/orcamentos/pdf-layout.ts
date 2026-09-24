@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 const logoPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../assets/inova-logo.png');
 export const pdfMoney = (value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const pdfDate = (value: Date | string) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+/** Mantém nomes de materiais em uma única linha, inclusive quando vierem do cadastro com quebra de linha. */
+export const normalizarNomeMaterial = (value: unknown) => String(value ?? '').replace(/\s+/g, ' ').trim();
 export function cabecalhoEmpresaPdf(pdf: PDFKit.PDFDocument, title: string, quote: { number: string }) {
   pdf.fillColor('#b6811e').rect(36, 34, 523, 5).fill();
   if (fs.existsSync(logoPath)) pdf.image(logoPath, 36, 42, { fit: [64, 49] });

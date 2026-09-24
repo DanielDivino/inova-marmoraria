@@ -1,6 +1,6 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
-export type SessionUser = { id: string; name: string; role: 'SUPER_ADMIN' | 'ADMIN'; maxDiscountPercent: number };
+export type SessionUser = { id: string; name: string; role: 'SUPER_ADMIN' | 'ADMIN' | 'SELLER'; maxDiscountPercent: number };
 type Session = { accessToken: string; user: SessionUser };
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }

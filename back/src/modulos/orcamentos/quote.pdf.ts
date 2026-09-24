@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { cabecalhoEmpresaPdf as header, assinaturasPdf } from './pdf-layout.js';
+import { cabecalhoEmpresaPdf as header, assinaturasPdf, normalizarNomeMaterial } from './pdf-layout.js';
 import { montarLinhasPdf, type QuotePdfLine } from './quote.pdf-lines.js';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
 import { projetoTemDesenho, calcularTotalCartao, planoDeProducao } from '@inova/domain';
@@ -16,6 +16,16 @@ const hasMiterFinish = (component: any) => (component.edges ?? []).some((edge: a
 const materialTitleFontSize = 13;
 const materialDimensionGap = 4;
 
+const materialFontSize = (pdf: PdfDocument, text: string, width: number, initial = materialTitleFontSize, minimum = 7) => {
+  let size = initial;
+  while (size > minimum) {
+    pdf.font('Helvetica-Bold').fontSize(size);
+    if (pdf.widthOfString(text) <= width) break;
+    size -= 0.5;
+  }
+  return size;
+};
+
 const cross = (pdf: PdfDocument, x: number, y: number, size = 4) => {
   pdf.save().strokeColor('#c9473c').lineWidth(1.7)
     .moveTo(x - size, y - size).lineTo(x + size, y + size)
@@ -30,8 +40,9 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   const cellW = 250;
   const areaX = 36 + column * 263;
   const areaW = cellW;
-  const materialTitle = `${component.drawingNumber}. ${materialName}`;
-  const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialTitleFontSize).heightOfString(materialTitle, { width: areaW });
+  const materialTitle = `${component.drawingNumber}. ${normalizarNomeMaterial(materialName)}`;
+  const materialSize = materialFontSize(pdf, materialTitle, areaW);
+  const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialSize).heightOfString(materialTitle, { width: areaW, lineBreak: false });
   const drawingTop = top + materialHeight + 8;
   // The minimum visual thickness keeps narrow pieces readable; labels retain real measurements.
   const maxW = 170;
@@ -50,7 +61,7 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   const y = drawingTop + 46 + (maxH - totalHeight) / 2 + topExtra * scaleY;
   const right = x + width;
   const bottom = y + height;
-  pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(materialTitleFontSize).text(materialTitle, areaX, y - topExtra * scaleY - 39 - materialDimensionGap - materialHeight, { width: areaW, align: 'center' });
+  pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(materialSize).text(materialTitle, areaX, y - topExtra * scaleY - 39 - materialDimensionGap - materialHeight, { width: areaW, align: 'center', lineBreak: false });
   const dimColor = '#80776a';
   const sides = [
     ['BACK', x, y, right, y, (x + right) / 2, y - 4],
@@ -281,33 +292,34 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     y += height;
   };
   const commercialTitle = (projectName: string, materialHeading: string) => {
-    const prefix = projectName ? `${projectName.toUpperCase()} · ` : '';
-    const title = `${prefix}${materialHeading}`;
-    pdf.font('Helvetica-Bold').fontSize(8);
-    const height = Math.max(16, pdf.heightOfString(title, { width: 515 }) + 8);
+    const prefix = projectName ? `${normalizarNomeMaterial(projectName).toUpperCase()} · ` : '';
+    const normalizedHeading = normalizarNomeMaterial(materialHeading);
+    const title = `${prefix}${normalizedHeading}`;
+    const titleSize = materialFontSize(pdf, title, 515, 8, 5.5);
+    const height = Math.max(16, pdf.font('Helvetica-Bold').fontSize(titleSize).heightOfString(title, { width: 515, lineBreak: false }) + 8);
     commercialSpace(height + 45);
     pdf.fillColor('#aaa7a4').rect(36, y, 523, height).fill();
     // Keep the project name neutral and give the selected material a subtle
     // mustard highlight so the stone is immediately identifiable.
     const contentWidth = pdf.widthOfString(title);
     let titleX = 36 + (523 - contentWidth) / 2;
-    pdf.fillColor('#111').font('Helvetica-Bold').fontSize(8)
+    pdf.fillColor('#111').font('Helvetica-Bold').fontSize(titleSize)
       .text(prefix, titleX, y + 4, { width: pdf.widthOfString(prefix), lineBreak: false });
     titleX += pdf.widthOfString(prefix);
-    if (materialHeading.startsWith('MATERIAL: ')) {
+    if (normalizedHeading.startsWith('MATERIAL: ')) {
       const label = 'MATERIAL: ';
       pdf.fillColor('#111').text(label, titleX, y + 4, { width: pdf.widthOfString(label), lineBreak: false });
       titleX += pdf.widthOfString(label);
-      pdf.fillColor('#c9473c').text(materialHeading.slice(label.length), titleX, y + 4, { width: pdf.widthOfString(materialHeading.slice(label.length)), lineBreak: false });
+      pdf.fillColor('#c9473c').text(normalizedHeading.slice(label.length), titleX, y + 4, { width: pdf.widthOfString(normalizedHeading.slice(label.length)), lineBreak: false });
     } else {
-      pdf.fillColor('#c9473c').text(materialHeading, titleX, y + 4, { width: pdf.widthOfString(materialHeading), lineBreak: false });
+      pdf.fillColor('#c9473c').text(normalizedHeading, titleX, y + 4, { width: pdf.widthOfString(normalizedHeading), lineBreak: false });
     }
     y += height + 2;
     commercialHeader();
   };
   quote.items.forEach((item: any, index: number) => {
-    const materialNames = [...new Set((item.components ?? []).map((component: any) => component.materialNameSnapshot ?? item.materialNameSnapshot))];
-    const materialHeading = materialNames.length > 1 ? 'MATERIAIS POR COMPONENTE' : `MATERIAL: ${String(materialNames[0] ?? item.materialNameSnapshot).toUpperCase()}`;
+    const materialNames = [...new Set((item.components ?? []).map((component: any) => normalizarNomeMaterial(component.materialNameSnapshot ?? item.materialNameSnapshot)).filter(Boolean))];
+    const materialHeading = materialNames.length > 1 ? 'MATERIAIS POR COMPONENTE' : `MATERIAL: ${normalizarNomeMaterial(materialNames[0] ?? item.materialNameSnapshot).toUpperCase()}`;
     commercialTitle(item.projectName ?? '', materialHeading);
     commercial.items[index].forEach(commercialRow);
     linearByItem[index].forEach(commercialRow);
@@ -478,7 +490,9 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     const { components: pieceComponents, cutouts: cutoutsForDrawing, production } = pecasParaOrdemDeServico(item);
     const components = pieceComponents.map((component: any, index: number) => ({ ...component, drawingNumber: index + 1, drawingTitle: tituloComponenteProducao(component, index) }));
     const drawingHeight = (component: any) => {
-      const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialTitleFontSize).heightOfString(`${component.drawingNumber}. ${component.materialNameSnapshot ?? item.materialNameSnapshot}`, { width: 250 });
+      const materialTitle = `${component.drawingNumber}. ${normalizarNomeMaterial(component.materialNameSnapshot ?? item.materialNameSnapshot)}`;
+      const materialSize = materialFontSize(pdf, materialTitle, 250);
+      const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialSize).heightOfString(materialTitle, { width: 250, lineBreak: false });
       return materialHeight + 188 + (hasMiterFinish(component) ? 14 : 0) + (component.componentType === 'SILL' ? 108 : 0);
     };
     const descriptions = components.map((component: any) => {
@@ -495,7 +509,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
       const details = Math.max(0, ...descriptions.slice(index, index + 2).map((description: { rows: DescriptionRow[] }) => description.rows.reduce((sum, row) => sum + row.height, 8)));
       return drawings + details <= 580 ? drawings + details : drawings + Math.min(details, 60);
     };
-    const itemTitle = `${itemIndex + 1}. ${item.projectName ? item.projectName + ' · ' : ''}${item.productType.name}${components.length ? '' : ` · ${item.materialNameSnapshot}`}`;
+    const itemTitle = `${itemIndex + 1}. ${item.projectName ? normalizarNomeMaterial(item.projectName) + ' · ' : ''}${item.productType.name}${components.length ? '' : ` · ${normalizarNomeMaterial(item.materialNameSnapshot)}`}`;
     const titleHeight = pdf.font('Helvetica-Bold').fontSize(10).heightOfString(itemTitle, { width: 523 }) + 8;
     ensureSpace(titleHeight + rowReservation(0));
     pdf.fillColor('#b6811e').font('Helvetica-Bold').fontSize(10).text(itemTitle, 36, y, { width: 523 }); y += titleHeight;

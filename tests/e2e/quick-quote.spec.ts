@@ -88,7 +88,9 @@ test('Orçamento rápido: teclado, projetos, serviços, PDF e detalhamento no me
   expect(pdf.status()).toBe(200);
   writeFileSync('.test-artifacts/quick-quote.pdf', await pdf.body());
   const text = execFileSync('pdftotext', ['-', '-'], { input: await pdf.body() }).toString();
-  expect(text).toContain('TOTAL COM DESCONTO NO PIX (5%)'); expect(text).not.toContain('ORDEM DE SERVIÇO');
+  expect(text).toContain('À VISTA'); expect(text).toContain('CARTÃO');
+  expect(text).toContain(Number(quote.netTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  expect(text).toContain((Math.round(Number(quote.netTotal) * 110) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); expect(text).not.toContain('ORDEM DE SERVIÇO');
   await page.getByRole('link', { name: 'Adicionar desenhos', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Concluir detalhamento', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Concluir detalhamento', exact: true }).click();

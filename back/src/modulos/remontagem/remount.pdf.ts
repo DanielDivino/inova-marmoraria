@@ -1,5 +1,5 @@
 import { calcularComponente, nomeExibicaoComponente, rotuloLadoBorda, type RemountDocument } from '@inova/domain';
-import { cabecalhoEmpresaPdf, assinaturasPdf, pdfDate, pdfMoney } from '../orcamentos/pdf-layout.js';
+import { cabecalhoEmpresaPdf, assinaturasPdf, normalizarNomeMaterial, pdfDate, pdfMoney } from '../orcamentos/pdf-layout.js';
 
 type Customer = { number: string; customerNameSnapshot: string; customerPhoneSnapshot: string | null; workAddressSnapshot: string | null };
 const meters = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
@@ -49,8 +49,9 @@ export function renderizarRemontagemPdf(pdf: PDFKit.PDFDocument, quote: Customer
   tableHeader();
   let itemNumber = 0;
   const row = (description: string, material: string, measure: string, quantity: number | string, area: string, total?: number) => {
-    const cells = delivery ? [String(++itemNumber), description, material, measure, String(quantity), '']
-      : [`${description}${material ? `\n${material}` : ''}`, measure, String(quantity), area, ...(priced ? [total === undefined ? '' : pdfMoney(total)] : [''])];
+    const normalizedMaterial = normalizarNomeMaterial(material);
+    const cells = delivery ? [String(++itemNumber), description, normalizedMaterial, measure, String(quantity), '']
+      : [`${description}${normalizedMaterial ? `\n${normalizedMaterial}` : ''}`, measure, String(quantity), area, ...(priced ? [total === undefined ? '' : pdfMoney(total)] : [''])];
     pdf.font('Helvetica').fontSize(8);
     const height = Math.max(28, ...cells.map((cell, index) => pdf.heightOfString(cell, { width: columns[index].w - 8 }) + 12));
     if (y + height > 755) { space(height + 21); tableHeader(); }

@@ -15,3 +15,5 @@ export * from './orcamentos/detailing.js';
 export * from './orcamentos/production-plan.js';
 export * from './orcamentos/arquivo-pdf.js';
 export * from './orcamentos/remontagem.js';
+export * from './acesso.js';
+export * from './dashboard.js';

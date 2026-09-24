@@ -1,3 +1,4 @@
+import { escopoOrcamentos } from '../../compartilhado/acesso.js';
 import type { FastifyInstance } from 'fastify';
 import { diasUteisEntre, situacaoPrazoInterno, type DeadlineStatus } from '@inova/domain';
 import { prisma } from '../../config/prisma.js';
@@ -5,10 +6,10 @@ import { prisma } from '../../config/prisma.js';
 const labels: Record<DeadlineStatus, string> = { NORMAL: 'No prazo', NEAR_DUE: 'Próximo do prazo', DUE_TODAY: 'Vence hoje', OVERDUE: 'Atrasado' };
 
 export async function registrarRotasNotificacoes(app: FastifyInstance) {
-  app.get('/deadlines', { preHandler: [app.authenticate] }, async () => {
+  app.get('/deadlines', { preHandler: [app.authenticate] }, async (request) => {
     const today = new Date();
     const quotes = await prisma.quote.findMany({
-      where: { status: 'APPROVED', executionStatus: { not: 'COMPLETED' }, dueDate: { not: null } },
+      where: { ...escopoOrcamentos(request.user), status: 'APPROVED', executionStatus: { not: 'COMPLETED' }, dueDate: { not: null } },
       select: { id: true, number: true, dueDate: true, customerNameSnapshot: true, items: { select: { projectName: true }, take: 1 } },
       orderBy: { dueDate: 'asc' }
     });

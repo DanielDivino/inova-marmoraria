@@ -27,10 +27,10 @@ test('remontagem: serviços, materiais, pagamento, persistência e documentos em
   await expect(page.getByText('Observações do projeto: Projeto original preservado.')).toBeVisible();
   const summary = page.locator('.quote-summary-card');
   const card = summary.locator('.summary-grand-total').filter({ hasText: 'Cartão' });
-  const pix = summary.locator('.summary-grand-total').filter({ hasText: 'Pix' });
+  const pix = summary.locator('span').filter({ hasText: 'Total à vista' });
   await expect(card).toContainText('600,00');
-  await expect(pix).toContainText('570,00');
-  const assembly = page.getByLabel('Montagem (R$)', { exact: true });
+  await expect(pix).toContainText('600,00');
+  const assembly = page.locator('section.section').filter({ has: page.getByRole('heading', { name: 'Serviços', exact: true }) }).locator('input').first();
   await assembly.fill('250');
   await expect(page.getByText('Desconto: R$ 50,00', { exact: true })).toBeVisible();
   await assembly.fill('450');
@@ -38,12 +38,10 @@ test('remontagem: serviços, materiais, pagamento, persistência e documentos em
   await expect(page.getByText(/Desconto: R\$/)).toHaveCount(0);
   await expect(page.getByText(/Acréscimo/)).toHaveCount(0);
   await page.getByLabel('Valor no cartão', { exact: false }).fill('5.000,00');
-  await expect(pix).toContainText('4.750,00');
-  await page.getByLabel('Desconto à vista', { exact: true }).selectOption('10');
-  await expect(pix).toContainText('4.500,00');
-  await page.getByLabel('Desconto à vista', { exact: true }).selectOption('5');
+  await expect(card).toContainText('5.000,00');
+  await expect(pix).toContainText('750,00');
   await page.getByLabel('Valor no cartão', { exact: false }).fill('5.500,00');
-  await expect(pix).toContainText('5.225,00');
+  await expect(pix).toContainText('750,00');
   await page.locator('.material-picker summary').click();
   await page.getByLabel('Buscar material', { exact: true }).fill('Verde Ubatuba');
   await page.locator('.material-picker-panel button.material').filter({ hasText: 'Verde Ubatuba' }).click();
@@ -59,13 +57,17 @@ test('remontagem: serviços, materiais, pagamento, persistência e documentos em
   await page.getByLabel('Comprimento da peça 2 (m)', { exact: true }).fill('1,15');
   await page.getByLabel('Largura da peça 2 (m)', { exact: true }).fill('0,10');
   await page.getByLabel('Observações da proposta e entrega', { exact: true }).fill('Entregar na cozinha.');
+  await expect(pix).toContainText('1.647,00');
+  await page.getByLabel('Valor no cartão', { exact: false }).fill('5.500,00');
+  await expect(card).toContainText('5.500,00');
+  await expect(pix).toContainText('1.647,00');
   await page.getByRole('button', { name: 'Salvar', exact: true }).click();
   await expect(page.getByText('Remontagem salva.', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('1,15');
   await expect(page.getByLabel('Quantidade da peça 1', { exact: true })).toHaveValue('2');
   await expect(page.getByLabel('Observação da peça', { exact: true }).first()).toHaveValue('Conferir acabamento.');
-  await expect(pix).toContainText('5.225,00');
+  await expect(pix).toContainText('1.647,00');
   for (const [width, height] of [[1440, 1000], [390, 844]]) {
     await page.setViewportSize({ width, height });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -80,7 +82,7 @@ test('remontagem: serviços, materiais, pagamento, persistência e documentos em
       expect(text).not.toContain('R$'); expect(text).not.toContain('5.500');
       expect(text).toContain('Conferido'); expect(text).toContain('Assinatura do cliente/recebedor:');
     } else {
-      expect(text).toContain('5.500,00'); expect(text).toContain('5.225,00');
+      expect(text).toContain('5.500,00'); expect(text).toContain('1.647,00');
       expect(text.includes('828,00')).toBe(detailed);
     }
   }

@@ -51,3 +51,10 @@ it('não volta uma entrega diretamente para execução sem indicar retrabalho', 
   expect((await change({ status: 'APPROVED', executionStatus: 'IN_PROGRESS' })).statusCode).toBe(409);
   expect(prisma.quote.update).not.toHaveBeenCalled();
 });
+
+it.each(['PENDING_APPROVAL', 'REJECTED'])('permite a etapa comercial %s sem iniciar produção', async workStatus => {
+  vi.mocked(prisma.quote.findUnique).mockResolvedValue({ ...quote, status: 'SENT', executionStatus: 'NOT_STARTED' } as never);
+  const result = await change({ workStatus });
+  expect(result.statusCode, result.body).toBe(200);
+  expect(result.json()).toMatchObject({ status: workStatus === 'REJECTED' ? 'REJECTED' : 'SENT', executionStatus: 'NOT_STARTED' });
+});
