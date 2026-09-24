@@ -13,6 +13,65 @@ function imagemDaPedra(material?: Material) {
 }
 const normalizar = (texto: string) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
+type Fogo = NonNullable<(typeof ambientes)[number]['fogo']>;
+
+// Chamas em gota distribuidas pelo queimador; alturas variam de forma fixa para nao mudar a cada render.
+function chamas({ base, inicio, fim }: Fogo, quantidade: number, escala: number) {
+  const passo = (fim - inicio) / quantidade;
+  return Array.from({ length: quantidade }, (_, indice) => {
+    const centro = inicio + passo * (indice + .5);
+    const largura = passo * 1.9 * escala;
+    const altura = (110 + ((indice * 37) % 5) * 20 + (indice % 2 ? 0 : 22)) * escala;
+    const topo = base - altura;
+    const inclinacao = ((indice * 13) % 7 - 3) * 5 * escala;
+    return {
+      d: `M${centro - largura / 2} ${base + 8} C${centro - largura / 2} ${base - altura * .35} ${centro - largura * .05} ${base - altura * .55} ${centro + inclinacao} ${topo} C${centro + largura * .1} ${base - altura * .55} ${centro + largura / 2} ${base - altura * .35} ${centro + largura / 2} ${base + 8} Z`,
+      atraso: `${-((indice * .37) % 1.3)}s`,
+      duracao: `${.9 + (indice % 3) * .22}s`,
+    };
+  });
+}
+
+function FogoAceso({ fogo, id }: { fogo: Fogo; id: string }) {
+  const meio = (fogo.inicio + fogo.fim) / 2;
+  const meiaLargura = (fogo.fim - fogo.inicio) / 2;
+  return <g className="ambientes-fogo" aria-hidden="true">
+    <defs>
+      <clipPath id={`${id}-fornalha`}><path d={fogo.recorte} /></clipPath>
+      <linearGradient id={`${id}-chama`} x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stopColor="#ffd36b" />
+        <stop offset=".3" stopColor="#ff8a1f" />
+        <stop offset=".7" stopColor="#e2440f" stopOpacity=".7" />
+        <stop offset="1" stopColor="#a8200a" stopOpacity="0" />
+      </linearGradient>
+      <linearGradient id={`${id}-nucleo`} x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stopColor="#fffbe8" />
+        <stop offset=".45" stopColor="#ffe08a" />
+        <stop offset="1" stopColor="#ffb23e" stopOpacity="0" />
+      </linearGradient>
+      <radialGradient id={`${id}-brilho`}>
+        <stop offset="0" stopColor="#ff9a3c" stopOpacity=".75" />
+        <stop offset="1" stopColor="#ff6a00" stopOpacity="0" />
+      </radialGradient>
+      <filter id={`${id}-labareda`} x="-20%" y="-30%" width="140%" height="160%">
+        <feTurbulence type="fractalNoise" baseFrequency=".018 .05" numOctaves="2" seed="4" />
+        <feDisplacementMap in="SourceGraphic" scale="26" xChannelSelector="R" yChannelSelector="G" />
+        <feGaussianBlur stdDeviation="5" />
+      </filter>
+      <filter id={`${id}-difuso`}><feGaussianBlur stdDeviation="9" /></filter>
+    </defs>
+    <ellipse className="ambientes-fogo-reflexo" cx={meio} cy={fogo.base + 90} rx={meiaLargura * 1.6} ry="90" fill={`url(#${id}-brilho)`} opacity=".35" />
+    <g clipPath={`url(#${id}-fornalha)`}>
+      <ellipse className="ambientes-fogo-brilho" cx={meio} cy={fogo.base - 40} rx={meiaLargura * 1.4} ry="190" fill={`url(#${id}-brilho)`} />
+      <ellipse cx={meio} cy={fogo.base + 4} rx={meiaLargura * 1.02} ry="14" fill="#ff7a1a" opacity=".85" filter={`url(#${id}-difuso)`} />
+      <g filter={`url(#${id}-labareda)`}>
+        {chamas(fogo, 9, 1).map((chama, indice) => <path key={indice} className="ambientes-chama" d={chama.d} fill={`url(#${id}-chama)`} style={{ animationDelay: chama.atraso, animationDuration: chama.duracao }} />)}
+        {chamas(fogo, 7, .55).map((chama, indice) => <path key={`n${indice}`} className="ambientes-chama" d={chama.d} fill={`url(#${id}-nucleo)`} style={{ animationDelay: chama.atraso, animationDuration: chama.duracao }} />)}
+      </g>
+    </g>
+  </g>;
+}
+
 export function VisualizadorAmbientes({ material, materiais, selecionarMaterial }: {
   material: Material | undefined;
   materiais: Material[];
@@ -80,6 +139,7 @@ export function VisualizadorAmbientes({ material, materiais, selecionarMaterial 
               <image href={ambiente.imagem} width="1448" height="1086" filter={`url(#${id}-luz)`} style={{ mixBlendMode: 'multiply' }} opacity="0.45" />
               {superficie.sombra && <path d={superficie.contorno} fill="black" opacity={superficie.sombra} fillRule="evenodd" />}
             </g>)}
+            {ambiente.fogo && cenaPronta && <FogoAceso fogo={ambiente.fogo} id={id} />}
           </svg>
           {!cenaPronta && <div className="ambientes-scene-status" role="status">{cenaComErro === ambiente.imagem ? 'Não foi possível carregar o ambiente.' : 'Carregando ambiente…'}</div>}
           <figcaption><span>{ambiente.titulo}</span><strong>{original || !pronta || !cenaPronta ? 'Ambiente original' : material?.name}</strong></figcaption>

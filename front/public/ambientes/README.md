@@ -1,14 +1,58 @@
 # Fotografias do visualizador
 
 Geradas com a ferramenta integrada image_gen, sem API/CLI externa.
-Arquivos: cozinha.png, banheiro.png, escada.png, janela-peitoril.png e porta-soleira.png.
+Arquivos originais: cozinha.png, banheiro.png, escada.png, janela-peitoril.png e porta-soleira.png.
+Novos arquivos: escada-em-l.png, painel-tv.png, nicho-banheiro.png,
+area-gourmet.png, lavanderia.png, lareira.png e mesa-jantar.png.
 Resolucao: 1448 x 1086. Cenas ilustrativas, nao fotografias de obras da empresa.
 
-Os contornos e planos ficam em components/ambientes-cenas.ts. Ao substituir uma
+Os contornos e planos ficam em front/componentes/ambientes-cenas.ts. Ao substituir uma
 foto, atualizar seus contornos; nao reutilizar mascaras em outra fotografia.
 A mesma amostra do catalogo preenche todos os planos, preservando sombras da
 foto em escala de cinza. A perspectiva e a escala dos veios sao aproximadas.
 Piso, madeira, paredes, esquadrias, cuba e metais ficam fora dos recortes.
+
+## Novas cenas (image_gen)
+
+Todas usam o mesmo prompt-base das cinco cenas originais: fotografia arquitetônica
+realista 4:3, 1448 × 1086, casa contemporânea brasileira, luz natural, pedra
+cinza-clara uniforme com planos nítidos para troca de textura, sem pessoas,
+marca d'água ou texto. Detalhes pedidos por cena:
+
+- **escada-em-l**: escada de pedra em L com patamar, degraus e espelhos visíveis,
+  madeira no piso e paredes brancas, sem pedras adicionais.
+- **painel-tv**: painel plano de pedra atrás de TV preta, móvel baixo de madeira,
+  enquadramento frontal e contorno simples para excluir a TV.
+- **nicho-banheiro**: nicho retangular de pedra embutido no box para sabonetes,
+  parede de revestimento branco e poucos frascos na prateleira.
+- **area-gourmet**: bancada de pedra com rodabanca e churrasqueira, armários
+  de madeira, metais e cuba distintos da pedra.
+- **lavanderia**: bancada de pedra para tanque e máquina, rodabanca, armários
+  de madeira e cuba branca.
+- **lareira**: revestimento de pedra ao redor da abertura preta da lareira,
+  base de pedra e mobiliário neutro.
+- **mesa-jantar**: grande tampo de pedra retangular, estrutura metálica escura,
+  cadeiras de madeira e vista levemente elevada para mostrar topo e borda.
+
+## Ajustes de contorno (24/09/2026)
+
+- **escada-em-l**: o lance superior agora segue os degraus reais (antes pintava a
+  parede); incluída a lateral do patamar.
+- **area-gourmet**: rodabanca recortada em volta da torneira, bancada contínua
+  com furo da cuba, laterais de pedra da churrasqueira e pé lateral esquerdo.
+- **lavanderia**: rodabanca contínua com recorte da torneira; bancada contornando
+  a cuba de apoio.
+- **lareira**: fogo aceso animado em SVG (campo `fogo` da cena), sem alterar a foto;
+  respeita `prefers-reduced-motion`.
+- **mesa-jantar**: contornos pelos quatro cantos reais do tampo e textura com
+  `matrix(...)` para os veios seguirem a perspectiva.
+
+## Cena pendente: cozinha com área seca e molhada
+
+Arquivo esperado: `cozinha-seca-molhada.png` (1448 × 1086). Prompt sugerido, no
+mesmo padrão das demais:
+
+Use case: product-mockup. Asset: realistic architectural photograph for stone showroom interactive material visualizer. Generate one single landscape 4:3 photograph, high resolution, crisp straight architectural edges, professional commercial photography, bright natural daylight, understated premium contemporary Brazilian home. All designated stone is UNIFORM light neutral gray honed limestone with almost no veins, so another texture can be composited onto it. Stone surfaces must be fully visible with simple straight boundaries, no objects obscuring them, no text, no watermarks, no collage. Non-stone surfaces clearly different: pale painted plaster, natural oak furniture and wood floor, no stone floor. Balanced realistic exposure, no fog, no depth blur, no extravagant decor. Kitchen seen from eye level, slightly elevated, centered front view. One long straight countertop on oak lower cabinets with a matching short rectangular stone backsplash, divided into two zones: LEFT "wet area" with one rectangular undermount stainless steel sink and a single brushed nickel faucet, RIGHT "dry area" with a flush black glass induction cooktop with four burners set into the stone and clear empty counter between sink and cooktop. Sink and cooktop clearly distinct from the stone, faucet slender and not covering the backsplash. 4cm stone front edge visible along the whole length. White plaster wall above backsplash, no upper cabinets, no range hood covering the backsplash, no objects on the counter.
 
 ## Prompts utilizados
 
