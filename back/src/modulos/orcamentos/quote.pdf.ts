@@ -161,20 +161,42 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   const detailY = bottom + bottomExtra * scaleY + (hasMiter ? 36 : 22);
   pdf.y = detailY;
   if (component.componentType === 'SILL' && peitorilDuplo) {
-    // Peitoril de duas pedras: lista as medidas reais das duas peças em vez do
-    // esquema de uma pedra só — a oficina precisa saber exatamente o que cortar.
+    // Peitoril de duas pedras: repete no PDF o esquema em degrau usado no
+    // editor, com as medidas reais de cada pedra e do encaixe.
     const detailTop = pdf.y + 12;
     pdf.font('Helvetica-Bold').fontSize(9).text('Detalhe do peitoril — duas pedras', areaX, detailTop, { width: areaW, align: 'center' });
-    pdf.font('Helvetica').fontSize(8);
-    const linhas = [
-      `Pedra de cima: ${number(component.lengthMm / 10, 1)} × ${number(component.sillTopWidthMm / 10, 1)} cm`,
-      `Pedra de baixo: ${number(component.lengthMm / 10, 1)} × ${number(component.sillBottomWidthMm / 10, 1)} cm`,
-      ...(component.sillOverlapMm ? [`Sobreposição/encaixe: ${number(component.sillOverlapMm / 10, 1)} cm`] : []),
-      ...(component.sillFinalWidthMm ? [`Largura final montada: ${number(component.sillFinalWidthMm / 10, 1)} cm`] : []),
-    ];
-    let lineY = detailTop + 16;
-    for (const linha of linhas) { pdf.text(linha, areaX, lineY, { width: areaW, align: 'center' }); lineY += 12; }
-    pdf.y = Math.max(pdf.y, lineY);
+    const diagramY = detailTop + 28;
+    const topX = areaX + 18;
+    const topW = 98;
+    const topH = 14;
+    const bottomX = topX + 62;
+    const bottomW = 154;
+    const bottomY = diagramY + topH;
+    const bottomH = 21;
+    const topLabel = `${number(component.lengthMm / 10, 1)} × ${number(component.sillTopWidthMm / 10, 1)} cm`;
+    const bottomLabel = `${number(component.lengthMm / 10, 1)} × ${number(component.sillBottomWidthMm / 10, 1)} cm`;
+    const dimensionLine = (x1: number, x2: number, lineY: number, label: string, labelY: number) => {
+      pdf.strokeColor('#8d816e').lineWidth(0.7)
+        .moveTo(x1, lineY).lineTo(x2, lineY)
+        .moveTo(x1, lineY - 4).lineTo(x1, lineY + 4)
+        .moveTo(x2, lineY - 4).lineTo(x2, lineY + 4).stroke();
+      pdf.fillColor('#635948').font('Helvetica-Bold').fontSize(7.5)
+        .text(label, (x1 + x2) / 2 - 58, labelY, { width: 116, align: 'center', lineBreak: false });
+    };
+    dimensionLine(topX, topX + topW, diagramY - 8, topLabel, diagramY - 20);
+    pdf.save().fillColor('#fff').strokeColor('#6e5830').lineWidth(1.1).rect(topX, diagramY, topW, topH).fillAndStroke().restore();
+    pdf.save().fillColor('#e7ebe0').strokeColor('#6e5830').lineWidth(1.1).rect(bottomX, bottomY, bottomW, bottomH).fillAndStroke().restore();
+    dimensionLine(bottomX, bottomX + bottomW, bottomY + bottomH + 8, bottomLabel, bottomY + bottomH + 12);
+    if (component.sillOverlapMm) {
+      pdf.fillColor('#7c531e').font('Helvetica-Bold').fontSize(7)
+        .text(`${number(component.sillOverlapMm / 10, 1)} cm`, bottomX - 2, bottomY + 3, { width: 42, align: 'center', lineBreak: false });
+    }
+    const finalLabel = [
+      component.sillFinalWidthMm ? `Largura final: ${number(component.sillFinalWidthMm / 10, 1)} cm` : '',
+      component.sillOverlapMm ? `encaixe: ${number(component.sillOverlapMm / 10, 1)} cm` : '',
+    ].filter(Boolean).join(' · ');
+    if (finalLabel) pdf.fillColor('#635948').font('Helvetica').fontSize(7.5).text(finalLabel, areaX, bottomY + bottomH + 28, { width: areaW, align: 'center', lineBreak: false });
+    pdf.y = Math.max(pdf.y, bottomY + bottomH + 40);
   } else if (component.componentType === 'SILL') {
     const detailTop = pdf.y + 12;
     const detailX = areaX + (cellW - 170) / 2;
@@ -493,7 +515,8 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
       const materialTitle = `${component.drawingNumber}. ${normalizarNomeMaterial(component.materialNameSnapshot ?? item.materialNameSnapshot)}`;
       const materialSize = materialFontSize(pdf, materialTitle, 250);
       const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialSize).heightOfString(materialTitle, { width: 250, lineBreak: false });
-      return materialHeight + 188 + (hasMiterFinish(component) ? 14 : 0) + (component.componentType === 'SILL' ? 108 : 0);
+      const sillDetailHeight = component.componentType === 'SILL' && component.sillTopWidthMm && component.sillBottomWidthMm ? 148 : component.componentType === 'SILL' ? 108 : 0;
+      return materialHeight + 188 + (hasMiterFinish(component) ? 14 : 0) + sillDetailHeight;
     };
     const descriptions = components.map((component: any) => {
       const lines = descricaoProducaoComponente({ ...component, edges: (component.edges ?? []).map((edge: any) => production ? { ...edge, serviceName: edge.serviceNameSnapshot } : ({ ...edge,

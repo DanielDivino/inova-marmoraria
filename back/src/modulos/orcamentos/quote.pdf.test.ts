@@ -66,6 +66,15 @@ describe('Opções e agrupamento comercial do PDF', () => {
     expect(texts).toContain('1. Verde Ubatuba');
     expect(texts.filter(text => text.includes('VERDE') || text.includes('Verde')).every(text => !text.includes('\n'))).toBe(true);
   });
+  it('desenha o peitoril duplo com as medidas reais das duas pedras', async () => {
+    const component = { id: 'sill', label: 'Peitoril', componentType: 'SILL', lengthMm: 1040, widthMm: 140, quantity: 1, billableArea: 0.1456, edges: [] };
+    const result = await render(1000, [{ ...item, drawingData: { componentDetails: [{ sillTopWidthMm: 50, sillBottomWidthMm: 110, sillOverlapMm: 20, sillFinalWidthMm: 140 }] }, components: [component] }], 'peitoril-duplo', undefined, { individualPrices: false, drawings: true });
+    const texts = result.calls.map(([text]) => text);
+    expect(texts).toContain('104,0 × 5,0 cm');
+    expect(texts).toContain('104,0 × 11,0 cm');
+    expect(texts).toContain('Largura final: 14,0 cm · encaixe: 2,0 cm');
+    expect(result.rectangles.some(([x, y, width, height]) => Number(x) > 36 && Number(y) > 200 && Number(width) > 90 && Number(height) > 10)).toBe(true);
+  });
   it.each([
     { individualPrices: false, drawings: false }, { individualPrices: false, drawings: true },
     { individualPrices: true, drawings: false }, { individualPrices: true, drawings: true },
