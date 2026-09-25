@@ -3,6 +3,7 @@ import './globals.css';
 import './components.css';
 import './application.css';
 import './stone-theme.css';
+import './dark-theme.css';
 import { EstruturaAplicacao } from '../componentes/ApplicationShell';
 
 export const metadata: Metadata = {
@@ -11,5 +12,6 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="pt-BR"><body className="inova-theme"><EstruturaAplicacao>{children}</EstruturaAplicacao></body></html>;
+  const themeScript = `(function(){try{if(localStorage.getItem('inova-theme')==='dark')document.documentElement.classList.add('inova-dark')}catch(e){}})()`;
+  return <html lang="pt-BR" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head><body className="inova-theme"><EstruturaAplicacao>{children}</EstruturaAplicacao></body></html>;
 }
