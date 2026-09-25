@@ -6,6 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { componentMaterialImage, materialImageSrc } from './ComponentMaterialPicker';
 import { criarRodabancaLateral } from '../../utilitarios/component-groups';
 import { SeletorTipoDescricao } from './TypeDescriptionSelector';
+import { criarId } from '../../utilitarios/id';
 
 type Props = { materialFor?: (component: DraftComponent) => { id: string; name: string; images?: { url: string; isPrimary: boolean }[] } | undefined; renderCutouts?: (componentIndex: number) => ReactNode; components: DraftComponent[]; cutouts?: DraftCutout[]; materialImage?: string; materialName?: string; linearServices: { id: string; name: string }[]; onChange: (components: DraftComponent[]) => void; onAdd: (type: DraftComponent['componentType'], parentIndex?: number, attached?: boolean) => void; onRemove: (index: number) => void; onAddCutout?: (index: number) => void; onActiveMaterialChange?: (componentId: string) => void };
 const area = (component: DraftComponent) => {
@@ -103,7 +104,7 @@ export function EditorComponentes({ materialFor, renderCutouts, components, cuto
       })()}
       <MapaBordasComponente component={component} cutouts={cutouts.filter(cutout => cutout.componentIndex === index)} materialImage={selectedMaterial ? materialImageSrc(componentMaterialImage(selectedMaterial)) : materialImage} materialName={selectedMaterial?.name ?? materialName} services={linearServices} onChange={edges => update(index, { edges })} onAddComponent={!attached ? (type, isAttached) => onAdd(type, isAttached ? index : undefined, isAttached) : undefined}
         backsplashes={sideBacksplashes}
-        onAddBacksplash={!attached ? side => onChange([...components, criarRodabancaLateral(component, side, globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)]) : undefined}
+        onAddBacksplash={!attached ? side => onChange([...components, criarRodabancaLateral(component, side, criarId())]) : undefined}
         onUpdateBacksplash={(id, patch) => update(components.findIndex(entry => entry.id === id), patch)}
         onRemoveBacksplash={id => onRemove(components.findIndex(entry => entry.id === id))}
         onEditBacksplash={id => setEditingBacksplash(current => current === id ? null : id)} />

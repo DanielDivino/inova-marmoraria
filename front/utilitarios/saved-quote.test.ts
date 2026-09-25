@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rascunhoParaEntradaItem, itemSalvoParaRascunho } from './saved-quote';
+import { currency, rascunhoParaEntradaItem, itemSalvoParaRascunho } from './saved-quote';
 import type { DraftItem } from '../componentes/orcamento/types';
 import { itemSalvoParaEntrada, type SavedQuoteItem } from '@inova/domain';
 import { criarRodabancaLateral, removerGrupoComponentes, restaurarNomesComponentes } from './component-groups';
@@ -55,7 +55,8 @@ describe('Dados do formulário enviados ao servidor', () => {
     expect(result.components.map((entry) => entry.id)).toEqual(['second']);
     expect(result.cutouts.map((entry) => entry.componentIndex)).toEqual([0, undefined]);
   });
-  it.each([['1.234,56', 1234.56], ['1234,56', 1234.56], ['1234.56', 1234.56], ['0,00', 0], ['10', 10]])('converte moeda %s em %s', (text, value) => { const input = draft(); input.components[0].appliedTotal = text; expect(rascunhoParaEntradaItem(input).components[0].appliedTotal).toBe(value); });
+  it.each([['1.234,56', 1234.56], ['1234,56', 1234.56], ['1234.56', 1234.56], ['0,00', 0], ['10', 10], ['1,005', 1.01]])('converte moeda %s em %s', (text, value) => { const input = draft(); input.components[0].appliedTotal = text; expect(rascunhoParaEntradaItem(input).components[0].appliedTotal).toBe(value); });
+  it('valida e arredonda o desconto geral com a mesma regra dos demais valores', () => { expect(currency('1,005')).toBe(1.01); expect(() => currency('-1')).toThrow(); expect(() => currency('1,2,3')).toThrow(); });
   it.each(['', ' ', '-1', 'NaN', 'Infinity', '1,2,3', 'R$ inválido'])('não transforma valor inválido %s em cobrança zero', (text) => { const input = draft(); input.components[0].appliedTotal = text; expect(() => rascunhoParaEntradaItem(input)).toThrow(); });
   it('converte centímetros fracionados para milímetros inteiros', () => expect(rascunhoParaEntradaItem(draft()).components[0]).toMatchObject({ lengthMm: 1905, widthMm: 400, quantity: 2 }));
   it('conserva posição zero de recorte e o vínculo com componente zero', () => { const input = draft(); input.cutouts = [{ id: 'cut', componentIndex: 0, cutoutType: 'SINK', label: '', quantity: 1, positionXCm: '0', positionYCm: '0' }]; expect(rascunhoParaEntradaItem(input).cutouts[0]).toMatchObject({ componentIndex: 0, positionX: 0, positionY: 0 }); });

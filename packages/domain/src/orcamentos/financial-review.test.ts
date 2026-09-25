@@ -3,6 +3,7 @@ import { valorAplicadoComponente, descontosIndividuais } from './financial-revie
 it('uses calculated edges by default', () => expect(valorAplicadoComponente(720, [{ calculatedSubtotal: 60 }])).toBe(780));
 it('uses manual edge adjustment without requiring component override', () => expect(valorAplicadoComponente(720, [{ calculatedSubtotal: 60, appliedSubtotal: 20 }])).toBe(740));
 it('component manual price supersedes its constituent prices, including zero', () => { expect(valorAplicadoComponente(720, [{ calculatedSubtotal: 60, appliedSubtotal: 20 }], 650)).toBe(650); expect(valorAplicadoComponente(720, [], 0)).toBe(0); });
+it('normalizes a manual component price to cents before showing it', () => expect(valorAplicadoComponente(720, [], 1.005)).toBe(1.01));
 it('restoring the component keeps negotiated edge prices', () => expect(valorAplicadoComponente(720, [{ calculatedSubtotal: 60, appliedSubtotal: 0 }], undefined)).toBe(720));
 it('does not count the edge discount twice and includes cutouts and direct services', () => expect(descontosIndividuais([{ components: [{ calculatedTotal: 780, appliedTotal: 740 }], services: [{ calculatedSubtotal: 300, appliedSubtotal: 250 }], cutouts: [{ calculatedSubtotal: 70, appliedSubtotal: 50 }] }])).toBe(110));
 it('preserves cents and does not report surcharges as discounts', () => expect(descontosIndividuais([{ components: [{ calculatedTotal: '10.30', appliedTotal: '10.20' }, { calculatedTotal: 10, appliedTotal: 20 }], services: [] }])).toBe(0.1));

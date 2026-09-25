@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calcularLinha, calcularTotalOrcamento, calcularLinhaServico } from './quote-calculator';
+import { arredondarMoeda, calcularLinha, calcularLimiteDesconto, calcularTotalCartao, calcularTotalPix, calcularTotalOrcamento, calcularLinhaServico } from './quote-calculator';
 import { somarAreasComponentes } from './components';
 
 describe('calculateLine', () => {
@@ -17,11 +17,26 @@ describe('calculateLine', () => {
     expect(calcularLinha({ billingUnit: 'UNIT', unitPrice: 45, quantity: 3 }).subtotal).toBe(135);
     expect(calcularLinha({ billingUnit: 'FIXED', unitPrice: 120, quantity: 9 }).subtotal).toBe(120);
   });
+
+  it.each([
+    ['SQUARE_METER', 250, 2, 3, 1, 1, 500],
+    ['LINEAR_METER', 100, 2, 3, 1500, undefined, 200],
+    ['UNIT', 45, 2, 3, undefined, undefined, 90],
+    ['FIXED', 120, 1, 9, undefined, undefined, 120],
+  ] as const)('usa billedQuantity como quantidade final em %s, sem multiplicar de novo', (billingUnit, unitPrice, billedQuantity, quantity, lengthMm, widthMm, subtotal) => {
+    expect(calcularLinha({ billingUnit, unitPrice, billedQuantity, quantity, lengthMm, widthMm }).subtotal).toBe(subtotal);
+  });
+
+  it('arredonda dinheiro em centavos, inclusive valores de meio centavo', () => {
+    expect(arredondarMoeda(1.005)).toBe(1.01);
+    expect(calcularLinha({ billingUnit: 'UNIT', unitPrice: 1.005, quantity: 1 })).toEqual({ billedQuantity: 1, subtotal: 1.01 });
+    expect(calcularTotalOrcamento([0.105, 0.205, 0.305])).toBe(0.63);
+  });
 });
 
 describe('calculateQuoteTotal', () => {
   it('arredonda em centavos e não permite desconto maior que o bruto', () => {
-    expect(calcularTotalOrcamento([10.005, 20.005], 5)).toBe(25.01);
+    expect(calcularTotalOrcamento([10.005, 20.005], 5)).toBe(25.02);
     expect(() => calcularTotalOrcamento([100], 101)).toThrow('desconto');
   });
 
@@ -36,6 +51,25 @@ describe('calculateQuoteTotal', () => {
     const calculated = 780;
     const applied: number | undefined = undefined;
     expect(applied ?? calculated).toBe(780);
+  });
+
+  it('normaliza o valor base e o desconto em centavos antes de subtrair', () => {
+    expect(calcularTotalOrcamento([10.005], 1.005)).toBe(9);
+    expect(() => calcularTotalOrcamento([1], 1.005)).toThrow('desconto');
+  });
+
+  it('calcula Pix e cartão a partir de centavos estáveis', () => {
+    expect(calcularTotalPix(5000, 5)).toBe(4750);
+    expect(calcularTotalPix(5000, 10)).toBe(4500);
+    expect(calcularTotalPix(1.005, 5)).toBe(0.96);
+    expect(calcularTotalCartao(509.25)).toBe(560.18);
+    expect(calcularTotalCartao(1.005)).toBe(1.11);
+  });
+
+  it('aplica limite de desconto sobre centavos e valida percentuais', () => {
+    expect(calcularLimiteDesconto(100.05, 10)).toBe(10.01);
+    expect(calcularLimiteDesconto(100.05, 5)).toBe(5);
+    expect(() => calcularLimiteDesconto(100, 101)).toThrow();
   });
 });
 

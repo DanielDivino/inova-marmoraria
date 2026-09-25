@@ -19,6 +19,9 @@ describe('Pagamentos da remontagem', () => {
     expect(calcularPagamentoRemontagem({ ...input, cardOverride: 5500 })).toMatchObject({ subtotal: 5000, cardTotal: 5500, pixTotal: 5000, cashDiscount: 500 });
     expect(calcularPagamentoRemontagem({ ...input, cardOverride: 0 })).toMatchObject({ cardTotal: 0, pixTotal: 5000, cashDiscount: 0 });
   });
+  it('arredonda preços manuais e serviços antes de compor os pagamentos', () => {
+    expect(calcularPagamentoRemontagem({ ...input, itemTotals: [1.005], assembly: 2.005, disassembly: 3.005, cardOverride: 7.005 })).toMatchObject({ itemsTotal: 1.01, subtotal: 6.03, cardTotal: 7.01, pixTotal: 6.03, cashDiscount: 0.98 });
+  });
   it('arredonda centavos e mantém 5% como padrão dos orçamentos', () => {
     expect(calcularTotalPix(10.01)).toBe(9.51);
     expect(calcularTotalPix(10.01, 10)).toBe(9.01);

@@ -27,6 +27,14 @@ describe('Validação centralizada de orçamento', () => {
   it.each([0, -10, 10.5, NaN, Infinity])('recusa dimensão inválida %s', (lengthMm) => expect(quoteComponentSchema.safeParse({ ...component, lengthMm }).success).toBe(false));
   it.each([-1, NaN, Infinity])('recusa preço manual inválido %s', (appliedTotal) => expect(quoteComponentSchema.safeParse({ ...component, appliedTotal }).success).toBe(false));
   it('permite preço manual zero', () => expect(quoteComponentSchema.parse({ ...component, appliedTotal: 0 }).appliedTotal).toBe(0));
+  it('normaliza peças, acabamentos, recortes e desconto para centavos no limite da API', () => {
+    const parsed = quoteItemSchema.parse({ materialId: id, productTypeId: id, components: [{ ...component, appliedTotal: 1.005, edges: [{ side: 'FRONT', serviceId: id, appliedSubtotal: 2.005 }] }], cutouts: [{ cutoutType: 'SINK', serviceId: id, appliedSubtotal: 3.005 }], services: [{ serviceId: id, appliedSubtotal: 4.005 }] });
+    expect(parsed.components[0].appliedTotal).toBe(1.01);
+    expect(parsed.components[0].edges[0].appliedSubtotal).toBe(2.01);
+    expect(parsed.cutouts[0].appliedSubtotal).toBe(3.01);
+    expect(parsed.services[0].appliedSubtotal).toBe(4.01);
+    expect(createQuoteSchema.parse({ customerId: id, items: [{ materialId: id, productTypeId: id, components: [component] }], discountAmount: 5.005 }).discountAmount).toBe(5.01);
+  });
   it('exige componente para dimensões', () => expect(quoteItemSchema.safeParse({ materialId: id, productTypeId: id, components: [] }).success).toBe(false));
   it('exige quantidade e justificativa para área manual', () => expect(quoteItemSchema.safeParse({ materialId: id, productTypeId: id, calculationMode: 'MANUAL_M2', billedQuantity: 2 }).success).toBe(false));
   it('permite recorte na origem e impede posição negativa', () => { expect(quoteCutoutSchema.safeParse({ cutoutType: 'SINK', positionX: 0 }).success).toBe(true); expect(quoteCutoutSchema.safeParse({ cutoutType: 'SINK', positionX: -1 }).success).toBe(false); });

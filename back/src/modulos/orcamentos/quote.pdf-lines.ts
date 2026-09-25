@@ -129,9 +129,13 @@ export function montarLinhasPdf(items: any[]): { items: QuotePdfLine[][]; linear
     for (const service of item.services ?? []) {
       const applied = amount(service);
       const calculated = Number(service.calculatedSubtotal ?? applied);
-      if (/montagem/i.test(service.serviceNameSnapshot) && calculated > applied) result.push({ description: 'Desconto montagem', total: -(calculated - applied), discount: true });
-      if (service.billingUnitSnapshot === 'LINEAR_METER') addLinear(service.serviceNameSnapshot, Number(service.billedQuantity), applied);
-      else result.push({ description: service.serviceNameSnapshot, measure: Number(service.billedQuantity), unit: unit(service.billingUnitSnapshot), total: applied });
+      const assemblyDiscount = /montagem/i.test(service.serviceNameSnapshot) && calculated > applied ? calculated - applied : 0;
+      // Exibe o preço original da montagem e o desconto em linhas separadas.
+      // Usar o preço já aplicado aqui também descontava a diferença duas vezes.
+      if (assemblyDiscount) result.push({ description: 'Desconto montagem', total: -assemblyDiscount, discount: true });
+      const displayed = assemblyDiscount ? calculated : applied;
+      if (service.billingUnitSnapshot === 'LINEAR_METER') addLinear(service.serviceNameSnapshot, Number(service.billedQuantity), displayed);
+      else result.push({ description: service.serviceNameSnapshot, measure: Number(service.billedQuantity), unit: unit(service.billingUnitSnapshot), total: displayed });
     }
     for (const cutout of item.cutouts ?? []) {
       const name = cutout.serviceNameSnapshot || cutout.label || (cutout.cutoutType === 'OVAL_SINK' ? 'Recorte para cuba oval' : 'Recorte');

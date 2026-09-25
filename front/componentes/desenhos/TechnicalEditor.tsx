@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, buscarArquivoApi } from '../../utilitarios/api';
 import { abrirPdf } from '../../utilitarios/abrir-pdf';
+import { criarId } from '../../utilitarios/id';
 import {
   makePiece, parametricContour, rotate, edgeLength, edgePoint, sampleContour, bounds as pieceBounds, formatMeasure, parseFriendlyMeasure,
   updatePiece as updatePieceCommand, deletePiece as deletePieceCommand, duplicatePiece as duplicatePieceCommand, snapPoint,
@@ -44,7 +45,7 @@ function computeDrawPreview(points: Point[], cursor: Point | null, typed: string
   return { x: last.x + Math.cos(angle) * length, y: last.y + Math.sin(angle) * length };
 }
 
-const uid = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const uid = criarId;
 const revisionLabel: Record<Revision['status'], string> = { IN_REVIEW: 'Em conferência', APPROVED: 'Aprovada', RETURNED: 'Devolvida', RELEASED: 'Liberada', SUPERSEDED: 'Substituída' };
 const featureLabel: Record<Feature['type'], string> = { SINK: 'Cuba', SCULPTED_SINK: 'Cuba esculpida', CUTOUT: 'Recorte', HOLE: 'Furo', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', EDGE_FINISH: 'Acabamento de borda' };
 const profileLabel: Record<Feature['profile'], string> = { SIMPLE: 'Simples', MITER45: 'Meia-esquadria 45°', BEVEL: 'Chanfro', ROUND: 'Arredondado' };

@@ -16,7 +16,7 @@ export function serializarRemontagem(row: Remount, quoteNumber: string): Remount
   return { id: row.id, quoteId: row.quoteId, version: row.version, number: numeroDocumentoRemontagem(quoteNumber, 'REM'), deliveryNumber: numeroDocumentoRemontagem(quoteNumber, 'ENT'),
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), items: row.items as unknown as RemountItem[],
     assembly: Number(row.assembly), disassembly: Number(row.disassembly), assemblyDiscount: Number(row.assemblyDiscount), disassemblyDiscount: Number(row.disassemblyDiscount),
-    cardOverride: row.cardOverride === null ? null : Number(row.cardOverride), pixPercent: row.pixPercent as 5 | 10,
+    cardOverride: row.cardOverride === null ? null : Number(row.cardOverride), pixPercent: row.pixPercent as RemountDocument['pixPercent'],
     itemsTotal: Number(row.itemsTotal), subtotal: Number(row.subtotal), cardTotal: Number(row.cardTotal), cashDiscount: Number(row.cashDiscount), pixTotal: Number(row.pixTotal),
     notes: row.notes, itemNotes: row.itemNotes as Record<string, string> };
 }

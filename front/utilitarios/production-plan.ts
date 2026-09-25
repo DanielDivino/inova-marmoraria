@@ -1,6 +1,7 @@
 import { centimetrosParaMilimetros, pecaInicial, dividirComponente, dividirIgualmente, validarDivisao, calcularUltimaPeca, seguirDivisao, planoDeProducao, comPlanoDeProducao, precisaRevisao,
   type ProductionPlan, type ProductionPiece, type ProductionSource, type ProductionCutout, type ProductionEdge, type ProductionEdgeSide, type ResultadoDivisao, type ProductionSplitAxis } from '@inova/domain';
 import type { DraftComponent, DraftCutout, DraftItem } from '../componentes/orcamento/types';
+import { criarId } from './id';
 
 export type { ProductionPlan, ProductionPiece, ProductionSource, ProductionCutout, ProductionEdge, ProductionEdgeSide, ResultadoDivisao, ProductionSplitAxis };
 export { dividirIgualmente, validarDivisao, calcularUltimaPeca, planoDeProducao, precisaRevisao };
@@ -37,7 +38,7 @@ export function componenteParaPeca(component: DraftComponent, sourceComponentId:
   };
 }
 
-function newId(): string { return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`; }
+function newId(): string { return criarId(); }
 const converterEdges = (edges: DraftComponent['edges'], servicos: { id: string; name: string }[]): ProductionEdge[] => edges.map((edge) => ({ side: edge.side, serviceId: edge.serviceId, serviceName: servicos.find((entry) => entry.id === edge.serviceId)?.name ?? 'Acabamento', lengthMm: mm(edge.lengthCm), heightMm: mm(edge.heightCm), quantity: edge.quantity }));
 
 /** Recorte/cuba de produção -> DraftCutout, só para reaproveitar DesenhoTecnico

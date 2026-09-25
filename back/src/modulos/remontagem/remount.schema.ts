@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { DEFAULT_ASSEMBLY_PRICE, DEFAULT_DISASSEMBLY_PRICE } from '@inova/domain';
+import { arredondarMoeda, DEFAULT_ASSEMBLY_PRICE, DEFAULT_DISASSEMBLY_PRICE } from '@inova/domain';
 import { quoteItemSchema } from '../orcamentos/quote.schema.js';
 
-const money = z.number().finite().nonnegative().max(9999999999.99).multipleOf(0.01);
+const money = z.number().finite().nonnegative().max(9999999999.99).transform(arredondarMoeda);
 export const remountSchema = z.object({
   expectedVersion: z.number().int().nonnegative(),
   items: z.array(quoteItemSchema).max(50).default([]),

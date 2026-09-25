@@ -1,19 +1,20 @@
 import type { DraftComponent, DraftCutout, DraftItem } from './types';
 import { servicoDeRecorte } from '../../utilitarios/service-groups';
 import { TituloEtapaProjeto } from './ProjectStageHeading';
+import { calcularLinha } from '@inova/domain';
 
 type Service = { id: string; name: string; category: string; billingUnit: 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED'; currentPrice: number };
 type Props = { mode?: 'all' | 'cutouts' | 'services' | 'unassigned'; componentIndex?: number; calculateCutout?: (cutout: DraftCutout) => number; cutouts: DraftCutout[]; components: DraftComponent[]; services: Service[]; serviceIds: string[]; serviceQuantities: DraftItem['serviceQuantities']; serviceAppliedValues: DraftItem['serviceAppliedValues']; onChange: (patch: Pick<DraftItem, 'cutouts' | 'serviceIds' | 'serviceQuantities' | 'serviceAppliedValues'>) => void };
 const numeric = (value?: string) => Number((value ?? '').replace(',', '.')) || 0;
 import { formatarMoeda } from '../../utilitarios/formatadores';
-const unitLabel = (service: Service) => service.billingUnit === 'SQUARE_METER' ? 'por m²' : service.billingUnit === 'UNIT' ? 'por unidade' : 'valor fixo';
+const unitLabel = (service: Service) => service.billingUnit === 'SQUARE_METER' ? 'por m²' : service.billingUnit === 'LINEAR_METER' ? 'por metro' : service.billingUnit === 'UNIT' ? 'por unidade' : 'valor fixo';
 
 export function ComplementosOrcamento({ mode = 'all', componentIndex, calculateCutout, cutouts, components, services, serviceIds, serviceQuantities, serviceAppliedValues, onChange }: Props) {
   const cutoutCalculated = (cutout: DraftCutout) => {
     const service = services.find((entry) => entry.id === cutout.serviceId);
     if (!service) return 0;
     const quantity = service.billingUnit === 'SQUARE_METER' ? numeric(cutout.lengthCm) / 100 * (numeric(cutout.widthCm) / 100) * cutout.quantity : service.billingUnit === 'FIXED' ? 1 : cutout.quantity;
-    return quantity > 0 ? quantity * service.currentPrice : 0;
+    return quantity > 0 ? calcularLinha({ billingUnit: service.billingUnit, unitPrice: service.currentPrice, billedQuantity: quantity }).subtotal : 0;
   };
   const patchCutout = (index: number, patch: Partial<DraftCutout>) => onChange({ cutouts: cutouts.map((entry, current) => current === index ? { ...entry, ...patch } : entry), serviceIds, serviceQuantities, serviceAppliedValues });
   const changeType = (index: number, cutoutType: DraftCutout['cutoutType']) => {
