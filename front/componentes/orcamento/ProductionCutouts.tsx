@@ -1,4 +1,5 @@
 import type { ProductionCutout, ProductionPiece } from '../../utilitarios/production-plan';
+import { criarId } from '../../utilitarios/id';
 
 type Props = { pieces: ProductionPiece[]; cutouts: ProductionCutout[]; onChange: (cutouts: ProductionCutout[]) => void };
 const cm = (mm?: number) => mm === undefined ? '' : String(mm / 10);
@@ -12,7 +13,7 @@ const cutoutTypeLabels: Record<ProductionCutout['cutoutType'], string> = { SINK:
  * mostra valor calculado/final nem grava em serviceAppliedValues.
  */
 export function RecortesProducao({ pieces, cutouts, onChange }: Props) {
-  const add = (pieceId: string) => onChange([...cutouts, { id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, pieceId, cutoutType: 'SINK', label: 'Recorte / cuba', quantity: 1 }]);
+  const add = (pieceId: string) => onChange([...cutouts, { id: criarId(), pieceId, cutoutType: 'SINK', label: 'Recorte / cuba', quantity: 1 }]);
   const patch = (id: string, changes: Partial<ProductionCutout>) => onChange(cutouts.map((cutout) => cutout.id === id ? { ...cutout, ...changes } : cutout));
   const remove = (id: string) => onChange(cutouts.filter((cutout) => cutout.id !== id));
   if (!pieces.length) return null;

@@ -9,7 +9,7 @@ import { adicionarDiasUteis, podeAlterarStatusOrcamento, calcularLinha, calcular
 import { prisma } from '../../config/prisma.js';
 import { AppError, idSchema } from '../../compartilhado/http.js';
 import { createQuoteSchema, quoteItemSchema, updateQuoteItemSchema, updateQuoteSchema, updateStatusSchema, calculateQuoteSchema } from './quote.schema.js';
-import { adicionarItemOrcamento, criarOrcamento, editarOrcamento, incluirOrcamento, recalcularOrcamento } from './quote.service.js';
+import { adicionarItemOrcamento, criarOrcamento, editarOrcamento, incluirOrcamento, recalcularOrcamento, validarDesconto } from './quote.service.js';
 import { editQuoteSchema } from './quote.schema.js';
 import { renderizarPdfOrcamento } from './quote.pdf.js';
 import { quotePdfOptionsSchema } from './quote.pdf-options.js';
@@ -78,7 +78,7 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
   });
   app.patch('/:id', authenticated, async (request) => {
     const { id } = idSchema.parse(request.params); const input = updateQuoteSchema.parse(request.body); const before = await prisma.quote.findUnique({ where: { id } }); if (!before) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND'); if (before.status !== 'DRAFT') throw new AppError(409, 'Apenas rascunhos podem ser alterados.', 'QUOTE_NOT_EDITABLE');
-    const grossTotal = Number(before.grossTotal); const discount = input.discountAmount ?? Number(before.discountAmount); const allowed = request.user.role === 'SUPER_ADMIN' ? grossTotal : grossTotal * request.user.maxDiscountPercent / 100; if (discount > allowed) throw new AppError(403, 'Desconto acima do limite permitido.', 'DISCOUNT_NOT_ALLOWED');
+    const grossTotal = Number(before.grossTotal); const discount = input.discountAmount ?? Number(before.discountAmount); validarDesconto(request.user, grossTotal, discount);
     const quote = await prisma.quote.update({ where: { id }, data: { ...input, ...(input.discountAmount !== undefined ? { netTotal: calcularTotalOrcamento([grossTotal], input.discountAmount) } : {}) }, include: incluirOrcamento(request.user) });
     await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'UPDATED', previous: { discountAmount: asNumber(before.discountAmount), notes: before.notes }, current: { discountAmount: asNumber(quote.discountAmount), notes: quote.notes } } }); return serializarOrcamento(quote);
   });
@@ -91,7 +91,7 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
       ...anterior,
       ...Object.fromEntries(Object.entries(input).filter(([, valor]) => valor !== undefined)),
     });
-    const replacement = await prisma.$transaction(async (tx) => { await tx.quoteItem.delete({ where: { id: old.id } }); const gross = Number(quote.grossTotal) - Number(old.total); await tx.quote.update({ where: { id: params.id }, data: { grossTotal: gross, netTotal: calcularTotalOrcamento([gross], Number(quote.discountAmount)) } }); return adicionarItemOrcamento(tx, params.id, merged, request.user); }); await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: replacement.id, action: merged.calculationMode === 'MANUAL_M2' ? 'MANUAL_M2_UPDATED' : 'MEASUREMENTS_UPDATED', previous: { itemId: old.id, components: old.components.length }, current: { components: merged.components.length, billedQuantity: merged.billedQuantity } } }); return serializarOrcamento({ items: [replacement] }).items[0];
+    const replacement = await prisma.$transaction(async (tx) => { await tx.quoteItem.delete({ where: { id: old.id } }); const gross = calcularTotalOrcamento([Number(quote.grossTotal)]) - calcularTotalOrcamento([Number(old.total)]); await tx.quote.update({ where: { id: params.id }, data: { grossTotal: gross, netTotal: calcularTotalOrcamento([gross], Number(quote.discountAmount)) } }); return adicionarItemOrcamento(tx, params.id, merged, request.user); }); await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: replacement.id, action: merged.calculationMode === 'MANUAL_M2' ? 'MANUAL_M2_UPDATED' : 'MEASUREMENTS_UPDATED', previous: { itemId: old.id, components: old.components.length }, current: { components: merged.components.length, billedQuantity: merged.billedQuantity } } }); return serializarOrcamento({ items: [replacement] }).items[0];
   });
   app.post('/:id/calculate', authenticated, async (request) => serializarOrcamento(await prisma.$transaction((tx) => recalcularOrcamento(tx, idSchema.parse(request.params).id, request.user))));
   app.patch('/:id/status', authenticated, async (request) => {

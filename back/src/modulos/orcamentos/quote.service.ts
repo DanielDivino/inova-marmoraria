@@ -1,6 +1,6 @@
 import { escopoClientes, escopoOrcamentos } from '../../compartilhado/acesso.js';
 import type { Prisma } from '@prisma/client';
-import { podeEditarOrcamento, itemSalvoParaEntrada, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularSubtotalMaterial, calcularAreaRetangularM2, calcularTotalOrcamento, podeUsarM2Manual, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
+import { arredondarMoeda, calcularLimiteDesconto, podeEditarOrcamento, itemSalvoParaEntrada, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularSubtotalMaterial, calcularAreaRetangularM2, calcularTotalOrcamento, podeUsarM2Manual, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
 import { AppError, type AuthUser } from '../../compartilhado/http.js';
 import type { z } from 'zod';
 import { quoteItemSchema, type createQuoteSchema, type editQuoteSchema } from './quote.schema.js';
@@ -18,7 +18,12 @@ export const incluirOrcamento = (user: AuthUser) => ({ ...quoteInclude,
   complements: { ...quoteInclude.complements, where: escopoOrcamentos(user) },
 });
 
-function validarDesconto(user: AuthUser, gross: number, discount: number) { const allowed = user.role === 'SUPER_ADMIN' ? gross : gross * (user.maxDiscountPercent / 100); if (discount > allowed + 0.001) throw new AppError(403, `Desconto acima do limite permitido (${user.role === 'SUPER_ADMIN' ? '100' : user.maxDiscountPercent}%).`, 'DISCOUNT_NOT_ALLOWED'); }
+export function validarDesconto(user: AuthUser, gross: number, discount: number) {
+  const grossValue = arredondarMoeda(gross);
+  const discountValue = arredondarMoeda(discount);
+  const allowed = user.role === 'SUPER_ADMIN' ? grossValue : calcularLimiteDesconto(grossValue, user.maxDiscountPercent);
+  if (discountValue > allowed) throw new AppError(403, `Desconto acima do limite permitido (${user.role === 'SUPER_ADMIN' ? '100' : user.maxDiscountPercent}%).`, 'DISCOUNT_NOT_ALLOWED');
+}
 function comprimentoBorda(component: z.infer<typeof import('./quote.schema.js').quoteComponentSchema>, edge: z.infer<typeof import('./quote.schema.js').quoteEdgeSchema>) { if (edge.lengthMm) return edge.lengthMm; return edge.side === 'FRONT' || edge.side === 'BACK' ? component.lengthMm : component.widthMm; }
 
 export async function montarItem(tx: Tx, input: QuoteItemInput, user: AuthUser, snapshot?: import('@inova/domain').SavedQuoteItem): Promise<BuiltItem> {
@@ -75,7 +80,7 @@ export async function montarItem(tx: Tx, input: QuoteItemInput, user: AuthUser, 
         billingUnitSnapshot: componentUnit, unitPriceSnapshot: componentPrice, subtotal: calcularSubtotalMaterial(calculated.billableArea, componentPrice), edges: component.edges });
     }
   }
-  const materialSubtotal = input.calculationMode === 'MANUAL_M2' ? calcularSubtotalMaterial(billedQuantity, unitPrice) : Math.round(componentRows.reduce((sum, component) => sum + component.subtotal, 0) * 100) / 100;
+  const materialSubtotal = input.calculationMode === 'MANUAL_M2' ? calcularSubtotalMaterial(billedQuantity, unitPrice) : calcularTotalOrcamento(componentRows.map(component => component.subtotal));
   const edgeRowsByComponent: any[][] = [];
   for (const component of componentRows) {
     const edges: any[] = [];
@@ -88,7 +93,8 @@ export async function montarItem(tx: Tx, input: QuoteItemInput, user: AuthUser, 
       const effectiveQuantity = component.quantity * edge.quantity;
       const calculation = calcularAcabamentoBorda({ name: service.name, lengthMm, heightMm: edge.heightMm, quantity: effectiveQuantity, materialPrice: component.unitPriceSnapshot, servicePrice: Number(service.currentPrice) });
       const subtotal = calculation.subtotal;
-      edges.push({ side: edge.side, customLabel: edge.customLabel, lengthMm, heightMm: strip ? edge.heightMm : null, serviceId: service.id, serviceNameSnapshot: service.name, billingUnitSnapshot: calculation.billingUnit, unitPriceSnapshot: calculation.unitPrice, billedQuantity: calculation.billedQuantity, subtotal, calculatedSubtotal: subtotal, appliedSubtotal: edge.appliedSubtotal ?? subtotal, hasManualPriceOverride: edge.appliedSubtotal !== undefined, sortOrder: edges.length });
+      const appliedSubtotal = edge.appliedSubtotal === undefined ? subtotal : arredondarMoeda(edge.appliedSubtotal);
+      edges.push({ side: edge.side, customLabel: edge.customLabel, lengthMm, heightMm: strip ? edge.heightMm : null, serviceId: service.id, serviceNameSnapshot: service.name, billingUnitSnapshot: calculation.billingUnit, unitPriceSnapshot: calculation.unitPrice, billedQuantity: calculation.billedQuantity, subtotal, calculatedSubtotal: subtotal, appliedSubtotal, hasManualPriceOverride: edge.appliedSubtotal !== undefined, sortOrder: edges.length });
     }
     edgeRowsByComponent.push(edges);
   }
@@ -98,7 +104,8 @@ export async function montarItem(tx: Tx, input: QuoteItemInput, user: AuthUser, 
     const billed = service.billingUnit === 'SQUARE_METER' ? billedQuantity * (/rebaixo italiano/i.test(service.name) ? (selected.billedQuantity ?? 1) : 1) : service.billingUnit === 'FIXED' ? 1 : selected.billedQuantity;
     if (!billed || billed <= 0) throw new AppError(422, 'Informe a quantidade do serviço selecionado.', 'SERVICE_QUANTITY_REQUIRED');
     const line = calcularLinhaServico({ serviceName: service.name, billingUnit: service.billingUnit, unitPrice: Number(service.currentPrice), billedQuantity: billed });
-    serviceRows.push({ serviceId: service.id, serviceNameSnapshot: service.name, billingUnitSnapshot: service.billingUnit, unitPriceSnapshot: Number(service.currentPrice), ...line, calculatedSubtotal: line.subtotal, appliedSubtotal: selected.appliedSubtotal ?? line.subtotal, hasManualPriceOverride: selected.appliedSubtotal !== undefined });
+    const appliedSubtotal = selected.appliedSubtotal === undefined ? line.subtotal : arredondarMoeda(selected.appliedSubtotal);
+    serviceRows.push({ serviceId: service.id, serviceNameSnapshot: service.name, billingUnitSnapshot: service.billingUnit, unitPriceSnapshot: Number(service.currentPrice), ...line, calculatedSubtotal: line.subtotal, appliedSubtotal, hasManualPriceOverride: selected.appliedSubtotal !== undefined });
   }
   const cutoutRows: any[] = [];
   for (const cutout of input.cutouts) {
@@ -109,21 +116,28 @@ export async function montarItem(tx: Tx, input: QuoteItemInput, user: AuthUser, 
     const billed = service.billingUnit === 'SQUARE_METER' ? dimensionsArea : service.billingUnit === 'FIXED' ? 1 : cutout.quantity;
     if (billed <= 0 && !(cutout.sizePending && service.billingUnit === 'SQUARE_METER')) throw new AppError(422, 'Informe a quantidade ou medidas do recorte.', 'CUTOUT_QUANTITY_REQUIRED');
     const line = billed > 0 ? calcularLinha({ billingUnit: service.billingUnit, unitPrice: Number(service.currentPrice), billedQuantity: billed }) : { subtotal: 0 };
-    cutoutRows.push({ ...cutout, serviceNameSnapshot: service.name, billingUnitSnapshot: service.billingUnit, unitPriceSnapshot: Number(service.currentPrice), billedQuantity: billed, calculatedSubtotal: line.subtotal, appliedSubtotal: cutout.appliedSubtotal ?? line.subtotal, hasManualPriceOverride: cutout.appliedSubtotal !== undefined });
+    const appliedSubtotal = cutout.appliedSubtotal === undefined ? line.subtotal : arredondarMoeda(cutout.appliedSubtotal);
+    cutoutRows.push({ ...cutout, serviceNameSnapshot: service.name, billingUnitSnapshot: service.billingUnit, unitPriceSnapshot: Number(service.currentPrice), billedQuantity: billed, calculatedSubtotal: line.subtotal, appliedSubtotal, hasManualPriceOverride: cutout.appliedSubtotal !== undefined });
   }
   const componentRowsWithValues = componentRows.map((component, index) => {
-    const edgeSubtotal = edgeRowsByComponent[index].reduce((sum, edge) => sum + edge.calculatedSubtotal, 0);
-    const appliedEdgeSubtotal = edgeRowsByComponent[index].reduce((sum, edge) => sum + edge.appliedSubtotal, 0);
-    const calculatedTotal = Math.round((component.subtotal + edgeSubtotal) * 100) / 100;
-    const appliedTotal = component.appliedTotal === undefined ? Math.round((component.subtotal + appliedEdgeSubtotal) * 100) / 100 : component.appliedTotal;
+    const edgeSubtotal = calcularTotalOrcamento(edgeRowsByComponent[index].map(edge => edge.calculatedSubtotal));
+    const appliedEdgeSubtotal = calcularTotalOrcamento(edgeRowsByComponent[index].map(edge => edge.appliedSubtotal));
+    const calculatedTotal = calcularTotalOrcamento([component.subtotal, edgeSubtotal]);
+    const appliedTotal = component.appliedTotal === undefined ? calcularTotalOrcamento([component.subtotal, appliedEdgeSubtotal]) : arredondarMoeda(component.appliedTotal);
     return { ...component, calculatedTotal, appliedTotal, hasManualPriceOverride: component.appliedTotal !== undefined, edges: edgeRowsByComponent[index] };
   });
-  const edgeSubtotal = edgeRowsByComponent.flat().reduce((sum, edge) => sum + edge.subtotal, 0); const directServicesSubtotal = serviceRows.reduce((sum, row) => sum + row.subtotal, 0); const servicesSubtotal = Math.round((edgeSubtotal + directServicesSubtotal) * 100) / 100;
+  const servicesSubtotal = calcularTotalOrcamento([
+    ...edgeRowsByComponent.flat().map(edge => edge.appliedSubtotal),
+    ...serviceRows.map(row => row.appliedSubtotal),
+    ...cutoutRows.map(row => row.appliedSubtotal),
+  ]);
   const appliedComponentsTotal = componentRowsWithValues.reduce((sum, component) => sum + component.appliedTotal, 0);
   const appliedDirectServicesSubtotal = serviceRows.reduce((sum, row) => sum + row.appliedSubtotal, 0);
   const appliedCutoutsSubtotal = cutoutRows.reduce((sum, row) => sum + row.appliedSubtotal, 0);
-  const total = input.calculationMode === 'MANUAL_M2' ? materialSubtotal + appliedDirectServicesSubtotal + appliedCutoutsSubtotal : Math.round((appliedComponentsTotal + appliedDirectServicesSubtotal + appliedCutoutsSubtotal) * 100) / 100;
-  return { projectName: input.projectName ?? null, environment: input.environment ?? null, productTypeId: productType.id, materialId: material.id, materialNameSnapshot: material.name, billingUnitSnapshot: material.billingUnit, unitPriceSnapshot: unitPrice, quantity: input.quantity, calculationMode: input.calculationMode, manualJustification: input.manualJustification, drawingSchemaVersion: input.drawingData ? 1 : null, drawingData: input.drawingData, billedQuantity, materialSubtotal, servicesSubtotal: Math.round((servicesSubtotal + appliedCutoutsSubtotal) * 100) / 100, total, services: serviceRows, components: componentRowsWithValues, cutouts: cutoutRows };
+  const total = input.calculationMode === 'MANUAL_M2'
+    ? calcularTotalOrcamento([materialSubtotal, appliedDirectServicesSubtotal, appliedCutoutsSubtotal])
+    : calcularTotalOrcamento([appliedComponentsTotal, appliedDirectServicesSubtotal, appliedCutoutsSubtotal]);
+  return { projectName: input.projectName ?? null, environment: input.environment ?? null, productTypeId: productType.id, materialId: material.id, materialNameSnapshot: material.name, billingUnitSnapshot: material.billingUnit, unitPriceSnapshot: unitPrice, quantity: input.quantity, calculationMode: input.calculationMode, manualJustification: input.manualJustification, drawingSchemaVersion: input.drawingData ? 1 : null, drawingData: input.drawingData, billedQuantity, materialSubtotal, servicesSubtotal, total, services: serviceRows, components: componentRowsWithValues, cutouts: cutoutRows };
 }
 
 async function persistirItem(tx: Tx, quoteId: string, item: BuiltItem, existingId?: string) {
@@ -140,7 +154,7 @@ export async function criarOrcamento(tx: Tx, input: QuoteInput, user: AuthUser) 
     const parent = await tx.quote.findUnique({ where: { id: input.parentQuoteId, ...escopoOrcamentos(user) } });
     if (!parent || parent.customerId !== input.customerId) throw new AppError(422, 'O complemento deve pertencer ao mesmo cliente do orçamento vinculado.', 'INVALID_PARENT_QUOTE');
   }
-  const items = []; for (const item of input.items) items.push(await montarItem(tx, item, user)); const grossTotal = items.reduce((sum, item) => sum + item.total, 0); validarDesconto(user, grossTotal, input.discountAmount);
+  const items = []; for (const item of input.items) items.push(await montarItem(tx, item, user)); const grossTotal = calcularTotalOrcamento(items.map(item => item.total)); validarDesconto(user, grossTotal, input.discountAmount);
   const createdAt = new Date();
   const { year, month } = periodoNumeroOrcamento(createdAt);
   const sequence = await tx.quoteSequence.upsert({ where: { year_month: { year, month } }, create: { year, month, lastNumber: 1 }, update: { lastNumber: { increment: 1 } } });
@@ -152,10 +166,10 @@ export async function criarOrcamento(tx: Tx, input: QuoteInput, user: AuthUser) 
 
 export async function adicionarItemOrcamento(tx: Tx, quoteId: string, input: QuoteItemInput, user: AuthUser) {
   const quote = await tx.quote.findUnique({ where: { id: quoteId } }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND'); if (quote.status !== 'DRAFT') throw new AppError(409, 'Apenas rascunhos podem ser alterados.', 'QUOTE_NOT_EDITABLE');
-  const item = await montarItem(tx, input, user); const grossTotal = Number(quote.grossTotal) + item.total; const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); const created = await persistirItem(tx, quoteId, item); await tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) } }); return created;
+  const item = await montarItem(tx, input, user); const grossTotal = calcularTotalOrcamento([Number(quote.grossTotal), item.total]); const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); const created = await persistirItem(tx, quoteId, item); await tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) } }); return created;
 }
 
-export async function recalcularOrcamento(tx: Tx, quoteId: string, user: AuthUser) { const quote = await tx.quote.findUnique({ where: { id: quoteId }, include: { items: true } }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND'); const grossTotal = quote.items.reduce((sum, item) => sum + Number(item.total), 0); const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); return tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) }, include: incluirOrcamento(user) }); }
+export async function recalcularOrcamento(tx: Tx, quoteId: string, user: AuthUser) { const quote = await tx.quote.findUnique({ where: { id: quoteId }, include: { items: true } }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND'); const grossTotal = calcularTotalOrcamento(quote.items.map(item => Number(item.total))); const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); return tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) }, include: incluirOrcamento(user) }); }
 
 export async function editarOrcamento(tx: Tx, id: string, input: z.infer<typeof editQuoteSchema>, user: AuthUser) {
   // Internal validation must also account for complements created by administrators.
@@ -178,12 +192,12 @@ export async function editarOrcamento(tx: Tx, id: string, input: z.infer<typeof 
     const financial = (value: unknown) => canonical({ ...quoteItemSchema.parse(value), projectName: null, environment: null, drawingData: undefined });
     if (saved && financial(item) === financial(itemSalvoParaEntrada(saved))) {
       await tx.quoteItem.update({ where: { id: saved.id }, data: { projectName: item.projectName, environment: item.environment, ...(item.drawingData ? { drawingData: item.drawingData as Prisma.InputJsonValue, drawingSchemaVersion: 1 } : {}) } });
-      grossTotal += Number(saved.total); continue;
+      grossTotal = calcularTotalOrcamento([grossTotal, Number(saved.total)]); continue;
     }
     const built = await montarItem(tx, item, user, saved);
     if (saved) await tx.quoteItem.delete({ where: { id: saved.id } });
     await persistirItem(tx, id, built, saved?.id);
-    grossTotal += built.total;
+    grossTotal = calcularTotalOrcamento([grossTotal, built.total]);
   }
   await tx.quoteItem.deleteMany({ where: { quoteId: id, id: { in: before.items.filter((item) => !ids.includes(item.id)).map((item) => item.id) } } });
   validarDesconto(user, grossTotal, input.discountAmount);

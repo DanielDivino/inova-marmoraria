@@ -1,4 +1,4 @@
-import { centimetrosParaMilimetros, detalheDesenhoComponente, itemSalvoParaEntrada, type SavedQuoteItem } from '@inova/domain';
+import { arredondarMoeda, centimetrosParaMilimetros, detalheDesenhoComponente, itemSalvoParaEntrada, type SavedQuoteItem } from '@inova/domain';
 import type { DraftItem } from '../componentes/orcamento/types';
 
 const cm = (value?: number) => value === undefined ? undefined : String(value / 10);
@@ -33,7 +33,7 @@ const decimal = (value: string) => Number(value.replace(',', '.'));
 export const currency = (value: string) => {
   const parsed = Number(value.includes(',') ? value.replace(/\./g, '').replace(',', '.') : value);
   if (!value.trim() || !Number.isFinite(parsed) || parsed < 0) throw new Error('Informe um valor monetário válido, maior ou igual a zero.');
-  return Math.round(parsed * 100) / 100;
+  return arredondarMoeda(parsed);
 };
 const optionalMm = (value?: string) => value ? centimetrosParaMilimetros(value) : undefined;
 const positionMm = (value?: string) => value ? Math.round(decimal(value) * 10) : undefined;
@@ -64,7 +64,7 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
     manualJustification: draft.calculationMode === 'MANUAL_M2' ? draft.manualJustification : undefined,
     billedQuantity: draft.calculationMode === 'MANUAL_M2' ? decimal(draft.manualM2) : undefined, quantity: saved?.quantity ?? 1,
     components: draft.calculationMode === 'DIMENSIONS' ? draft.components.map((component, sortOrder) => ({
-      // Sempre envia o id gerado no cliente (crypto.randomUUID, sem risco de
+      // Sempre envia o id gerado no cliente (UUID v4, sem risco de
       // colisão) para que ele vire o id definitivo já na primeira gravação —
       // isso é o que permite drawingData.productionPlan referenciar o
       // componente comercial (sourceComponentId) sem precisar reconciliar IDs

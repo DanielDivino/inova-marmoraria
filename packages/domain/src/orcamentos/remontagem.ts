@@ -1,4 +1,4 @@
-import { calcularTotalOrcamento, type PixDiscountPercent } from '../calculos/quote-calculator.js';
+import { arredondarMoeda, calcularTotalOrcamento, type PixDiscountPercent } from '../calculos/quote-calculator.js';
 import type { SavedQuoteItem } from './snapshot.js';
 
 export const DEFAULT_ASSEMBLY_PRICE = 300;
@@ -6,8 +6,8 @@ export const DEFAULT_DISASSEMBLY_PRICE = 300;
 export type RemountItem = SavedQuoteItem & { materialSubtotal: number; servicesSubtotal: number };
 export function calcularPagamentoRemontagem(input: { itemTotals: number[]; assembly: number; disassembly: number; cardOverride?: number | null; pixPercent: PixDiscountPercent }) {
   const itemsTotal = calcularTotalOrcamento(input.itemTotals);
-  const subtotal = calcularTotalOrcamento([itemsTotal, input.assembly, input.disassembly]);
-  const cardTotal = calcularTotalOrcamento([input.cardOverride ?? subtotal]);
+  const subtotal = calcularTotalOrcamento([itemsTotal, arredondarMoeda(input.assembly), arredondarMoeda(input.disassembly)]);
+  const cardTotal = arredondarMoeda(input.cardOverride ?? subtotal);
   const cashDiscount = Math.max(0, Math.round((cardTotal - subtotal) * 100)) / 100;
   return { itemsTotal, subtotal, cardTotal, cashDiscount, pixTotal: subtotal,
     assemblyDiscount: Math.max(0, Math.round((DEFAULT_ASSEMBLY_PRICE - input.assembly) * 100)) / 100,

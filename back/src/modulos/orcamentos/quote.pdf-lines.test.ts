@@ -75,6 +75,24 @@ describe('Linhas comerciais do PDF', () => {
     expect(result.linear[0]).toMatchObject({ measure: .1, total: .3 });
     expect(result.items[0]).toMatchObject([{ measure: 1.5, total: 500 }, { description: 'Furo', total: 0 }]);
   });
+  it.each([109.01, 80])('reconcilia cada linha do PDF com o total aplicado da peça e serviços (%s)', appliedTotal => {
+    const result = montarLinhasPdf([{ components: [piece([
+      { ...edge(2, 5.01), calculatedSubtotal: 20 },
+      { ...edge(.05, 4, 'Vista'), billingUnitSnapshot: 'SQUARE_METER', calculatedSubtotal: 5 },
+    ], { subtotal: 100, appliedTotal })], services: [{ ...edge(1, 8.01, 'Furo de torneira'), billingUnitSnapshot: 'UNIT', calculatedSubtotal: 10 }], cutouts: [{ label: 'Recorte da cuba', quantity: 1, billingUnitSnapshot: 'UNIT', calculatedSubtotal: 3, appliedSubtotal: 2.01 }] }]);
+    const lineTotal = result.items[0].reduce((sum, line) => sum + line.total, 0) + result.linear.reduce((sum, line) => sum + line.total, 0);
+    const expected = appliedTotal + 8.01 + 2.01;
+    expect(Math.round(lineTotal * 100)).toBe(Math.round(expected * 100));
+  });
+  it('apresenta a montagem pelo valor base e desconta a diferença uma única vez', () => {
+    const result = montarLinhasPdf([{ components: [], services: [{ serviceNameSnapshot: 'Montagem', billingUnitSnapshot: 'FIXED', billedQuantity: 1, calculatedSubtotal: 300, appliedSubtotal: 250 }] }]);
+    const assemblyLines = result.items[0].filter(line => line.description !== 'Material · área informada');
+    expect(assemblyLines).toEqual([
+      { description: 'Desconto montagem', total: -50, discount: true },
+      { description: 'Montagem', measure: 1, unit: 'serviço', total: 300 },
+    ]);
+    expect(assemblyLines.reduce((sum, line) => sum + line.total, 0)).toBe(250);
+  });
 });
 
 describe('Opções do PDF', () => {

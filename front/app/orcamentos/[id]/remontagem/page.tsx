@@ -12,6 +12,8 @@ import { currency, itemSalvoParaRascunho, rascunhoParaEntradaItem } from '../../
 import { api, buscarArquivoApi } from '../../../../utilitarios/api';
 import { abrirPdf } from '../../../../utilitarios/abrir-pdf';
 import { formatarMoeda } from '../../../../utilitarios/formatadores';
+import { ResumoMovel } from '../../../../componentes/orcamento/MobileQuoteSummary';
+import { criarId } from '../../../../utilitarios/id';
 import '../../../project-builder.css';
 import '../../../../componentes/orcamento/quick-quote.css';
 import './remontagem.css';
@@ -20,7 +22,7 @@ type Service = { id: string; name: string; category: string; billingUnit: Compon
 type Catalog = { materials: ComponentMaterial[]; services: Service[]; productTypes: { id: string; name: string }[] };
 type Origin = { id: string; number: string; customerNameSnapshot: string; customerPhoneSnapshot: string | null; workAddressSnapshot: string | null; notes: string | null; createdAt: string };
 type Preview = RemountTotals & { items: RemountItem[] };
-const newItem = (productTypeId: string): DraftItem => ({ id: crypto.randomUUID(), projectName: '', productTypeId, materialId: '', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [criarComponenteRapido()], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {}, drawingData: { entryMode: 'QUICK' } });
+const newItem = (productTypeId: string): DraftItem => ({ id: criarId(), projectName: '', productTypeId, materialId: '', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [criarComponenteRapido()], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {}, drawingData: { entryMode: 'QUICK' } });
 const date = (value: string) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
 export default function RemontagemPage() {
@@ -110,6 +112,7 @@ export default function RemontagemPage() {
   const individualComponents = items.flatMap(item => item.components.map(component => ({ item, component })));
   const updateComponentValue = (itemId: string, componentId: string, value: string) => change(() => { setItems(current => current.map(item => item.id !== itemId ? item : { ...item, components: item.components.map(component => component.id === componentId ? { ...component, appliedTotal: value || undefined } : component) })); setCard(''); });
   return <main className="shell project-builder remount-page">
+    <ResumoMovel total={display(totals?.subtotal)} />
     <header className="quote-detail-header"><div className="quote-detail-heading"><Link href={`/orcamentos/${id}`}>← Orçamento {origin.number}</Link><h1>Desmontagem e Remontagem</h1><small>{saved?.number ?? numeroDocumentoRemontagem(origin.number, 'REM')}</small></div></header>
     <section className="detail-card"><strong>{origin.customerNameSnapshot}</strong><small>{origin.customerPhoneSnapshot || 'Telefone não informado'}</small><small>{origin.workAddressSnapshot || 'Endereço não informado'}</small><small>Orçamento {origin.number} · {date(origin.createdAt)}{saved ? ` · Proposta atualizada em ${date(saved.updatedAt)}` : ''}</small>{origin.notes && <p>Observações do projeto: {origin.notes}</p>}</section>
     {error && <p role="alert" className="form-error">{error}</p>}

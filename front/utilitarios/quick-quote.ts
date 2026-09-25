@@ -1,6 +1,7 @@
 import { modoEntradaOrcamento, calcularAreaPeitorilDuplo, centimetrosParaMilimetros } from '@inova/domain';
 import type { DraftComponent, DraftItem } from '../componentes/orcamento/types';
 import { removerGrupoComponentes } from './component-groups';
+import { criarId } from './id';
 
 export function metrosParaCentimetrosRascunho(value: string): string {
   if (!value.trim()) return '';
@@ -50,7 +51,7 @@ export function centimetrosRascunhoParaMetros(value: string): string {
   const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) ? String(parsed / 100).replace('.', ',') : value;
 }
-export function criarComponenteRapido(materialId = '', id = crypto.randomUUID()): DraftComponent {
+export function criarComponenteRapido(materialId = '', id = criarId()): DraftComponent {
   return { id, materialId, label: '', componentType: 'TOP', orientation: 'HORIZONTAL', lengthCm: '', widthCm: '', quantity: 1, edges: [] };
 }
 export function aplicarMaterialProjeto(item: DraftItem, materialId: string): Partial<DraftItem> {
@@ -71,12 +72,12 @@ export function prepararItemRapido(item: DraftItem): DraftItem {
 export function duplicarComponenteRapido(item: DraftItem, index: number): Partial<DraftItem> {
   const root = item.components[index];
   const originals = [root, ...item.components.filter(component => component.parentComponentId === root.id)];
-  const ids = new Map(originals.map(component => [component.id, crypto.randomUUID()]));
+  const ids = new Map(originals.map(component => [component.id, criarId()]));
   const components = originals.map(component => ({ ...component, id: ids.get(component.id)!, parentComponentId: ids.get(component.parentComponentId ?? '') ?? component.parentComponentId, edges: component.edges.map(({ id: _id, ...edge }) => ({ ...edge })) }));
   const cutouts = item.cutouts.flatMap(cutout => {
     const source = item.components[cutout.componentIndex ?? -1];
     const offset = originals.indexOf(source);
-    return offset < 0 ? [] : [{ ...cutout, id: crypto.randomUUID(), componentIndex: item.components.length + offset }];
+    return offset < 0 ? [] : [{ ...cutout, id: criarId(), componentIndex: item.components.length + offset }];
   });
   return { components: [...item.components, ...components], cutouts: [...item.cutouts, ...cutouts] };
 }
