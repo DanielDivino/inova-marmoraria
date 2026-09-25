@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { apresentacaoPrazo, ROLE_LABELS, temPermissao } from '@inova/domain';
@@ -33,6 +33,8 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
   const [leaving, setLeaving] = useState(false);
   const [logoutError, setLogoutError] = useState('');
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const mobileMenu = useRef<HTMLDialogElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [darkTheme, setDarkTheme] = useState(false);
   const [alerts, setAlerts] = useState<{ id: string; number: string; customerName: string; projectName?: string | null; status: string; label: string; businessDays: number; dueDate: string }[]>([]);
 
@@ -60,7 +62,13 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
     return () => window.clearInterval(interval);
   }, [user]);
 
-  useEffect(() => { setAlertsOpen(false); }, [pathname]);
+  useEffect(() => { setAlertsOpen(false); mobileMenu.current?.close(); }, [pathname]);
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 761px)');
+    const closeOnDesktop = () => { if (desktop.matches) mobileMenu.current?.close(); };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, []);
   useEffect(() => {
     if (!alertsOpen) return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setAlertsOpen(false); };
@@ -103,11 +111,21 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
     ...(temPermissao(user.role, 'administration') ? [{ href: '/usuarios', label: 'Usuários e vendedores', icon: 'customers' }] : []),
     { href: '/historico', label: 'Histórico', icon: 'history' },
   ];
+  const navigation = <nav aria-label="Menu principal">{links.map((link) => { const selected = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href); return <Link key={link.href} href={link.href} onClick={() => mobileMenu.current?.close()} className={selected ? 'active' : ''} aria-current={selected ? 'page' : undefined}><span aria-hidden="true"><NavigationIcon name={link.icon} /></span>{link.label}</Link>; })}</nav>;
+  const mobileTitle = links.find(link => link.href === '/' ? pathname === '/' : pathname.startsWith(link.href))?.label ?? 'Inova Marmoraria';
   return <SessionContext.Provider value={user}><div className="application-frame">
     <aside className="application-sidebar"><Link className="application-brand" href="/" aria-label="Inova — novo orçamento"><img src="/inova-logo.png" alt="Inova Marmoraria" /></Link>
       <span className="sidebar-section-label">ÁREA DE TRABALHO</span>
-      <nav aria-label="Menu principal">{links.map((link) => { const selected = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href); return <Link key={link.href} href={link.href} className={selected ? 'active' : ''} aria-current={selected ? 'page' : undefined}><span aria-hidden="true"><NavigationIcon name={link.icon} /></span>{link.label}</Link>; })}</nav>
+      {navigation}
       <div className="sidebar-marble-message"><span className="sidebar-signature">NATUREZA EM CADA DETALHE</span><p>Pedras que<br />transformam<br /><em>ambientes.</em></p></div>
-  </aside><div className="application-content"><div className="application-header-actions"><div id="application-header-tabs" className="application-header-tabs" />{pathname === '/mostruario' && <Link className="showcase-header-request" href="/">Solicitar orçamento <span>→</span></Link>}<button type="button" className="notification-bell" aria-label="Notificações de prazo" aria-expanded={alertsOpen} aria-controls="deadline-notifications" onClick={() => setAlertsOpen((open) => !open)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>{alerts.length > 0 && <b>{alerts.length}</b>}</button><button type="button" className="notification-bell theme-toggle" aria-label={darkTheme ? 'Ativar tema claro' : 'Ativar tema escuro'} title={darkTheme ? 'Tema claro' : 'Tema escuro'} aria-pressed={darkTheme} onClick={toggleTheme}>{darkTheme ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></svg>}</button><div className="header-account"><span className="account-avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span><div><strong>{user.name}</strong><small>{ROLE_LABELS[user.role]}</small></div><button type="button" onClick={signOut} disabled={leaving}>{leaving ? 'Saindo…' : 'Sair'}</button></div>{alertsOpen && <aside id="deadline-notifications" className="notification-panel" aria-label="Notificações de prazo"><strong>Prazos de projetos</strong>{alerts.length ? alerts.map((alert) => <Link onClick={() => setAlertsOpen(false)} href={`/orcamentos/${alert.id}`} key={alert.id} className={`deadline-alert ${alert.status.toLowerCase()}`}><b>{alert.number}</b><span>{alert.customerName}{alert.projectName ? ` · ${alert.projectName}` : ''}</span><small>{apresentacaoPrazo(alert.dueDate)?.description ?? alert.label}</small></Link>) : <p>Nenhum prazo exige atenção.</p>}</aside>}</div>{logoutError && <p role="alert" className="form-error header-logout-error">{logoutError}</p>}{allowed ? children : <main className="list-page"><h1>Acesso restrito</h1><p>Seu perfil não tem acesso a esta área.</p><Link href="/orcamentos">Voltar aos seus orçamentos</Link></main>}</div>
+  </aside><dialog className="mobile-navigation-dialog" id="mobile-navigation" ref={mobileMenu} aria-label="Navegação da Inova" onClose={() => setMenuOpen(false)} onClick={event => { if (event.target === event.currentTarget) mobileMenu.current?.close(); }}>
+    <aside className="application-sidebar mobile-sidebar">
+      <button type="button" className="secondary-button mobile-menu-close" autoFocus onClick={() => mobileMenu.current?.close()} aria-label="Fechar menu">Fechar <span aria-hidden="true">×</span></button>
+      <Link className="application-brand" href="/" onClick={() => mobileMenu.current?.close()} aria-label="Inova — novo orçamento"><img src="/inova-logo.png" alt="Inova Marmoraria" /></Link>
+      <span className="sidebar-section-label">ÁREA DE TRABALHO</span>
+      {navigation}
+      <div className="mobile-menu-account"><strong>{user.name}</strong><small>{ROLE_LABELS[user.role]}</small><button type="button" className="secondary-button" onClick={signOut} disabled={leaving}>{leaving ? 'Saindo…' : 'Sair da conta'}</button>{logoutError && <p role="alert" className="form-error">{logoutError}</p>}</div>
+    </aside>
+  </dialog><div className="application-content"><div className="application-header-actions"><button type="button" className="notification-bell mobile-menu-toggle" aria-label="Abrir menu" aria-haspopup="dialog" aria-controls="mobile-navigation" aria-expanded={menuOpen} onClick={() => { setAlertsOpen(false); mobileMenu.current?.showModal(); setMenuOpen(true); }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button><strong className="mobile-header-title">{mobileTitle}</strong><div id="application-header-tabs" className="application-header-tabs" />{pathname === '/mostruario' && <Link className="showcase-header-request" href="/">Solicitar orçamento <span>→</span></Link>}<button type="button" className="notification-bell" aria-label="Notificações de prazo" aria-expanded={alertsOpen} aria-controls="deadline-notifications" onClick={() => setAlertsOpen((open) => !open)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>{alerts.length > 0 && <b>{alerts.length}</b>}</button><button type="button" className="notification-bell theme-toggle" aria-label={darkTheme ? 'Ativar tema claro' : 'Ativar tema escuro'} title={darkTheme ? 'Tema claro' : 'Tema escuro'} aria-pressed={darkTheme} onClick={toggleTheme}>{darkTheme ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></svg>}</button><div className="header-account"><span className="account-avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span><div><strong>{user.name}</strong><small>{ROLE_LABELS[user.role]}</small></div><button type="button" onClick={signOut} disabled={leaving}>{leaving ? 'Saindo…' : 'Sair'}</button></div>{alertsOpen && <aside id="deadline-notifications" className="notification-panel" aria-label="Notificações de prazo"><strong>Prazos de projetos</strong>{alerts.length ? alerts.map((alert) => <Link onClick={() => setAlertsOpen(false)} href={`/orcamentos/${alert.id}`} key={alert.id} className={`deadline-alert ${alert.status.toLowerCase()}`}><b>{alert.number}</b><span>{alert.customerName}{alert.projectName ? ` · ${alert.projectName}` : ''}</span><small>{apresentacaoPrazo(alert.dueDate)?.description ?? alert.label}</small></Link>) : <p>Nenhum prazo exige atenção.</p>}</aside>}</div>{logoutError && <p role="alert" className="form-error header-logout-error">{logoutError}</p>}{allowed ? children : <main className="list-page"><h1>Acesso restrito</h1><p>Seu perfil não tem acesso a esta área.</p><Link href="/orcamentos">Voltar aos seus orçamentos</Link></main>}</div>
   </div></SessionContext.Provider>;
 }

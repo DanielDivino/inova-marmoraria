@@ -2,13 +2,13 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type SetStateAction } from 'react';
 import { createPortal } from 'react-dom';
-import { valorAplicadoComponente, podeEditarOrcamento, type SavedQuoteItem, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularTotalOrcamento, centimetrosParaMilimetros, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
+import { arredondarMoeda, valorAplicadoComponente, podeEditarOrcamento, type SavedQuoteItem, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularTotalOrcamento, centimetrosParaMilimetros, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
 import { EditorComponentes } from './ComponentEditor';
 import { DesenhoTecnico } from './TechnicalDrawing';
 import type { ComponentType, DraftComponent, DraftEdge, DraftItem } from './types';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { rascunhoParaEntradaItem, itemSalvoParaRascunho } from '../../utilitarios/saved-quote';
+import { currency, rascunhoParaEntradaItem, itemSalvoParaRascunho } from '../../utilitarios/saved-quote';
 import { restaurarNomesComponentes } from '../../utilitarios/component-groups';
 import { VincularOrcamento, type QuoteLink } from './QuoteLinker';
 import { api } from '../../utilitarios/api';
@@ -18,6 +18,8 @@ import { useSession } from '../ApplicationShell';
 import { EtapasProjeto } from './ProjectStepper';
 import { calcularTotalCartao, projetoTemDesenho, dadosEntradaProjeto, modoEntradaOrcamento, type QuoteEntryMode } from '@inova/domain';
 import { EditorOrcamentoRapido } from './QuickQuoteEditor';
+import { ResumoMovel } from './MobileQuoteSummary';
+import { criarId } from '../../utilitarios/id';
 import { aplicarMaterialProjeto, arredondarMedidaParaCima, prepararItemRapido } from '../../utilitarios/quick-quote';
 import './quick-quote.css';
 import { reconciliarPlano, aplicarDivisaoIgual, aplicarDivisaoManual, aplicarSeguirDivisao, aceitarMudancaComercial, lerPlanoDeProducao, gravarPlanoDeProducao, componenteParaPeca, planoParaDesenho, type ProductionPlan, type ProductionPiece } from '../../utilitarios/production-plan';
@@ -33,13 +35,15 @@ type ProductType = { id: string; name: string };
 type Customer = { id: string; name: string; phone: string; document?: string | null; email?: string | null; address?: string | null; neighborhood?: string | null; city?: string | null; postalCode?: string | null; complement?: string | null; notes?: string | null };
 type Catalog = { materials: Material[]; services: Service[]; productTypes: ProductType[] };
 type ClientWorkspace = { id: string; customer: Customer | null; items: DraftItem[]; activeIndex: number; discount: string; validUntil: string; notes: string; parentQuote: QuoteLink | null };
+type CustomerTarget = { kind: 'WORKSPACE'; workspaceId: string } | { kind: 'NEW_WORKSPACE' };
+type ClientTabDialog = { kind: 'ADD' } | { kind: 'ACTIONS'; workspaceId: string } | { kind: 'DELETE'; workspaceId: string };
 
 const projetoPreenchido = (project: DraftItem) => !!project.projectName.trim() || !!project.materialId || !!project.manualM2 || !!project.manualJustification || project.components.length > 1 || project.cutouts.length > 0 || project.serviceIds.length > 0 || project.components.some(component => !!component.label.trim() || !!component.materialId || !!component.lengthCm || !!component.widthCm || component.quantity !== 1 || component.componentType !== 'TOP' || component.edges.length > 0 || component.appliedTotal !== undefined);
 
 import { formatarMoeda } from '../../utilitarios/formatadores';
-const newId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+const newId = criarId;
 const decimal = (value: string) => Number(value.replace(',', '.')) || 0;
-const currencyDecimal = (value: string) => { const normalized = value.trim(); if (!normalized) return 0; return Number(normalized.includes(',') ? normalized.replace(/\./g, '').replace(',', '.') : normalized) || 0; };
+const currencyDecimal = (value: string) => { const normalized = value.trim(); if (!normalized) return 0; const parsed = Number(normalized.includes(',') ? normalized.replace(/\./g, '').replace(',', '.') : normalized); return Number.isFinite(parsed) && parsed >= 0 ? arredondarMoeda(parsed) : 0; };
 const billedServiceQuantity = (service: Pick<Service, 'id' | 'name' | 'billingUnit'>, area: number, quantities: DraftItem['serviceQuantities']) => service.billingUnit === 'SQUARE_METER' ? area * (/rebaixo italiano/i.test(service.name) ? decimal(quantities[service.id] ?? '1') : 1) : service.billingUnit === 'FIXED' ? 1 : decimal(quantities[service.id] ?? '1');
 const catalogCacheKey = 'inova_catalog_cache_v4';
 const catalogCacheTtlMs = 60_000;
@@ -70,6 +74,10 @@ export default function EditorOrcamento() {
   const [activeClientIndex, setActiveClientIndex] = useState(0);
   const [error, setError] = useState('');
   const [customerMode, setCustomerMode] = useState<'NEW' | 'EXISTING' | null>(null);
+  const [customerTarget, setCustomerTarget] = useState<CustomerTarget | null>(null);
+  const [clientTabDialog, setClientTabDialog] = useState<ClientTabDialog | null>(null);
+  const [customerError, setCustomerError] = useState('');
+  const [savingCustomer, setSavingCustomer] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -290,8 +298,8 @@ export default function EditorOrcamento() {
     const calculated = calculateDraftComponent(component, draft.arredondarM2);
     if (!calculated || !material) return 0;
     const materialValue = calcularLinha({ billingUnit: material.billingUnit, unitPrice: material.currentPrice, billedQuantity: calculated.billableArea }).subtotal;
-    const edgeValue = component.edges.reduce((sum, edge) => sum + edgeCalculatedSubtotal(draft, component, edge), 0);
-    return Math.round((materialValue + edgeValue) * 100) / 100;
+    const edgeValue = calcularTotalOrcamento(component.edges.map(edge => edgeCalculatedSubtotal(draft, component, edge)));
+    return calcularTotalOrcamento([materialValue, edgeValue]);
   };
   const componentAppliedTotal = (draft: DraftItem, component: DraftComponent) => {
     const edges = component.edges.map((edge) => ({ calculatedSubtotal: edgeCalculatedSubtotal(draft, component, edge), appliedSubtotal: edge.appliedTotal === undefined ? undefined : currencyDecimal(edge.appliedTotal) }));
@@ -324,7 +332,7 @@ export default function EditorOrcamento() {
       if (amount <= 0) return;
       const name = /(?:^|\D)45\s*(?:°|º|graus?)/i.test(rawName) ? 'Acabamento 45°' : rawName.trim() || 'Acabamento';
       const existing = serviceBreakdown.find((entry) => entry.name.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'));
-      if (existing) existing.amount += amount;
+      if (existing) existing.amount = calcularTotalOrcamento([existing.amount, amount]);
       else serviceBreakdown.push({ id: `service-${name.toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-')}`, name, amount });
     };
     const draftServices = servicesFor(draft);
@@ -338,7 +346,7 @@ export default function EditorOrcamento() {
       return sum + applied;
     }, 0);
     const calculatedComponents = draft.components.reduce((sum, component) => sum + componentCalculatedTotal(draft, component), 0);
-    const calculatedEdges = draft.components.reduce((sum, component) => sum + Math.max(0, componentCalculatedTotal(draft, component) - (calculateDraftComponent(component, draft.arredondarM2)?.billableArea ?? 0) * (materialFor(draft, component)?.currentPrice ?? 0)), 0);
+    const appliedEdges = draft.components.reduce((sum, component) => sum + calcularTotalOrcamento(component.edges.map(edge => edge.appliedTotal === undefined ? edgeCalculatedSubtotal(draft, component, edge) : currencyDecimal(edge.appliedTotal))), 0);
     const componentTotal = draft.calculationMode === 'MANUAL_M2' ? materialSubtotal : draft.components.reduce((sum, component) => sum + componentAppliedTotal(draft, component), 0);
     const cutoutsTotal = draft.cutouts.reduce((sum, cutout) => {
       const calculated = cutoutCalculatedSubtotal(draft, cutout);
@@ -370,7 +378,8 @@ export default function EditorOrcamento() {
     const saved = snapshotFor(draft);
     const financialDraft = (value: DraftItem) => JSON.stringify({ ...value, projectName: '', drawingData: undefined });
     const unchanged = saved && financialDraft(draft) === financialDraft(itemSalvoParaRascunho(saved));
-    return { area, materialSubtotal, componentsTotal: componentTotal, componentBreakdown, additionalServicesTotal: directServices + cutoutsTotal, serviceBreakdown, servicesSubtotal: directServices + calculatedEdges + cutoutsTotal, calculatedComponents, calculatedTotal: (draft.calculationMode === 'MANUAL_M2' ? materialSubtotal : calculatedComponents) + calculatedServices + calculatedCutouts, individualDiscountTotal: componentDiscounts + serviceDiscounts + cutoutDiscounts, total: unchanged ? Number(saved.total) : componentTotal + directServices + cutoutsTotal };
+    const total = unchanged ? arredondarMoeda(Number(saved.total)) : calcularTotalOrcamento([componentTotal, directServices, cutoutsTotal]);
+    return { area, materialSubtotal, componentsTotal: componentTotal, componentBreakdown, additionalServicesTotal: calcularTotalOrcamento([directServices, cutoutsTotal]), serviceBreakdown, servicesSubtotal: calcularTotalOrcamento([directServices, appliedEdges, cutoutsTotal]), calculatedComponents, calculatedTotal: calcularTotalOrcamento([(draft.calculationMode === 'MANUAL_M2' ? materialSubtotal : calculatedComponents), calculatedServices, calculatedCutouts]), individualDiscountTotal: calcularTotalOrcamento([componentDiscounts, serviceDiscounts, cutoutDiscounts]), total };
   };
   const summaries = useMemo(() => items.map(itemSummary), [items, catalog, editingQuote]);
   const gross = summaries.reduce((sum, summary) => sum + summary.total, 0);
@@ -426,14 +435,50 @@ export default function EditorOrcamento() {
     if (summarySelection !== 'TOTAL' && summarySelection !== activeIndex) setSummarySelection(activeIndex);
   }, [activeIndex, summarySelection]);
 
-  const selectCustomer = (entry: Customer) => { setCustomer(entry); setEditingCustomerId(null); setCustomerMode(null); setCustomerForm({ name: entry.name, phone: entry.phone, document: entry.document ?? '', email: entry.email ?? '', address: entry.address ?? '', neighborhood: entry.neighborhood ?? '', city: entry.city ?? '', postalCode: entry.postalCode ?? '', complement: entry.complement ?? '', notes: entry.notes ?? '' }); setCustomerSearch(''); setCustomers([]); };
-  const openCustomerSearch = () => { setEditingCustomerId(null); setCustomerMode('EXISTING'); setCustomerSearch(''); setCustomers([]); };
-  const openNewCustomer = () => { setEditingCustomerId(null); setCustomerMode('NEW'); setCustomerForm({ name: '', phone: '', document: '', email: '', address: '', neighborhood: '', city: '', postalCode: '', complement: '', notes: '' }); };
+  const selectCustomer = (entry: Customer) => {
+    if (customerTarget?.kind === 'NEW_WORKSPACE') {
+      const fresh = newClientWorkspace();
+      fresh.customer = entry;
+      fresh.items = fresh.items.map(project => ({ ...project, productTypeId: catalog?.productTypes[0]?.id ?? '' }));
+      setWorkspaces(current => [...current, fresh]);
+      setActiveClientIndex(workspaces.length);
+      setSummarySelection(0);
+    } else if (customerTarget?.kind === 'WORKSPACE') {
+      const targetWorkspaceId = customerTarget.workspaceId;
+      const targetIndex = workspaces.findIndex(candidate => candidate.id === targetWorkspaceId);
+      if (targetIndex >= 0) {
+        setWorkspaces(current => current.map(candidate => candidate.id === targetWorkspaceId ? { ...candidate, customer: entry } : candidate));
+        setActiveClientIndex(targetIndex);
+        setSummarySelection(0);
+      } else setCustomer(entry);
+    } else setCustomer(entry);
+    if (customerTarget) { setReviewedSteps([]); setCurrentStep(1); }
+    setCustomerTarget(null);
+    setEditingCustomerId(null);
+    setCustomerMode(null);
+    setCustomerForm({ name: entry.name, phone: entry.phone, document: entry.document ?? '', email: entry.email ?? '', address: entry.address ?? '', neighborhood: entry.neighborhood ?? '', city: entry.city ?? '', postalCode: entry.postalCode ?? '', complement: entry.complement ?? '', notes: entry.notes ?? '' });
+    setCustomerSearch('');
+    setCustomers([]);
+  };
+  const openCustomerSearch = () => { setCustomerError(''); setEditingCustomerId(null); setCustomerMode('EXISTING'); setCustomerSearch(''); setCustomers([]); };
+  const openNewCustomer = () => { setCustomerError(''); setEditingCustomerId(null); setCustomerMode('NEW'); setCustomerForm({ name: '', phone: '', document: '', email: '', address: '', neighborhood: '', city: '', postalCode: '', complement: '', notes: '' }); };
   const editCustomer = () => { if (!customer) return; selectCustomer(customer); setEditingCustomerId(customer.id); setCustomerMode('NEW'); };
+  const closeCustomerDialog = () => { if (savingCustomer) return; setCustomerError(''); setCustomerMode(null); setCustomerTarget(null); setEditingCustomerId(null); };
+  const customerTargetForNewTab = (): CustomerTarget => {
+    const empty = workspaces.find(entry => !entry.customer && !entry.parentQuote && entry.items.every(project => !projetoPreenchido(project)));
+    return empty ? { kind: 'WORKSPACE', workspaceId: empty.id } : { kind: 'NEW_WORKSPACE' };
+  };
+  const addNewCustomerFromTab = () => { setCustomerTarget(customerTargetForNewTab()); setClientTabDialog(null); openNewCustomer(); };
+  const selectExistingCustomerFromTab = () => { setCustomerTarget(customerTargetForNewTab()); setClientTabDialog(null); openCustomerSearch(); };
+  const changeWorkspaceCustomer = (workspaceId: string) => { setCustomerTarget({ kind: 'WORKSPACE', workspaceId }); setClientTabDialog(null); openCustomerSearch(); };
   async function salvarCliente(event: FormEvent) {
     event.preventDefault();
+    if (savingCustomer) return;
+    setSavingCustomer(true);
+    setCustomerError('');
     try { const payload = Object.fromEntries(Object.entries(customerForm).map(([key, value]) => [key, value || null])); const saved = editingCustomerId ? await api<Customer>('/customers/' + editingCustomerId, { method: 'PATCH', body: JSON.stringify(payload) }) : await api<Customer>('/customers', { method: 'POST', body: JSON.stringify(payload) }); selectCustomer(saved); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o cliente.'); }
+    catch (cause) { setCustomerError(cause instanceof Error ? cause.message : 'Não foi possível salvar o cliente.'); }
+    finally { setSavingCustomer(false); }
   }
   function adicionarProjeto() { setItems((current) => [...current, { ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '', ...(quickMode ? { drawingData: dadosEntradaProjeto(undefined, 'QUICK') } : {}) }]); setActiveIndex(items.length); setReviewedSteps([]); }
   function removerProjeto(index: number) {
@@ -458,10 +503,10 @@ export default function EditorOrcamento() {
     setReviewedSteps([]);
     setCurrentStep(1);
   }
-  function removerEspacoCliente(index: number) {
+  function removerEspacoCliente(index: number, confirmed = false) {
     const entry = workspaces[index];
     if (!entry) return;
-    if (workspaceHasData(entry) && !window.confirm(`Excluir ${entry.customer?.name || 'Cliente ' + (index + 1)} e todos os seus projetos?`)) return;
+    if (!confirmed && workspaceHasData(entry) && !window.confirm(`Excluir ${entry.customer?.name || 'Cliente ' + (index + 1)} e todos os seus projetos?`)) return;
     if (workspaces.length === 1) {
       const fresh = newClientWorkspace();
       fresh.items = [{ ...fresh.items[0], productTypeId: catalog?.productTypes[0]?.id ?? '' }];
@@ -482,6 +527,12 @@ export default function EditorOrcamento() {
     setReviewedSteps([]);
     setCurrentStep(1);
   }
+  const openClientTabActions = (workspaceId: string) => setClientTabDialog({ kind: 'ACTIONS', workspaceId });
+  const confirmRemoveClientTab = (workspaceId: string) => {
+    const index = workspaces.findIndex(entry => entry.id === workspaceId);
+    if (index >= 0) removerEspacoCliente(index, true);
+    setClientTabDialog(null);
+  };
   const projectProblem = (draft: DraftItem): { message: string; componentId?: string } | null => {
     draft = prepararItemRapido(draft);
     const quickDraft = modoEntradaOrcamento(draft.drawingData) === 'QUICK';
@@ -559,7 +610,7 @@ export default function EditorOrcamento() {
     setSaving(true);
     try {
       const defaultProductTypeId = catalog?.productTypes[0]?.id ?? '';
-      const payload = { customerId: activeWorkspace.customer!.id, parentQuoteId: activeWorkspace.parentQuote?.id, expectedUpdatedAt: editingQuote?.updatedAt, notes: activeWorkspace.notes.trim() || null, validUntil: activeWorkspace.validUntil || null, discountAmount: currencyDecimal(activeWorkspace.discount), items: itemsToSave.map((draft) => { const prepared = prepareDraftForSave(draft); const normalized = prepared.productTypeId ? prepared : { ...prepared, productTypeId: defaultProductTypeId }; return rascunhoParaEntradaItem(normalized, snapshotFor(draft)); }) };
+      const payload = { customerId: activeWorkspace.customer!.id, parentQuoteId: activeWorkspace.parentQuote?.id, expectedUpdatedAt: editingQuote?.updatedAt, notes: activeWorkspace.notes.trim() || null, validUntil: activeWorkspace.validUntil || null, discountAmount: activeWorkspace.discount.trim() ? currency(activeWorkspace.discount) : 0, items: itemsToSave.map((draft) => { const prepared = prepareDraftForSave(draft); const normalized = prepared.productTypeId ? prepared : { ...prepared, productTypeId: defaultProductTypeId }; return rascunhoParaEntradaItem(normalized, snapshotFor(draft)); }) };
       const saved = await api<{ id: string }>(quoteId ? `/quotes/${quoteId}` : '/quotes', { method: quoteId ? 'PUT' : 'POST', body: JSON.stringify(payload) });
       const savedActiveId = saved.id;
       if (!quoteId) await api(`/quotes/${saved.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'SENT' }) });
@@ -576,10 +627,13 @@ export default function EditorOrcamento() {
   if (!catalog) return <main className="shell"><p className="empty">{error || 'Carregando catálogo…'}</p></main>;
   const clientTabs = !quoteId ? <div className="client-tabs-bar" role="tablist" aria-label="Clientes"><span className="client-tabs-label">Clientes</span>{workspaces.map((entry, index) => <div className={`client-tab ${index === activeClientIndex ? 'active' : ''}`} key={entry.id}>
     <button type="button" role="tab" aria-selected={index === activeClientIndex} onClick={() => selecionarEspacoCliente(index)}>{entry.customer?.name || `Cliente ${index + 1}`}</button>
-    <button type="button" className="close-client-tab" aria-label={`Excluir ${entry.customer?.name || 'Cliente ' + (index + 1)}`} onClick={() => removerEspacoCliente(index)}>×</button>
-  </div>)}<button type="button" className="add-client-tab" aria-label="Adicionar cliente" onClick={adicionarEspacoCliente}>+</button></div> : null;
+    <button type="button" className="close-client-tab desktop-client-close" aria-label={`Excluir ${entry.customer?.name || 'Cliente ' + (index + 1)}`} onClick={() => removerEspacoCliente(index)}>×</button>
+    <button type="button" className="mobile-client-pencil" aria-label={`Opções de ${entry.customer?.name || 'Cliente ' + (index + 1)}`} onClick={() => openClientTabActions(entry.id)}>✎</button>
+  </div>)}<button type="button" className="add-client-tab desktop-add-client" aria-label="Adicionar cliente" onClick={adicionarEspacoCliente}>+</button><button type="button" className="add-client-tab mobile-add-client" aria-label="Adicionar cliente" onClick={() => setClientTabDialog({ kind: 'ADD' })}>+</button></div> : null;
+  const clientTabWorkspace = clientTabDialog && clientTabDialog.kind !== 'ADD' ? workspaces.find(entry => entry.id === clientTabDialog.workspaceId) : null;
 
-  return <main className="shell project-builder">
+  return <main className={`shell project-builder${!quoteId ? ' has-client-tabs' : ''}`}>
+    <ResumoMovel total={formatarMoeda(total)} />
     <header className="project-topbar">
       {!headerTabsTarget && clientTabs}
       <div className="project-topbar-main"><div className="project-title-client"><h1>{editingQuote ? `Editar ${editingQuote.number}` : 'Novo Projeto'}</h1>
@@ -591,9 +645,10 @@ export default function EditorOrcamento() {
       </div>)}</div><button type="button" className="add-project-tab" aria-label="Adicionar projeto" onClick={adicionarProjeto}>+</button></div></div>
     </header>
     {headerTabsTarget && clientTabs && createPortal(clientTabs, headerTabsTarget)}
-    {customerMode && <dialog className="customer-dialog" ref={node => { if (node && !node.open) node.showModal(); }} onCancel={() => setCustomerMode(null)}>
-      <div className="customer-dialog-heading"><strong>{editingCustomerId ? 'Editar cliente' : customerMode === 'NEW' ? 'Novo cliente' : 'Selecionar cliente'}</strong><button type="button" className="text-button" aria-label="Fechar seleção de cliente" onClick={() => setCustomerMode(null)}>×</button></div>
-      <div className="customer-mode-tabs"><button type="button" onClick={openCustomerSearch}>Selecionar cliente</button><button type="button" onClick={openNewCustomer}>Novo cliente</button></div>
+    {customerMode && <dialog className="customer-dialog" aria-label={editingCustomerId ? 'Editar cliente' : customerMode === 'NEW' ? 'Novo cliente' : 'Selecionar cliente'} ref={node => { if (node && !node.open) node.showModal(); }} onCancel={event => { if (savingCustomer) event.preventDefault(); else closeCustomerDialog(); }}>
+      <div className="customer-dialog-heading"><strong>{editingCustomerId ? 'Editar cliente' : customerMode === 'NEW' ? 'Novo cliente' : 'Selecionar cliente'}</strong><button type="button" className="text-button" aria-label="Fechar seleção de cliente" disabled={savingCustomer} onClick={closeCustomerDialog}>×</button></div>
+      <div className="customer-mode-tabs"><button type="button" disabled={savingCustomer} onClick={openCustomerSearch}>Selecionar cliente</button><button type="button" disabled={savingCustomer} onClick={openNewCustomer}>Novo cliente</button></div>
+      {customerError && <p className="form-error" role="alert">{customerError}</p>}
       {customerMode === 'NEW' ? <><form className="inline-form customer-form" onSubmit={salvarCliente}>
         <input value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} placeholder="Nome" required />
         <input value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} placeholder="Telefone" required />
@@ -605,16 +660,31 @@ export default function EditorOrcamento() {
         <input value={customerForm.postalCode} onChange={(event) => setCustomerForm({ ...customerForm, postalCode: event.target.value })} placeholder="CEP" />
         <input value={customerForm.complement} onChange={(event) => setCustomerForm({ ...customerForm, complement: event.target.value })} placeholder="Complemento" />
         <textarea value={customerForm.notes} onChange={(event) => setCustomerForm({ ...customerForm, notes: event.target.value })} placeholder="Observações" />
-        <button className="primary-button">{editingCustomerId ? 'Salvar alterações' : 'Salvar e selecionar cliente'}</button>
-      </form><button type="button" className="text-button customer-back" onClick={openCustomerSearch}>← Voltar para busca</button></> : <>
+        <button className="primary-button" disabled={savingCustomer}>{savingCustomer ? 'Salvando…' : editingCustomerId ? 'Salvar alterações' : 'Salvar e selecionar cliente'}</button>
+      </form><button type="button" className="text-button customer-back" disabled={savingCustomer} onClick={openCustomerSearch}>← Voltar para busca</button></> : <>
         <label className="customer-search-label">Buscar cliente existente<input className="search" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Digite nome, telefone ou CPF" autoFocus /></label>
         {customerSearch.trim().length < 2 ? <p className="customer-help">Comece digitando para localizar um cliente cadastrado.</p> : customers.length ? <div className="customer-results">{customers.map((entry) => <button className="customer-result" key={entry.id} onClick={() => selectCustomer(entry)}><strong>{entry.name}</strong><small>{entry.phone}{entry.document ? ` · ${entry.document}` : ''}</small></button>)}</div> : <p className="customer-help">Nenhum cliente encontrado. <button type="button" className="text-button" onClick={openNewCustomer}>Cadastrar novo cliente</button></p>}
+      </>}
+    </dialog>}
+    {clientTabDialog && <dialog className="customer-dialog client-tabs-dialog" aria-label={clientTabDialog.kind === 'ADD' ? 'Adicionar cliente' : clientTabDialog.kind === 'DELETE' ? 'Excluir cliente?' : 'Opções do cliente'} ref={node => { if (node && !node.open) node.showModal(); }} onCancel={() => setClientTabDialog(null)}>
+      <div className="customer-dialog-heading"><strong>{clientTabDialog.kind === 'ADD' ? 'Adicionar cliente' : clientTabDialog.kind === 'DELETE' ? 'Excluir cliente?' : 'Opções do cliente'}</strong><button type="button" className="text-button" aria-label="Fechar opções do cliente" onClick={() => setClientTabDialog(null)}>×</button></div>
+      {clientTabDialog.kind === 'ADD' && <>
+        <p>Escolha como deseja adicionar o cliente a este orçamento.</p>
+        <div className="client-tab-dialog-actions"><button type="button" onClick={addNewCustomerFromTab}>Cadastrar novo cliente</button><button type="button" onClick={selectExistingCustomerFromTab}>Escolher cliente existente</button></div>
+      </>}
+      {clientTabDialog.kind === 'ACTIONS' && <>
+        <p className="client-tab-dialog-customer">{clientTabWorkspace?.customer?.name || 'Cliente sem cadastro'}</p>
+        <div className="client-tab-dialog-actions"><button type="button" onClick={() => changeWorkspaceCustomer(clientTabDialog.workspaceId)}>Trocar cliente</button><button type="button" className="client-tab-delete-action" onClick={() => setClientTabDialog({ kind: 'DELETE', workspaceId: clientTabDialog.workspaceId })}>Excluir cliente</button></div>
+      </>}
+      {clientTabDialog.kind === 'DELETE' && <>
+        <p>O cliente <strong>{clientTabWorkspace?.customer?.name || 'selecionado'}</strong> e os projetos desta aba serão removidos deste orçamento. O cadastro do cliente continuará salvo.</p>
+        <div className="client-tab-dialog-actions"><button type="button" onClick={() => setClientTabDialog(null)}>Cancelar</button><button type="button" className="client-tab-delete-action" onClick={() => confirmRemoveClientTab(clientTabDialog.workspaceId)}>Excluir cliente e projetos</button></div>
       </>}
     </dialog>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className={`quote-workspace${quickMode ? ' quick-workspace' : ''}`}><div className="quote-form-column" id="active-project-panel" role="tabpanel" aria-labelledby={`tab-${item.id}`}>
     {editingQuote && <p className="customer-help">Editando o orçamento salvo. Os preços registrados e os ajustes manuais são preservados; novos materiais e serviços usam o catálogo atual. <Link href={`/orcamentos/${quoteId}`} onClick={() => { savedRef.current = true; localStorage.removeItem(quoteDraftStorageKey); }}>Cancelar edição</Link></p>}
-    <div className="quote-mode-switch" role="group" aria-label="Modo do orçamento">
+    <div className={`quote-mode-switch${quickMode ? ' is-quick-mode' : ''}`} role="group" aria-label="Modo do orçamento">
       <button type="button" aria-pressed={quickMode} onClick={() => changeEntryMode('QUICK')}>Orçamento Rápido</button>
       <button type="button" aria-pressed={!quickMode} onClick={() => changeEntryMode('DETAILED')}>Orçamento com Desenho / Detalhado</button>
       <small>{projetoTemDesenho(item.drawingData) ? 'Desenho adicionado' : 'Desenho pendente'}</small>

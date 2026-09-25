@@ -1,0 +1,262 @@
+/* Adaptações de tela: os mesmos formulários e cálculos em qualquer tamanho. */
+.mobile-menu-toggle, .mobile-header-title, .mobile-quote-bar, .quick-mobile-summary-row,
+.quick-mobile-label, .quick-mobile-help, .quick-collapse-toggle { display: none; }
+
+@media screen {
+  .quick-services-modal::backdrop, .mobile-navigation-dialog::backdrop { background: #101a16a6; backdrop-filter: blur(4px); }
+  .quick-services-modal { overscroll-behavior: contain; }
+  body:has(.mobile-navigation-dialog[open], .quick-services-modal[open], .customer-dialog[open]) { overflow: hidden; }
+}
+
+@media screen and (max-width: 760px) {
+  html { scroll-padding-block: 16px 100px; }
+  html .inova-theme { -webkit-text-size-adjust: 100%; }
+  html .inova-theme :is(button, a, summary, input, select, textarea) { touch-action: manipulation; }
+  html .inova-theme :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea) {
+    min-width: 0; max-width: 100%; min-height: 48px; font-size: 16px; padding: 10px 12px;
+  }
+  html .inova-theme :is(input[type=checkbox], input[type=radio]) { width: 20px; height: 20px; min-height: 20px; flex-shrink: 0; }
+  html .inova-theme :is(button, .secondary-button, .primary-button, .text-button, summary) { min-height: 44px; }
+  html .inova-theme :is(.list-header, .detail-card, .saved-quote-card, .admin-rows article) { overflow-wrap: anywhere; }
+  html .inova-theme :is(h1, h2, h3) { overflow-wrap: anywhere; }
+
+  /* Menu completo sob demanda; o cabeçalho deixa espaço para o trabalho. */
+  html .inova-theme .application-frame > .application-sidebar { display: none; }
+  html .inova-theme .application-header-actions { padding: 10px 12px; gap: 8px; min-height: 64px; }
+  html .inova-theme .mobile-menu-toggle { display: inline-grid; place-items: center; }
+  html .inova-theme .mobile-header-title { display: block; flex: 1; min-width: 0; margin-right: auto; font-size: 14px; color: var(--ink); }
+  html .inova-theme .notification-bell { width: 44px; height: 44px; flex: 0 0 44px; }
+  html .inova-theme .application-header-actions > .header-account,
+  html .inova-theme .application-header-actions > .showcase-header-request { display: none; }
+  html .inova-theme .application-header-tabs { order: 2; flex-basis: 100%; }
+  html .inova-theme .client-tabs-label { display: none; }
+  html .inova-theme .project-builder.has-client-tabs .project-title-client { display: none; }
+  html .inova-theme .project-builder.has-client-tabs .compact-customer { display: none; }
+  html .inova-theme :is(.client-tab button, .project-tab button, .add-client-tab, .add-project-tab) { min-height: 44px; min-width: 44px; }
+  html .inova-theme .client-tab [role=tab] { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html .inova-theme .client-tab .desktop-client-close, html .inova-theme .desktop-add-client { display: none !important; }
+  html .inova-theme .client-tab .mobile-client-pencil { display: grid; place-items: center; width: 40px; min-width: 40px; min-height: 44px; padding: 0 8px; border-left: 1px solid var(--line); color: var(--green); font-size: 19px; }
+  html .inova-theme .mobile-add-client { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; margin-left: 2px; border: 1px solid var(--line); border-radius: 9px 9px 0 0; background: var(--surface); color: var(--green); font-size: 21px; }
+  html .inova-theme .client-tabs-dialog > p { margin: 8px 0; color: var(--muted); line-height: 1.5; }
+  html .inova-theme .client-tabs-dialog .client-tab-dialog-actions button { width: 100%; min-height: 48px; text-align: center; }
+  html .inova-theme .notification-panel { right: 12px; top: 60px; width: min(360px, calc(100vw - 24px)); max-height: 70dvh; overflow: auto; z-index: 30; }
+  html .inova-theme .mobile-navigation-dialog { position: fixed; inset: 0 auto 0 0; margin: 0; padding: 0; width: min(320px, 92vw); max-width: 92vw; height: 100dvh; max-height: 100dvh; border: 0; color: var(--ink); background: var(--surface); }
+  html .inova-theme .mobile-navigation-dialog .mobile-sidebar { position: static; width: 100%; height: 100%; padding: max(12px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom)); gap: 12px; border: 0; overflow-y: auto; overscroll-behavior: contain; }
+  html .inova-theme .mobile-sidebar .mobile-menu-close { align-self: flex-end; display: flex; gap: 16px; align-items: center; }
+  html .inova-theme .mobile-sidebar .application-brand { align-self: center; }
+  html .inova-theme .mobile-sidebar .application-brand img { width: 130px; height: 86px; }
+  html .inova-theme .mobile-sidebar .sidebar-section-label { display: block; }
+  html .inova-theme .mobile-sidebar nav { display: grid; flex-shrink: 0; overflow: visible; padding: 0; gap: 6px; }
+  html .inova-theme .mobile-sidebar nav a { justify-content: flex-start; min-height: 48px; white-space: normal; font-size: 14px; }
+  html .inova-theme .mobile-menu-account { display: grid; gap: 6px; padding-top: 16px; margin-top: auto; border-top: 1px solid var(--line); }
+  html .inova-theme .mobile-menu-account small { color: var(--muted); }
+  html .inova-theme .mobile-menu-account button { margin-top: 6px; }
+
+  /* Peças como cartões: todos os campos ficam visíveis sem arrastar a tabela. */
+  html .inova-theme .application-content :is(.shell, .list-page) { padding: 20px 12px 32px; }
+  html .inova-theme .application-content .project-builder { padding: 0 12px calc(104px + env(safe-area-inset-bottom)); }
+  html .inova-theme .project-builder .quote-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  html .inova-theme .project-topbar { padding: 18px 0; }
+  html .inova-theme .project-topbar-main { flex-direction: column; align-items: stretch; gap: 14px; }
+  html .inova-theme .project-title-client h1 { font-size: 27px; }
+  html .inova-theme .compact-customer { gap: 8px; font-size: 13px; }
+  html .inova-theme .compact-customer:has(> span > strong) { display: grid; grid-template-columns: minmax(0, 1fr) 44px; }
+  html .inova-theme .compact-customer > span:has(> strong) { grid-column: 1 / -1; max-width: none; white-space: normal; overflow-wrap: anywhere; }
+  html .inova-theme .compact-customer button { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+  html .inova-theme .compact-customer > span[aria-hidden] { display: none; }
+  html .inova-theme .project-builder .quote-mode-switch { gap: 6px; padding: 6px; }
+  html .inova-theme .project-builder .quote-mode-switch button { flex: 1 1 120px; font-size: 12px; line-height: 1.4; padding: 8px; }
+  html .inova-theme .quote-mode-switch small { flex-basis: 100%; padding: 2px 6px; font-size: 11px; }
+  html .inova-theme .project-builder .quote-form-column .section { padding: 14px; }
+  html .inova-theme .quick-heading { flex-direction: column; gap: 12px; }
+  html .inova-theme .quick-heading h2 { font-size: 23px; }
+  html .inova-theme .quick-desktop-help { display: none; }
+  html .inova-theme .quick-mobile-help { display: inline; font-size: 12px; }
+  html .inova-theme .quick-round-toggle { min-height: 44px; padding: 10px 12px; width: 100%; }
+  html .inova-theme .quick-project-fields { grid-template-columns: minmax(0, 1fr); gap: 14px; margin-bottom: 18px; }
+  html .inova-theme .quick-project-fields label { font-size: 13px; }
+  html .inova-theme .project-builder.has-client-tabs .project-topbar { padding: 6px 0 12px; }
+  html .inova-theme .project-builder .quote-mode-switch > button:nth-child(-n+2) { flex: 1 1 0; min-width: 0; }
+  html .inova-theme .project-builder .quote-mode-switch.is-quick-mode small { display: none; }
+  html .inova-theme .project-builder .quick-project-setup { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: 36px minmax(48px, auto); gap: 6px 12px; margin-bottom: 16px; }
+  html .inova-theme .project-builder .quick-project-setup .quick-heading,
+  html .inova-theme .project-builder .quick-project-setup .quick-project-fields { display: contents; }
+  html .inova-theme .project-builder .quick-project-setup .quick-heading > div { display: none; }
+  html .inova-theme .project-builder .quick-project-setup .quick-project-fields > label { grid-column: 1; grid-row: 1 / 3; display: grid; grid-template-rows: 36px minmax(48px, auto); align-items: center; gap: 6px; font-weight: 600; }
+  html .inova-theme .project-builder .quick-project-setup .quick-round-toggle { grid-column: 2; grid-row: 1; align-self: center; min-height: 36px; padding: 4px 0; border: 0; background: transparent; font-size: 12px; }
+  html .inova-theme .project-builder .quick-project-setup .quick-project-fields > .component-material-field { grid-column: 2; grid-row: 2; min-width: 0; align-self: stretch; }
+  html .inova-theme .project-builder .quick-project-setup .component-material-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  html .inova-theme .project-builder .quick-project-setup .material-selection-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html .inova-theme .project-builder .quick-table-scroll { border: 0; border-radius: 0; overflow: visible; }
+  html .inova-theme .project-builder .quick-table { display: block; width: 100%; min-width: 0; }
+  html .inova-theme .quick-table thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; clip-path: inset(50%); overflow: hidden; white-space: nowrap; }
+  html .inova-theme .quick-table .quick-item-group { display: block; margin-bottom: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  html .inova-theme .quick-collapse-toggle { display: none; }
+  html .inova-theme .quick-table .quick-item-group[data-collapsed=true] [data-quick-row] > td:not(.quick-description, .quick-item-total, .quick-actions) { display: none; }
+  html .inova-theme .quick-table .quick-item-group[data-collapsed=true] .quick-description > .quick-mobile-label,
+  html .inova-theme .quick-table .quick-item-group[data-collapsed=true] .quick-description > .type-description-field,
+  html .inova-theme .quick-table .quick-item-group[data-collapsed=true] > .quick-info-row,
+  html .inova-theme .quick-table .quick-item-group[data-collapsed=true] > .quick-details-row { display: none; }
+  html .inova-theme .quick-table .quick-collapse-toggle { display: flex; width: 100%; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 10px; border: 0; background: transparent; color: var(--ink); text-align: left; font-size: 14px; font-weight: 650; }
+  html .inova-theme .quick-table .quick-collapse-toggle > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html .inova-theme .quick-table .quick-collapse-toggle > span:last-child { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); font-size: 20px; }
+  html .inova-theme .quick-table .quick-item-group[data-collapsed=true] .quick-item-total { border-top: 0; padding-top: 4px; }
+  html .inova-theme .quick-table [data-quick-row] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  html .inova-theme .project-builder .quick-table .quick-item-group tr > td { display: block; width: auto; min-width: 0; padding: 0; border: 0; text-align: left; white-space: normal; background: transparent; }
+  html .inova-theme .quick-table :is(.quick-description, .quick-item-total, .quick-actions) { grid-column: 1 / -1; }
+  html .inova-theme .quick-mobile-label { display: block; margin-bottom: 6px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+  html .inova-theme .quick-description > .quick-mobile-label { color: var(--ink); font-weight: 600; }
+  html .inova-theme .quick-area > span:last-child { display: flex; align-items: center; min-height: 48px; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  html .inova-theme .project-builder .quick-table .quick-item-group .quick-item-total { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; border-block: 1px solid var(--line); padding-block: 12px; }
+  html .inova-theme .quick-item-total .quick-mobile-label { margin: 0; }
+  html .inova-theme .quick-item-total strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+  html .inova-theme .quick-item-total small { width: 100%; }
+  html .inova-theme .quick-row-actions { display: flex; flex-wrap: nowrap; gap: 8px; }
+  html .inova-theme .quick-row-actions .quick-options-button { width: auto; min-width: 64px; min-height: 40px; flex: 0 0 auto; padding: 7px 10px; font-size: 12px; }
+  html .inova-theme .quick-row-actions button[aria-label^="Remover peça"] { width: 40px; min-width: 40px; min-height: 40px; flex: 0 0 40px; font-size: 20px; }
+  html .inova-theme .project-builder .quick-table .quick-item-group { display: block; margin: 0 0 12px; padding: 0; border: 0; background: transparent; }
+  html .inova-theme .project-builder .quick-table .quick-mobile-summary-row { display: block; }
+  html .inova-theme .project-builder .quick-table .quick-mobile-summary-row > td { display: block; width: auto; padding: 0; border: 0; }
+  html .inova-theme .project-builder .quick-mobile-card { display: grid; grid-template-columns: minmax(0, 1fr) max-content auto; align-items: center; gap: 10px; min-height: 84px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); box-shadow: 0 3px 12px #18251b0b; }
+  html .inova-theme .project-builder .quick-mobile-card-title { display: flex; min-width: 0; min-height: 48px; align-items: center; justify-content: space-between; gap: 4px; overflow: hidden; padding: 4px 0; border: 0; background: transparent; color: var(--ink); text-align: left; font-size: clamp(15px, 4.5vw, 19px); font-weight: 700; }
+  html .inova-theme .project-builder .quick-mobile-card-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html .inova-theme .project-builder .quick-mobile-card-title svg { width: 17px; height: 17px; flex: 0 0 17px; fill: none; stroke: var(--muted); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
+  html .inova-theme .project-builder .quick-mobile-card-total { justify-self: center; color: var(--ink); white-space: nowrap; font-size: clamp(14px, 4.1vw, 19px); font-weight: 750; font-variant-numeric: tabular-nums; }
+  html .inova-theme .project-builder .quick-mobile-card-actions { display: flex; align-items: center; gap: 6px; }
+  html .inova-theme .project-builder .quick-mobile-card-actions > button { display: grid; place-items: center; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); color: var(--green); }
+  html .inova-theme .project-builder .quick-mobile-card-actions > .quick-options-button { width: 40px; min-width: 40px; }
+  html .inova-theme .project-builder .quick-mobile-card-actions .quick-options-button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 1.8; }
+  html .inova-theme .project-builder .quick-mobile-card-actions .quick-options-button svg circle { fill: var(--canvas); }
+  html .inova-theme .project-builder .quick-mobile-card-actions .quick-options-button span { display: none; }
+  html .inova-theme .project-builder .quick-mobile-card-actions > .quick-mobile-card-remove { color: var(--muted); font-size: 25px; font-weight: 400; }
+  html .inova-theme .project-builder .quick-table .quick-item-group[data-collapsed="true"] [data-quick-row] { display: none; }
+  html .inova-theme .project-builder .quick-table .quick-item-group[data-collapsed="true"] > .quick-info-row { display: none; }
+  html .inova-theme .project-builder .quick-table .quick-item-group[data-collapsed="true"] > .quick-details-row:not([hidden]) { display: block; }
+  html .inova-theme .project-builder .quick-table .quick-item-group tr[data-quick-row] { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  html .inova-theme .project-builder .quick-table .quick-item-group tr[data-quick-row] > .quick-item-total,
+  html .inova-theme .project-builder .quick-table .quick-item-group tr[data-quick-row] > .quick-actions { display: none; }
+  html .inova-theme .project-builder .quick-table .quick-collapse-toggle { display: none; }
+  html .inova-theme .quick-details-row, html .inova-theme .quick-info-row { display: block; margin-top: 14px; }
+  html .inova-theme .quick-details-row[hidden] { display: none !important; }
+  html .inova-theme .quick-details-row .quick-services { padding: 12px 0 0; border-top: 1px solid var(--line); background: transparent; }
+  html .inova-theme .quick-material-override { grid-template-columns: minmax(0,1fr); gap: 7px; }
+  html .inova-theme .quick-material-controls { gap: 6px; }
+  html .inova-theme .quick-material-controls .component-material-field { flex: 1 1 auto; }
+  html .inova-theme .quick-use-project-material { min-height: 40px; padding: 6px 8px; font-size: 10px; }
+  html .inova-theme .quick-piece-finishes-heading { align-items: center; flex-direction: row; }
+  html .inova-theme .quick-piece-finishes-heading .text-button { width: auto; min-height: 36px; padding: 6px 9px; white-space: nowrap; text-align: center; font-size: 11px; }
+  html .inova-theme .quick-sides { grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .quick-sides > div { border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  html .inova-theme .quick-sides small { font-size: 12px; line-height: 1.5; }
+  html .inova-theme .quick-add-item { width: 100%; border-style: dashed; min-height: 48px; }
+  html .inova-theme .quick-project-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  html .inova-theme .quick-project-actions button { min-height: 46px; font-size: 13px; text-align: left; }
+  html .inova-theme .quick-assembly-service { display: grid; gap: 10px; font-size: 14px; }
+  html .inova-theme .quick-assembly-service input[aria-label] { max-width: none; width: 100%; }
+  html .inova-theme .type-description-form { grid-template-columns: minmax(0, 1fr) 44px; }
+  html .inova-theme .type-description-form input { grid-column: 1 / -1; }
+  html .inova-theme .quick-price { max-width: none; font-size: 13px; }
+  html .inova-theme .quick-service-prices label { grid-template-columns: minmax(0, 1fr); }
+
+  /* Escolhas e diálogos: rolagem contida e controles ao alcance do toque. */
+  html .inova-theme .project-builder .component-material-picker .picker-summary { min-height: 48px; font-size: 14px; }
+  html .inova-theme .project-builder .component-material-picker .material-selection-text { white-space: normal; overflow-wrap: anywhere; }
+  html .inova-theme .project-builder .component-material-picker .material-picker-panel,
+  html .inova-theme .material-picker-panel { position: static; width: 100%; max-width: 100%; max-height: 45dvh; margin-top: 6px; box-shadow: none; padding: 8px; overscroll-behavior: contain; }
+  html .inova-theme .material-picker-panel .material { display: flex; flex-wrap: wrap; align-items: center; min-height: 62px; padding: 10px; gap: 8px; }
+  html .inova-theme .material-picker-panel .material strong { white-space: normal; font-size: 13px; overflow-wrap: anywhere; }
+  html .inova-theme .material-picker-panel .material-price { margin-left: auto; font-size: 13px; }
+  html .inova-theme .material-picker-panel .material-name { flex: 1 1 100px; }
+  html .inova-theme :is(.catalog-modal-backdrop, .quick-services-modal-backdrop) { padding: 8px; }
+  html .inova-theme :is(.catalog-modal, .quick-services-modal, .customer-dialog) { width: calc(100vw - 16px); max-width: 540px; max-height: calc(100dvh - 24px); padding: 16px; border-radius: 14px; overflow-y: auto; overscroll-behavior: contain; }
+  html .inova-theme :is(.catalog-modal > header, .quick-services-modal > header, .customer-dialog-heading) { align-items: flex-start; gap: 12px; }
+  html .inova-theme :is(.catalog-modal > header button, .quick-services-modal > header button, .customer-dialog-heading > button) { flex: 0 0 44px; min-width: 44px; min-height: 44px; }
+  html .inova-theme .quick-services-modal footer { position: sticky; bottom: -16px; margin: 16px -16px -16px; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); background: var(--surface); z-index: 1; }
+  html .inova-theme .quick-services-modal footer button { width: 100%; min-height: 48px; }
+  html .inova-theme :is(.quick-modal-service-list, .quick-modal-simple-list) { grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .quick-modal-service-list legend { font-size: 13px; }
+  html .inova-theme :is(.quick-inline-sides label, .quick-modal-simple-list label) { min-height: 44px; font-size: 13px; white-space: normal; gap: 8px; }
+  html .inova-theme .quick-service-choice { flex-wrap: wrap; }
+  html .inova-theme .customer-dialog .customer-form { grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .customer-mode-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  html .inova-theme .customer-mode-tabs button { flex: 1; }
+
+  /* Resumo completo na página e atalho enquanto se preenchem as peças. */
+  html .inova-theme .project-builder .quote-summary-card { position: static; width: 100%; max-height: none; margin: 0; padding: 16px; font-size: 13px; scroll-margin-top: 16px; }
+  html .inova-theme .project-builder .quote-visual-card { display: none; }
+  html .inova-theme .quote-summary-card > span { gap: 12px; align-items: baseline; }
+  html .inova-theme .quote-summary-card b { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  html .inova-theme .quote-summary-card > label { display: grid; gap: 8px; }
+  html .inova-theme .quote-summary-actions :is(button, select) { width: 100%; min-height: 48px; font-size: 14px; }
+  html .inova-theme .quote-summary-actions select { font-size: 16px; }
+  html .inova-theme .mobile-quote-bar { position: fixed; inset: auto 0 0; z-index: 18; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -6px 24px #00000010; }
+  html .inova-theme .mobile-quote-bar > div { min-width: 0; display: grid; gap: 3px; }
+  html .inova-theme .mobile-quote-bar small { font-size: 11px; color: var(--muted); }
+  html .inova-theme .mobile-quote-bar strong { font-size: 19px; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  html .inova-theme .mobile-quote-bar button { flex-shrink: 0; min-height: 46px; font-size: 13px; }
+  html .inova-theme .mobile-quote-bar[data-summary-visible=true],
+  html .inova-theme:has(input:focus, textarea:focus, select:focus, dialog[open]) .mobile-quote-bar { display: none; }
+
+  /* Listas, acompanhamento e formulários administrativos. */
+  html .inova-theme .list-header { align-items: flex-start; gap: 12px; }
+  html .inova-theme .list-header h1 { font-size: 28px; }
+  html .inova-theme .list-header a { display: inline-flex; align-items: center; min-height: 44px; }
+  html .inova-theme :is(.quote-filter-row, .customer-toolbar, .quote-workbench-general, .quote-workbench-deadlines, .quote-workbench-team, .user-form) { display: grid; grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .quote-filter-row label { min-width: 0; }
+  html .inova-theme .quote-filter-row :is(input, select) { width: 100%; }
+  html .inova-theme .quote-workbench-tabs { display: flex; overflow-x: auto; flex-wrap: nowrap; }
+  html .inova-theme .quote-workbench-tabs button { flex: 0 0 auto; min-height: 46px; }
+  html .inova-theme :is(.detail-actions, .customer-history-actions, .remount-document-actions .detail-actions, .user-form-actions) { display: flex; flex-wrap: wrap; gap: 8px; }
+  html .inova-theme .detail-actions > :is(button, a, div),
+  html .inova-theme .user-form-actions > button { flex: 1 1 140px; min-width: 0; }
+  html .inova-theme .detail-actions :is(button, a) { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; white-space: normal; }
+  html .inova-theme :is(.worker-row, .admin-rows article) { flex-wrap: wrap; gap: 12px; }
+  html .inova-theme .worker-row-info { flex: 1 1 180px; min-width: 0; }
+  html .inova-theme .worker-row-info :is(strong, small) { overflow-wrap: anywhere; }
+  html .inova-theme .worker-row-divider { display: none; }
+  html .inova-theme .dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  html .inova-theme .dashboard-kpis .detail-card { padding: 14px; }
+  html .inova-theme .dashboard-kpis strong { font-size: 23px; overflow-wrap: anywhere; }
+  html .inova-theme .dashboard-stages { grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .dashboard-filters { display: grid; grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .dashboard-table-wrap { overscroll-behavior-x: contain; }
+  html .inova-theme .remount-piece-info { grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .remount-individual-values label { grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .remount-document-actions > label { max-width: none; }
+  html .inova-theme .technical-drawing { min-width: 0; max-width: 100%; }
+  html .inova-theme .technical-drawing svg { max-width: 100%; height: auto; }
+  html .inova-theme .technical-workspace { grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .technical-canvas-scroll { max-width: 100%; overscroll-behavior: contain; }
+  html .inova-theme .technical-save-state { flex-wrap: wrap; }
+
+  /* Mostruário: informações e simulação empilhadas, fotos preservadas. */
+  html .inova-theme .showcase-hero { margin: 12px; padding: 28px 20px; min-height: 0; }
+  html .inova-theme .showcase-hero h1 { font-size: 36px; }
+  html .inova-theme .showcase-featured { position: static; width: 100%; grid-template-columns: 64px minmax(0, 1fr); margin-top: 24px; }
+  html .inova-theme .showcase-featured > img { width: 64px; height: 96px; }
+  html .inova-theme .showcase-featured h2 { font-size: 23px; }
+  html .inova-theme .showcase-featured-actions { grid-column: 1 / -1; }
+  html .inova-theme .showcase-featured-actions > * { flex: 1 1 100%; min-height: 44px; }
+  html .inova-theme .showcase-collection-strip { position: static; margin-top: 20px; width: 100%; }
+  html .inova-theme .showcase-strip-items { min-width: 0; overflow-x: auto; }
+  html .inova-theme .showcase-catalog { padding: 24px 12px; }
+  html .inova-theme .showcase-filters { flex-wrap: wrap; }
+  html .inova-theme .showcase-filters button { min-height: 44px; }
+  html .inova-theme .showcase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  html .inova-theme .showcase-material-card { min-width: 0; }
+  html .inova-theme .ambientes-showcase { margin: 0 12px 24px; padding: 14px; }
+  html .inova-theme .ambientes-layout { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  html .inova-theme .ambientes-heading { flex-wrap: wrap; gap: 10px; }
+  html .inova-theme .ambientes-tabs { max-width: 100%; }
+  html .inova-theme .ambientes-swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); max-height: 300px; }
+  html .inova-theme .login-screen { padding: 24px 18px; gap: 24px; }
+  html .inova-theme .login-atmosphere { min-height: 150px; padding: 24px; }
+  html .inova-theme .login-atmosphere h2 { font-size: 29px; }
+}
+
+@media screen and (max-width: 360px) {
+  html .inova-theme .quick-table .quick-item-group { padding: 10px; }
+  html .inova-theme .dashboard-kpis { grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme .mobile-quote-bar { padding-inline: 12px; gap: 8px; }
+  html .inova-theme .mobile-quote-bar strong { font-size: 17px; }
+}
