@@ -425,9 +425,14 @@ button:not(:disabled) { cursor: pointer; }
 .saved-quote-card { min-width: 0; padding: 16px; background: #fff; border: 1px solid #e7ded1; border-radius: 12px; }
 .saved-quote-card > .quote-card { border: 0; padding: 0 0 12px; }
 .saved-quote-card .detail-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; }
-.saved-drawings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; min-height: 120px; }
-.saved-drawings > section { min-width: 0; }
-.saved-drawings h3 { font-size: 15px; margin: 8px 0; }
+/* Colunas montadas em SavedDrawings.tsx: cada projeto entra na coluna mais curta. */
+.saved-drawings { display: flex; align-items: flex-start; gap: 16px; min-height: 120px; }
+.saved-drawings-column { flex: 1 1 0; min-width: 0; display: grid; gap: 16px; }
+.saved-drawing-card { min-width: 0; padding: 12px; border: 1px solid var(--tom-borda); border-radius: 12px; background: var(--tom-fundo); }
+.saved-drawing-card.tom-1 { --tom-fundo: #edf4fb; --tom-borda: #d3e3f3; }
+.saved-drawing-card.tom-2 { --tom-fundo: #edf7ef; --tom-borda: #d2e9d7; }
+.saved-drawing-card.tom-3 { --tom-fundo: #f4effa; --tom-borda: #e2d7f0; }
+.saved-drawings h3 { font-size: 15px; margin: 0 0 8px; }
 .saved-drawings .technical-drawing { margin: 0; }
 .quote-linker { margin: 0 0 20px; padding: 16px; border: 1px solid #e7ded1; border-radius: 12px; background: #fffdf8; }
 .quote-linker summary { cursor: pointer; font-weight: 600; }
