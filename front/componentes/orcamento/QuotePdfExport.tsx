@@ -6,6 +6,26 @@ import { nomeArquivoPdf } from '@inova/domain';
 import { abrirPdf } from '../../utilitarios/abrir-pdf';
 import styles from './QuotePdfExport.module.css';
 
+/** Abre só as folhas de OS de um projeto, prontas para imprimir, sem a folha comercial. */
+export function ImprimirDesenhoProjeto({ quoteId, itemId, quoteNumber, customerName, projectName }: { quoteId: string; itemId: string; quoteNumber: string; customerName: string; projectName: string }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  async function imprimir() {
+    if (loading) return;
+    setLoading(true); setError('');
+    try {
+      const file = await buscarArquivoApi(`/quotes/${quoteId}/items/${itemId}/drawing-pdf`);
+      abrirPdf(file, nomeArquivoPdf(customerName, `${quoteNumber} - ${projectName}`));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível gerar o desenho.');
+    } finally { setLoading(false); }
+  }
+  return <>
+    <button type="button" className={`secondary-button ${styles.printDrawing}`} disabled={loading} onClick={imprimir}>{loading ? 'Gerando…' : 'Imprimir desenho'}</button>
+    {error && <p role="alert" className="form-error">{error}</p>}
+  </>;
+}
+
 export function ExportarPdfOrcamento({ quoteId, quoteNumber, customerName, hasDrawings = true }: { quoteId: string; quoteNumber: string; customerName: string; hasDrawings?: boolean }) {
   const panelId = useId();
   const [open, setOpen] = useState(false);

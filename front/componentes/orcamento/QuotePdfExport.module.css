@@ -9,3 +9,5 @@
   :global(html.inova-dark) .panel small { color: var(--muted); }
 }
 @media (max-width: 640px) { .panel { position: static; margin-top: 8px; } }
+/* No cartão do projeto (grid), o botão fica do tamanho do texto, não da largura toda. */
+.printDrawing { justify-self: start; }
