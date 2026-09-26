@@ -94,7 +94,8 @@ describe('Desenho e observações do PDF', () => {
     const result = await render(input, 'os-descricoes-por-peca');
     const drawings = result.rectangles.filter((call) => call[2] === 170);
     expect(drawings).toHaveLength(2);
-    drawings.forEach((call, index) => expect(call[3] / call[2]).toBeCloseTo(pieces[index].widthMm / pieces[index].lengthMm));
+    // Peças estreitas ganham espessura visual mínima; as cotas mantêm a medida real.
+    drawings.forEach((call) => expect(call[3]).toBeCloseTo(24));
     expect(result.text).toContain('5 cm');
     expect(result.text).toContain('3 cm');
     const leftTitle = result.printed.find((call) => call[0] === '1. cozinha')!;
@@ -102,7 +103,7 @@ describe('Desenho e observações do PDF', () => {
     expect(leftTitle[1]).toBe(36);
     expect(rightTitle[1]).toBe(299);
     expect(leftTitle[2]).toBe(rightTitle[2]);
-    const rightMaterial = result.printed.find((call) => call[0] === '2. Branco Dallas')!;
+    const rightMaterial = result.printed.find((call) => call[0] === '2. Branco Dallas / 1 peça')!;
     expect(Number(rightTitle[2])).toBeGreaterThan(Number(rightMaterial[2]));
     expect(result.printed.find((call) => call[0] === 'Acabamento simples no lado Superior - 3 m')![1]).toBe(40);
     expect(result.printed.find((call) => call[0] === 'Acabamento simples no lado Superior - 1 m')![1]).toBe(303);
@@ -124,7 +125,7 @@ describe('Desenho e observações do PDF', () => {
       expect(call?.[1]).toBe(303);
     }
     const lastCutout = result.printed.findIndex((entry) => String(entry[0]).includes('Corte 45.'));
-    expect(result.printed.findIndex((entry) => entry[0] === '3. Verde Ubatuba')).toBeGreaterThan(lastCutout);
+    expect(result.printed.findIndex((entry) => entry[0] === '3. Verde Ubatuba / 1 peça')).toBeGreaterThan(lastCutout);
   });
   it('segue a referência da OS: material acima, descrição sutil e lados padronizados', async () => {
     const piece = { ...component(sides.map((side) => { const lengthMm = ['FRONT', 'BACK'].includes(side) ? 2530 : 120; return { ...edge(side, 'Acabamento Simples'), lengthMm, billedQuantity: lengthMm / 1000 }; })), label: 'PEDRA', componentType: 'OTHER', orientation: 'HORIZONTAL', lengthMm: 2530, widthMm: 120, billableArea: 0.3036 };
@@ -138,7 +139,7 @@ describe('Desenho e observações do PDF', () => {
     expect(os).not.toContain('aplicações por peça');
     for (const [side, length] of [['Inferior', '2,53'], ['Superior', '2,53'], ['Esquerdo', '0,12'], ['Direito', '0,12']]) expect(os).toContain(`Acabamento Simples no lado ${side} - ${length} m`);
     expect(result.text).not.toMatch(/frontal|traseiro|inferior no desenho|superior no desenho|linear por aplicação|\b(?:FRONT|BACK|LEFT|RIGHT|up|down|left|right)\b/);
-    const materialIndex = result.printed.findIndex((call) => call[0] === '1. Cinza Corumbazinho');
+    const materialIndex = result.printed.findIndex((call) => call[0] === '1. Cinza Corumbazinho / 1 peça');
     const material = result.printed[materialIndex];
     const dimension = result.printed.slice(materialIndex + 1).find((call) => call[0] === '2,53 m')!;
     expect(Number(material[2])).toBeLessThan(Number(dimension[2]));

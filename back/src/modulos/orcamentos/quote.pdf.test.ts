@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import PDFDocument from 'pdfkit';
-import { renderizarPdfOrcamento } from './quote.pdf.js';
+import { renderizarPdfOrcamento, renderizarPdfDesenhoProjeto } from './quote.pdf.js';
 import { montarLinhasPdf } from './quote.pdf-lines.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
@@ -65,7 +65,7 @@ describe('Opções e agrupamento comercial do PDF', () => {
     const result = await render(1000, [{ ...item, materialNameSnapshot, components: [component] }], 'nome-material-verde', undefined, { individualPrices: false, drawings: true });
     const texts = result.calls.map(([text]) => text);
     expect(texts).toContain('VERDE UBATUBA');
-    expect(texts).toContain('1. Verde Ubatuba');
+    expect(texts).toContain('1. Verde Ubatuba / 1 peça');
     expect(texts.filter(text => text.includes('VERDE') || text.includes('Verde')).every(text => !text.includes('\n'))).toBe(true);
     const materialLines = result.fragments.filter(([text]) => /VERDE|UBATUBA/.test(text));
     expect(materialLines).toHaveLength(1);
@@ -288,5 +288,29 @@ describe('Condição de pagamento Pix no PDF', () => {
     expect(normal[2]).toBeGreaterThan(120);
     expect(pix[2]).toBeCloseTo(Number(normal[2]) + 19, 5);
     expect(result.pages).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('Desenho de um único projeto', () => {
+  it('imprime só as folhas de OS do projeto escolhido, com o número da OS completa', async () => {
+    const detalhado = { drawingData: { entryMode: 'DETAILED', detailingStatus: 'COMPLETED' } };
+    const component = { id: 'top', label: 'Bancada', lengthMm: 2000, widthMm: 600, quantity: 1, billableArea: 1.2, edges: [] };
+    const items = [
+      { ...item, ...detalhado, id: 'cozinha', projectName: 'Cozinha', components: [component] },
+      { ...item, ...detalhado, id: 'banheiro', projectName: 'Banheiro', components: [component] },
+    ];
+    const pdf = new PDFDocument({ margin: 36 });
+    const printed = vi.spyOn(pdf, 'text');
+    const pages = vi.spyOn(pdf, 'addPage');
+    const finished = new Promise<void>((resolve) => { pdf.on('data', () => undefined); pdf.on('end', resolve); });
+    renderizarPdfDesenhoProjeto(pdf, { number: 'OS-1', customerNameSnapshot: 'Cliente', items }, 'banheiro');
+    pdf.end();
+    await finished;
+    const texts = printed.mock.calls.map(([text]) => String(text));
+    expect(texts).toContain('2. Banheiro · Bancada');
+    expect(texts.some((text) => text.includes('Cozinha'))).toBe(false);
+    expect(texts).not.toContain('À VISTA');
+    // A primeira folha do documento já é a folha de desenho.
+    expect(pages.mock.calls).toHaveLength(0);
   });
 });

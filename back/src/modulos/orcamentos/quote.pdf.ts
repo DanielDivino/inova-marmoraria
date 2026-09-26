@@ -16,6 +16,13 @@ const hasMiterFinish = (component: any) => (component.edges ?? []).some((edge: a
 const materialTitleFontSize = 13;
 const materialDimensionGap = 4;
 
+/** Título acima do desenho: número, material e quantidade de peças (ex.: "3. Preto Escovado / 10 peças"). */
+const tituloMaterialDesenho = (component: any, materialName: unknown) => {
+  const quantidade = Number(component.quantity);
+  const pecas = quantidade > 0 ? ` / ${quantidade} ${quantidade === 1 ? 'peça' : 'peças'}` : '';
+  return `${component.drawingNumber}. ${normalizarNomeMaterial(materialName)}${pecas}`;
+};
+
 const materialFontSize = (pdf: PdfDocument, text: string, width: number, initial = materialTitleFontSize, minimum = 7) => {
   let size = initial;
   while (size > minimum) {
@@ -60,19 +67,9 @@ const sillDetail = (pdf: PdfDocument, component: any, x: number, y: number) => {
   return py(210) + 8;
 };
 
-/** Renders the same simple technical drawing language used by the web SVG.
- * All dimensions are real millimetres; the scale is only visual and never
- * participates in the quote calculation.
- */
-const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], materialName: string, top: number, column = 0) => {
+/** Escala e altura visual de um desenho, usadas tanto para desenhá-lo quanto para reservar o espaço da linha. */
+const geometriaDesenho = (component: any) => {
   const peitorilDuplo = component.componentType === 'SILL' && component.sillTopWidthMm && component.sillBottomWidthMm;
-  const cellW = peitorilDuplo ? 150 : 250;
-  const areaX = 36 + column * 263;
-  const areaW = 250;
-  const materialTitle = `${component.drawingNumber}. ${normalizarNomeMaterial(materialName)}`;
-  const materialSize = materialFontSize(pdf, materialTitle, areaW);
-  const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialSize).heightOfString(materialTitle, { width: areaW, lineBreak: false });
-  const drawingTop = top + materialHeight + 8;
   // The minimum visual thickness keeps narrow pieces readable; labels retain real measurements.
   const maxW = peitorilDuplo ? 120 : 170;
   const maxH = 100;
@@ -80,14 +77,33 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   const widthMm = Math.max(1, Number(component.widthMm));
   const stripEdges: { side: string; serviceName: string; lengthMm: number; heightMm: number }[] = (component.edges ?? []).map((edge: any) => ({ side: edge.side, serviceName: finishName(edge), lengthMm: Number(edge.lengthMm ?? (['FRONT', 'BACK'].includes(edge.side) ? lengthMm : widthMm)), heightMm: Number(edge.heightMm) }));
   const { strips, extra } = faixasBordaPedra(stripEdges);
+  const { scaleX, scaleY } = escalasDesenhoTecnico(lengthMm, widthMm, extra, maxW, maxH);
+  const totalHeight = (widthMm + extra.top + extra.bottom) * scaleY;
+  // O perfil do peitoril duplo desce ~39 pt abaixo do centro da pedra; com 34 pt de caixa ele cabe na reserva da linha.
+  const alturaCaixa = peitorilDuplo ? Math.max(totalHeight, 34) : totalHeight;
+  return { peitorilDuplo, lengthMm, widthMm, strips, extra, scaleX, scaleY, totalHeight, alturaCaixa };
+};
+
+/** Renders the same simple technical drawing language used by the web SVG.
+ * All dimensions are real millimetres; the scale is only visual and never
+ * participates in the quote calculation. `caixa` is the drawing height
+ * reserved for the whole row; each drawing is centred inside it.
+ */
+const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], materialName: string, top: number, column = 0, caixa?: number) => {
+  const { peitorilDuplo, lengthMm, widthMm, strips, extra, scaleX, scaleY, totalHeight, alturaCaixa } = geometriaDesenho(component);
+  const cellW = peitorilDuplo ? 150 : 250;
+  const areaX = 36 + column * 263;
+  const areaW = 250;
+  const materialTitle = tituloMaterialDesenho(component, materialName);
+  const materialSize = materialFontSize(pdf, materialTitle, areaW);
+  const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialSize).heightOfString(materialTitle, { width: areaW, lineBreak: false });
+  const drawingTop = top + materialHeight + 8;
   const { left: leftExtra, right: rightExtra, top: topExtra, bottom: bottomExtra } = extra;
-  const { scaleX, scaleY } = escalasDesenhoTecnico(lengthMm, widthMm, { left: leftExtra, right: rightExtra, top: topExtra, bottom: bottomExtra }, maxW, maxH, 0);
   const width = lengthMm * scaleX;
   const height = widthMm * scaleY;
   const totalWidth = (lengthMm + leftExtra + rightExtra) * scaleX;
-  const totalHeight = (widthMm + topExtra + bottomExtra) * scaleY;
   const x = areaX + (cellW - totalWidth) / 2 + leftExtra * scaleX;
-  const y = drawingTop + 46 + (maxH - totalHeight) / 2 + topExtra * scaleY;
+  const y = drawingTop + 46 + ((caixa ?? alturaCaixa) - totalHeight) / 2 + topExtra * scaleY;
   const right = x + width;
   const bottom = y + height;
   pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(materialSize)
@@ -260,9 +276,13 @@ function pecasParaOrdemDeServico(item: any): { components: any[]; cutouts: any[]
   return { components, cutouts, production: true };
 }
 
-export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: QuotePdfOptions = { individualPrices: false, drawings: true }) {
+const rotuloEntrega = (quote: any) => {
   const deliveryDate = quote.deliveryDeadline ?? quote.dueDate;
-  const deliveryLabel = deliveryDate ? pdfDate(deliveryDate) : 'A definir';
+  return deliveryDate ? pdfDate(deliveryDate) : 'A definir';
+};
+
+export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: QuotePdfOptions = { individualPrices: false, drawings: true }) {
+  const deliveryLabel = rotuloEntrega(quote);
   header(pdf, 'ORÇAMENTO', quote);
   pdf.font('Helvetica-Bold').fontSize(8).fillColor('#17251f').text('CLIENTE:', 36, 124).font('Helvetica').text(quote.customerNameSnapshot, 92, 124);
   pdf.font('Helvetica-Bold').text('ENDEREÇO:', 36, 137).font('Helvetica').text(quote.workAddressSnapshot ?? 'Não informado', 92, 137);
@@ -416,13 +436,28 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
   // The signatures belong to the footer of the commercial sheet, regardless
   // of how much content the closing block has above them.
   assinaturasPdf(pdf, footerSignatureY);
+  if (options.drawings) renderizarFolhasDesenho(pdf, quote, deliveryLabel);
+}
 
-  const drawnItems = quote.items.filter((item: any) => projetoTemDesenho(item.drawingData));
-  if (!options.drawings || !drawnItems.length) return;
+/** Só as folhas de OS de um projeto, para imprimir o desenho sem a folha comercial. */
+export function renderizarPdfDesenhoProjeto(pdf: PdfDocument, quote: any, itemId: string) {
+  renderizarFolhasDesenho(pdf, quote, rotuloEntrega(quote), { itemId, aproveitarFolhaAtual: true });
+}
+
+/** Folhas de OS: desenho e descrição de fabricação de cada projeto com desenho. */
+function renderizarFolhasDesenho(pdf: PdfDocument, quote: any, deliveryLabel: string, { itemId, aproveitarFolhaAtual = false }: { itemId?: string; aproveitarFolhaAtual?: boolean } = {}) {
+  // O número de cada projeto é o da OS completa, mesmo quando só um é impresso.
+  const drawnItems = quote.items.filter((item: any) => projetoTemDesenho(item.drawingData))
+    .map((item: any, itemIndex: number) => ({ item, itemIndex }))
+    .filter(({ item }: { item: any }) => !itemId || item.id === itemId);
+  if (!drawnItems.length) return;
+  let y = 0;
+  let folhaVazia = aproveitarFolhaAtual;
   // Every drawing sheet can be identified independently in the workshop.
   // Keep the three header columns separate, including for long customer names.
   const newDrawingPage = () => {
-    pdf.addPage();
+    if (folhaVazia) folhaVazia = false;
+    else pdf.addPage();
     pdf.font('Helvetica-Bold').fontSize(10).fillColor('#17251f').text('OS', 451, 36, { width: 108, align: 'right' });
     const orderHeight = pdf.fontSize(10).heightOfString(quote.number, { width: 108 });
     pdf.text(quote.number, 451, 52, { width: 108, align: 'right' });
@@ -517,18 +552,21 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
       }
     }
   };
-  drawnItems.forEach((item: any, itemIndex: number) => {
+  drawnItems.forEach(({ item, itemIndex }: { item: any; itemIndex: number }, position: number) => {
     // Separate projects without charging the final project for an unused gap.
     // That trailing space could push a short observation onto its own sheet.
-    if (itemIndex > 0) y += 12;
+    if (position > 0) y += 12;
     const { components: pieceComponents, cutouts: cutoutsForDrawing, production } = pecasParaOrdemDeServico(item);
     const components = pieceComponents.map((component: any, index: number) => ({ ...component, drawingNumber: index + 1, drawingTitle: tituloComponenteProducao(component, index) }));
-    const drawingHeight = (component: any) => {
-      const materialTitle = `${component.drawingNumber}. ${normalizarNomeMaterial(component.materialNameSnapshot ?? item.materialNameSnapshot)}`;
+    // A linha reserva só a altura do desenho mais alto da dupla: peças finas
+    // não ocupam o espaço de uma bancada nem empurram um desenho sozinho para outra folha.
+    const caixaLinha = (index: number) => Math.max(0, ...components.slice(index, index + 2).map((component: any) => geometriaDesenho(component).alturaCaixa));
+    const drawingHeight = (component: any, caixa: number) => {
+      const materialTitle = tituloMaterialDesenho(component, component.materialNameSnapshot ?? item.materialNameSnapshot);
       const materialSize = materialFontSize(pdf, materialTitle, 250);
       const materialHeight = pdf.font('Helvetica-Bold').fontSize(materialSize).heightOfString(materialTitle, { width: 250, lineBreak: false });
       const sillDetailHeight = component.componentType === 'SILL' && !(component.sillTopWidthMm && component.sillBottomWidthMm) ? 108 : 0;
-      return materialHeight + 188 + (hasMiterFinish(component) ? 14 : 0) + sillDetailHeight;
+      return materialHeight + 88 + caixa + (hasMiterFinish(component) ? 14 : 0) + sillDetailHeight;
     };
     const descriptions = components.map((component: any) => {
       const lines = descricaoProducaoComponente({ ...component, edges: (component.edges ?? []).map((edge: any) => production ? { ...edge, serviceName: edge.serviceNameSnapshot } : ({ ...edge,
@@ -540,7 +578,8 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
       return { title: component.drawingTitle, rows: descriptionRows(component.drawingTitle, lines) };
     });
     const rowReservation = (index: number) => {
-      const drawings = Math.max(0, ...components.slice(index, index + 2).map(drawingHeight));
+      const caixa = caixaLinha(index);
+      const drawings = Math.max(0, ...components.slice(index, index + 2).map((component: any) => drawingHeight(component, caixa)));
       const details = Math.max(0, ...descriptions.slice(index, index + 2).map((description: { rows: DescriptionRow[] }) => description.rows.reduce((sum, row) => sum + row.height, 8)));
       return drawings + details <= 580 ? drawings + details : drawings + Math.min(details, 60);
     };
@@ -553,13 +592,14 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     for (let componentIndex = 0; componentIndex < components.length; componentIndex += 2) {
       ensureSpace(rowReservation(componentIndex));
       const rowTop = y;
+      const caixa = caixaLinha(componentIndex);
       const left = components[componentIndex];
       const leftCutouts = cutoutsForDrawing.filter((cutout: any) => cutout.componentId === left.id);
-      let rowBottom = technicalComponent(pdf, left, leftCutouts, left.materialNameSnapshot ?? item.materialNameSnapshot, rowTop, 0);
+      let rowBottom = technicalComponent(pdf, left, leftCutouts, left.materialNameSnapshot ?? item.materialNameSnapshot, rowTop, 0, caixa);
       const right = components[componentIndex + 1];
       if (right) {
         const rightCutouts = cutoutsForDrawing.filter((cutout: any) => cutout.componentId === right.id);
-        rowBottom = Math.max(rowBottom, technicalComponent(pdf, right, rightCutouts, right.materialNameSnapshot ?? item.materialNameSnapshot, rowTop, 1));
+        rowBottom = Math.max(rowBottom, technicalComponent(pdf, right, rightCutouts, right.materialNameSnapshot ?? item.materialNameSnapshot, rowTop, 1, caixa));
       }
       y = rowBottom;
       writeComponentColumns(descriptions.slice(componentIndex, componentIndex + 2));

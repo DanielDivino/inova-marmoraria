@@ -1,6 +1,6 @@
 import { escopoOrcamentos, exigirOrcamentoProprio, exigirPermissao } from '../../compartilhado/acesso.js';
 import { serializarOrcamento } from './serializacao.js';
-import { nomeArquivoPdf, disposicaoArquivoPdf, itemSalvoParaCopia } from '@inova/domain';
+import { nomeArquivoPdf, disposicaoArquivoPdf, itemSalvoParaCopia, projetoTemDesenho } from '@inova/domain';
 import PDFDocument from 'pdfkit';
 import { Prisma } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
@@ -11,7 +11,7 @@ import { AppError, idSchema } from '../../compartilhado/http.js';
 import { createQuoteSchema, quoteItemSchema, updateQuoteItemSchema, updateQuoteSchema, updateStatusSchema, calculateQuoteSchema } from './quote.schema.js';
 import { adicionarItemOrcamento, criarOrcamento, editarOrcamento, incluirOrcamento, recalcularOrcamento, validarDesconto } from './quote.service.js';
 import { editQuoteSchema } from './quote.schema.js';
-import { renderizarPdfOrcamento } from './quote.pdf.js';
+import { renderizarPdfOrcamento, renderizarPdfDesenhoProjeto } from './quote.pdf.js';
 import { quotePdfOptionsSchema } from './quote.pdf-options.js';
 import { montarFiltrosOrcamento, historySchema } from './quote.tracking.js';
 import { trackingSchema } from './quote.tracking.js';
@@ -134,5 +134,14 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     const quote = await prisma.quote.findUnique({ where: idSchema.parse(request.params), include: incluirOrcamento(request.user) }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
     const filename = nomeArquivoPdf(quote.customerNameSnapshot, quote.number);
     const pdf = new PDFDocument({ margin: 36 }); renderizarPdfOrcamento(pdf, quote, options); pdf.end(); return reply.type('application/pdf').header('Content-Disposition', disposicaoArquivoPdf(filename)).send(pdf);
+  });
+  // Desenho de um único projeto: só as folhas de OS, sem a folha comercial.
+  app.get('/:id/items/:itemId/drawing-pdf', authenticated, async (request, reply) => {
+    const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const quote = await prisma.quote.findUnique({ where: { id: params.id }, include: incluirOrcamento(request.user) }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
+    const item = quote.items.find((entry) => entry.id === params.itemId);
+    if (!item || !projetoTemDesenho(item.drawingData)) throw new AppError(404, 'Projeto sem desenho.', 'NOT_FOUND');
+    const filename = nomeArquivoPdf(quote.customerNameSnapshot, `${quote.number} - ${item.projectName || item.productType.name}`);
+    const pdf = new PDFDocument({ margin: 36 }); renderizarPdfDesenhoProjeto(pdf, quote, params.itemId); pdf.end(); return reply.type('application/pdf').header('Content-Disposition', disposicaoArquivoPdf(filename)).send(pdf);
   });
 }

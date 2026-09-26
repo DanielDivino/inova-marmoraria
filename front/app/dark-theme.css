@@ -303,6 +303,10 @@
   html.inova-dark .inova-theme .showcase-material-card em { background: var(--status-yellow-bg); color: var(--status-yellow-ink); }
   html.inova-dark .inova-theme .ambientes-scene-status { background: var(--soft); color: var(--muted); }
 
+  html.inova-dark .inova-theme .saved-drawing-card.tom-1 { --tom-fundo: #1d2731; --tom-borda: #33475a; }
+  html.inova-dark .inova-theme .saved-drawing-card.tom-2 { --tom-fundo: #1d2a22; --tom-borda: #35503f; }
+  html.inova-dark .inova-theme .saved-drawing-card.tom-3 { --tom-fundo: #272231; --tom-borda: #483d5a; }
+
   /* A folha técnica usa cores próprias para manter desenhos e cotas legíveis. */
   html.inova-dark .inova-theme .technical-drawing {
     --ink: #30342f; --muted: #62695f; --line: #d9ddd5;

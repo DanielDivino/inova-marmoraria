@@ -181,8 +181,10 @@
   html .inova-theme .customer-mode-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
   html .inova-theme .customer-mode-tabs button { flex: 1; }
 
-  /* Resumo completo na página e atalho enquanto se preenchem as peças. */
-  html .inova-theme .project-builder .quote-summary-card { position: static; width: 100%; max-height: none; margin: 0; padding: 16px; font-size: 13px; scroll-margin-top: 16px; }
+  /* O resumo fica na barra e só entra na tela quando aberto como painel. */
+  html .inova-theme .project-builder .quote-summary-card,
+  html .inova-theme .remount-page .quote-summary-card { display: none; }
+  html .inova-theme .project-builder .quote-summary-card { position: static; width: 100%; max-height: none; margin: 0; padding: 16px; font-size: 13px; }
   html .inova-theme .project-builder .quote-visual-card { display: none; }
   html .inova-theme .quote-summary-card > span { gap: 12px; align-items: baseline; }
   html .inova-theme .quote-summary-card b { flex-shrink: 0; font-variant-numeric: tabular-nums; }
@@ -190,12 +192,14 @@
   html .inova-theme .quote-summary-actions :is(button, select) { width: 100%; min-height: 48px; font-size: 14px; }
   html .inova-theme .quote-summary-actions select { font-size: 16px; }
   html .inova-theme .mobile-quote-bar { position: fixed; inset: auto 0 0; z-index: 18; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -6px 24px #00000010; }
+  html .inova-theme .mobile-summary-backdrop { position: fixed; inset: 0; z-index: 19; border: 0; border-radius: 0; background: rgb(0 0 0 / 42%); }
+  html .inova-theme .mobile-quote-bar[data-expanded="true"] { z-index: 22; }
+  html .inova-theme :is(.project-builder, .remount-page):has(.mobile-quote-bar[data-expanded="true"]) .quote-summary-card { position: fixed; z-index: 21; inset: auto 12px calc(76px + env(safe-area-inset-bottom)); display: grid; width: auto; max-width: none; max-height: min(72dvh, 680px); overflow-y: auto; margin: 0; padding: 16px; border-radius: 14px; box-shadow: 0 14px 48px rgb(0 0 0 / 25%); animation: mobile-summary-rise 180ms ease-out; }
   html .inova-theme .mobile-quote-bar > div { min-width: 0; display: grid; gap: 3px; }
   html .inova-theme .mobile-quote-bar small { font-size: 11px; color: var(--muted); }
   html .inova-theme .mobile-quote-bar strong { font-size: 19px; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   html .inova-theme .mobile-quote-bar button { flex-shrink: 0; min-height: 46px; font-size: 13px; }
-  html .inova-theme .mobile-quote-bar[data-summary-visible=true],
-  html .inova-theme:has(input:focus, textarea:focus, select:focus, dialog[open]) .mobile-quote-bar { display: none; }
+  html .inova-theme .project-builder:not(:has(.mobile-quote-bar[data-expanded="true"])):has(input:focus, textarea:focus, select:focus, dialog[open]) .mobile-quote-bar { display: none; }
 
   /* Listas, acompanhamento e formulários administrativos. */
   html .inova-theme .list-header { align-items: flex-start; gap: 12px; }
@@ -252,6 +256,15 @@
   html .inova-theme .login-screen { padding: 24px 18px; gap: 24px; }
   html .inova-theme .login-atmosphere { min-height: 150px; padding: 24px; }
   html .inova-theme .login-atmosphere h2 { font-size: 29px; }
+}
+
+@keyframes mobile-summary-rise {
+  from { opacity: 0; translate: 0 18px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html .inova-theme :is(.project-builder, .remount-page):has(.mobile-quote-bar[data-expanded="true"]) .quote-summary-card { animation: none; }
 }
 
 @media screen and (max-width: 360px) {
