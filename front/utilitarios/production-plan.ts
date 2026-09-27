@@ -177,3 +177,13 @@ export function aplicarSeguirDivisao(plano: ProductionPlan, sourceComponentId: s
 }
 
 export { planoDeProducao as lerPlanoDeProducao, comPlanoDeProducao as gravarPlanoDeProducao };
+
+/**
+ * Para salvar: o plano gravado no rascunho passa a seguir os componentes que vão
+ * ser enviados, igual ao que o editor já mostra. Uma peça removida ou trocada
+ * por outra não deixa origem órfã no plano (a API recusaria o orçamento).
+ */
+export function conciliarPlanoParaSalvar(item: DraftItem, servicos: { id: string; name: string }[] = []): DraftItem {
+  const plano = planoDeProducao(item.drawingData);
+  return plano ? { ...item, drawingData: comPlanoDeProducao(item.drawingData, reconciliarPlano(item, plano, servicos)) } : item;
+}
