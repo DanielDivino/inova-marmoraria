@@ -201,6 +201,9 @@
   html .inova-theme .mobile-quote-bar button { flex-shrink: 0; min-height: 46px; font-size: 13px; }
   html .inova-theme .project-builder:not(:has(.mobile-quote-bar[data-expanded="true"])):has(input:focus, textarea:focus, select:focus, dialog[open]) .mobile-quote-bar { display: none; }
 
+  /* O nome da página já está na barra do topo: o título repetido fica só para leitor de tela. */
+  html .inova-theme .titulo-no-topo { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
   /* Listas, acompanhamento e formulários administrativos. */
   html .inova-theme .list-header { align-items: flex-start; gap: 12px; }
   html .inova-theme .list-header h1 { font-size: 28px; }

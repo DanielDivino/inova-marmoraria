@@ -5,6 +5,7 @@ import { buscarArquivoApi } from '../../utilitarios/api';
 import { nomeArquivoPdf } from '@inova/domain';
 import { abrirPdf } from '../../utilitarios/abrir-pdf';
 import styles from './QuotePdfExport.module.css';
+import { Icone } from '../filtros/Filtros';
 
 /** Abre só as folhas de OS de um projeto, prontas para imprimir, sem a folha comercial. */
 export function ImprimirDesenhoProjeto({ quoteId, itemId, quoteNumber, customerName, projectName }: { quoteId: string; itemId: string; quoteNumber: string; customerName: string; projectName: string }) {
@@ -52,7 +53,7 @@ export function ExportarPdfOrcamento({ quoteId, quoteNumber, customerName, hasDr
   }
 
   return <div className={styles.export}>
-    <button type="button" className="text-button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>Orçamento / OS PDF</button>
+    <button type="button" className="botao-contorno" title="Orçamento ou OS em PDF" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}><Icone nome="download" />Exportar<Icone nome="seta" tamanho={16} /></button>
     {open && <section id={panelId} className={styles.panel} aria-label="Opções do PDF" onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
       <strong>Como deseja gerar o PDF?</strong>
       <label><input type="checkbox" checked={individualPrices} disabled={loading} onChange={event => setIndividualPrices(event.target.checked)} />Exibir valores individuais</label>

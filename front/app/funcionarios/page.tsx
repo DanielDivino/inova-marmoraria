@@ -1,11 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../utilitarios/api';
+import { CabecalhoEquipe } from '../../componentes/equipe/CabecalhoEquipe';
+import { AbasFiltro, Icone } from '../../componentes/filtros/Filtros';
 
 type Worker = { id: string; name: string | null; cpf: string | null; phone: string | null; workColor: string; isActive: boolean };
 const emptyWorker = { name: '', cpf: '', phone: '', workColor: '#607453', isActive: true };
+type Situacao = 'active' | 'incomplete' | 'inactive';
+/** Sem nome o cadastro está incompleto; inativo vale mais que incompleto. */
+const situacao = (worker: Worker): Situacao => !worker.isActive ? 'inactive' : worker.name?.trim() ? 'active' : 'incomplete';
+const normalizar = (valor: string) => valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
 const iniciais = (name: string | null) => {
   const palavras = name?.trim().split(/\s+/).filter(Boolean) ?? [];
   if (!palavras.length) return null;
@@ -18,6 +23,10 @@ export default function FuncionariosPage() {
   const [editingWorker, setEditingWorker] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [aba, setAba] = useState<'TODOS' | Situacao>('TODOS');
+  const [busca, setBusca] = useState('');
+  const visiveis = useMemo(() => workers.filter((worker) => (aba === 'TODOS' || situacao(worker) === aba)
+    && normalizar([worker.name, worker.cpf, worker.phone].filter(Boolean).join(' ')).includes(normalizar(busca.trim()))), [workers, aba, busca]);
   const requestVersion = useRef(0);
 
   const load = async () => {
@@ -54,24 +63,33 @@ export default function FuncionariosPage() {
   }
 
   return <main className="list-page catalog-admin-page">
-    <header className="list-header">
-      <Link href="/">← Orçamento</Link>
-      <div><span className="catalog-eyebrow">EQUIPE DA MARMORARIA</span><h1>Funcionários</h1></div>
-      <Link href="/orcamentos">Orçamentos</Link>
-    </header>
+    <CabecalhoEquipe />
 
-    <div className="catalog-toolbar">
-      <span className="catalog-toolbar-hint">Nenhuma informação é obrigatória — cadastre aos poucos.</span>
-      <button className="primary-button" type="button" onClick={() => { setWorkerForm(emptyWorker); setEditingWorker(''); }}>+ Criar funcionário</button>
+    <div className="barra-lista">
+      <button className="botao-destaque" type="button" onClick={() => { setWorkerForm(emptyWorker); setEditingWorker(''); }}><Icone nome="mais" />Criar funcionário</button>
+    </div>
+
+    <div className="barra-filtros" role="search" aria-label="Buscar funcionários">
+      <label className="barra-filtros-busca"><Icone nome="buscar" tamanho={20} /><input type="search" aria-label="Buscar funcionários" placeholder="Nome, CPF ou telefone" value={busca} onChange={(event) => setBusca(event.target.value)} /></label>
+      {/* Abas e "Limpar" juntos: se não couberem ao lado da busca, descem para a linha de baixo. */}
+      <div className="barra-filtros-abas">
+        <AbasFiltro rotulo="Filtrar funcionários" valor={aba} aoEscolher={(valor) => setAba(valor === aba ? 'TODOS' : valor)} grupos={[{ opcoes: [
+          { valor: 'TODOS', rotulo: 'Todos', icone: 'todos', total: workers.length },
+          { valor: 'active', rotulo: 'Ativos', icone: 'aprovado', total: workers.filter((worker) => situacao(worker) === 'active').length },
+          { valor: 'incomplete', rotulo: 'Cadastro incompleto', icone: 'incompleto', total: workers.filter((worker) => situacao(worker) === 'incomplete').length },
+          { valor: 'inactive', rotulo: 'Inativos', icone: 'inativo', total: workers.filter((worker) => situacao(worker) === 'inactive').length },
+        ] }]} />
+        <i className="barra-filtros-separador" aria-hidden="true" />
+        <button type="button" className="botao-contorno" disabled={aba === 'TODOS' && !busca} onClick={() => { setAba('TODOS'); setBusca(''); }}><Icone nome="limpar" />Limpar</button>
+      </div>
     </div>
 
     {error && <p className="form-error" role="alert">{error}</p>}
     {notice && <p className="catalog-notice" role="status">{notice}</p>}
 
     <div className="worker-admin-rows">
-      {workers.map(worker => {
-        const completo = Boolean(worker.name?.trim());
-        const status = !worker.isActive ? 'inactive' : completo ? 'active' : 'incomplete';
+      {visiveis.map(worker => {
+        const status = situacao(worker);
         return <article className="worker-row" key={worker.id}>
           <span className="worker-avatar" style={{ backgroundColor: `color-mix(in srgb, ${worker.workColor} 20%, white)`, color: worker.workColor }}>
             {iniciais(worker.name) ?? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>}
@@ -84,6 +102,7 @@ export default function FuncionariosPage() {
         </article>;
       })}
       {!workers.length && <p className="catalog-empty">Nenhum funcionário cadastrado ainda.</p>}
+      {!!workers.length && !visiveis.length && <p className="catalog-empty">Nenhum funcionário com esses filtros.</p>}
     </div>
 
     {editingWorker !== null && <div className="catalog-modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) closeWorkerForm(); }}>

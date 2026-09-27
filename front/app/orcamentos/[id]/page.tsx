@@ -9,6 +9,7 @@ import { StatusOrcamento } from '../../../componentes/QuoteStatus';
 import { useSession } from '../../../componentes/ApplicationShell';
 import { api } from '../../../utilitarios/api';
 import { ExportarPdfOrcamento, ImprimirDesenhoProjeto } from '../../../componentes/orcamento/QuotePdfExport';
+import { Icone } from '../../../componentes/filtros/Filtros';
 
 import { formatarMoeda } from '../../../utilitarios/formatadores';
 type Edge = { side: string; serviceNameSnapshot: string; billingUnitSnapshot?: string; billedQuantity: number; subtotal: number; calculatedSubtotal: number; appliedSubtotal: number };
@@ -19,7 +20,7 @@ type WorkerAssignment = { id: string; assignedAt: string; releasedAt?: string | 
 type TrackingTab = 'GENERAL' | 'TEAM' | 'DEADLINES' | 'NOTES' | 'HISTORY';
 type Quote = {
   parentQuote?: { id: string; number: string } | null; complements?: { id: string; number: string; netTotal: number }[];
-  number: string; createdAt?: string; status: string; executionStatus?: string; approvedAt?: string; completedAt?: string; validUntil?: string; dueDate?: string; deliveryDeadline?: string; installationDeadline?: string; deadlineConfirmed?: boolean; deadlineNote?: string | null; customerNameSnapshot: string; customerPhoneSnapshot?: string; workAddressSnapshot?: string;
+  number: string; customerId: string; createdAt?: string; status: string; executionStatus?: string; approvedAt?: string; completedAt?: string; validUntil?: string; dueDate?: string; deliveryDeadline?: string; installationDeadline?: string; deadlineConfirmed?: boolean; deadlineNote?: string | null; customerNameSnapshot: string; customerPhoneSnapshot?: string; workAddressSnapshot?: string;
   discountAmount: number; grossTotal: number; netTotal: number; notes?: string;
   workerAssignments?: WorkerAssignment[];
   items: (SavedQuoteItem & { id: string; materialNameSnapshot: string; unitPriceSnapshot: number; billedQuantity: number; materialSubtotal: number; total: number; calculationMode: 'DIMENSIONS' | 'MANUAL_M2'; productType: { name: string }; services: { serviceNameSnapshot: string; billedQuantity: number; unitPriceSnapshot: number; subtotal: number; calculatedSubtotal: number; appliedSubtotal: number; billingUnitSnapshot: string }[]; components: Component[]; cutouts: Cutout[] })[];
@@ -94,10 +95,20 @@ export default function QuoteDetailPage() {
   const situacaoPrazoInterno = obterStatusPrazo(quote);
   const activeWorker = quote.workerAssignments?.find((assignment) => !assignment.releasedAt);
   return <main className="list-page">
-    <header className="quote-detail-header">
-      <div className="quote-detail-heading"><Link href="/orcamentos">← Orçamentos</Link><h1>{quote.number}</h1><StatusOrcamento quote={quote} /></div>
-      <div className="quote-detail-header-actions">
-        {canTechnical && <button className="secondary-button" disabled={openingDesign} onClick={() => void openTechnicalDesign()}>{openingDesign ? 'Abrindo desenho…' : 'Desenho técnico'}</button>}
+    <header className="cabecalho-pagina">
+      <span className="cabecalho-pagina-icone"><Icone nome="documento" tamanho={28} /></span>
+      <div className="cabecalho-pagina-titulo">
+        <nav aria-label="Caminho"><Link href="/orcamentos">Orçamentos</Link><span aria-hidden="true">›</span></nav>
+        <h1>{quote.number}</h1>
+        <div className="cabecalho-pagina-etiquetas">
+          <span className="etiqueta-destaque" title="Data de emissão"><Icone nome="calendario" tamanho={16} />{dateLabel(quote.createdAt)}</span>
+          <Link className="etiqueta-destaque" href={`/clientes/${quote.customerId}`}><Icone nome="pessoa" tamanho={16} />Cliente: {quote.customerNameSnapshot}</Link>
+          <StatusOrcamento quote={quote} />
+        </div>
+      </div>
+      <div className="cabecalho-pagina-acoes">
+        <Link className="botao-destaque" href="/"><Icone nome="mais" />Novo orçamento</Link>
+        {canTechnical && <button type="button" className="botao-contorno" disabled={openingDesign} onClick={() => void openTechnicalDesign()}>{openingDesign ? 'Abrindo desenho…' : 'Desenho técnico'}</button>}
         <ExportarPdfOrcamento quoteId={id} quoteNumber={quote.number} customerName={quote.customerNameSnapshot} hasDrawings={quote.items.some(item => projetoTemDesenho(item.drawingData))} />
       </div>
     </header>

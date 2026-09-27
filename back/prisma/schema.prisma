@@ -33,7 +33,9 @@ enum QuoteStatus {
 enum ProjectWorkflowStatus {
   TODO
   IN_PROGRESS
+  /// "Produzido – entrega/montagem": produção terminada, aguardando entrega ou montagem.
   DONE
+  DELIVERED
 }
 
 enum ExecutionStatus {

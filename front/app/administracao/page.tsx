@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import Link from 'next/link';
 import { api, token } from '../../utilitarios/api';
 
 type BillingUnit = 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED';
@@ -12,6 +11,7 @@ type MaterialFilter = 'ALL' | 'WHITE' | 'BLACK' | 'GRANITE' | 'MARBLE' | 'ULTRAC
 type PhotoFilter = 'ALL' | 'WITH_IMAGE' | 'WITHOUT_IMAGE';
 type PriceFilter = 'ALL' | 'WITH_PRICE' | 'WITHOUT_PRICE';
 
+import { AbasFiltro, AtalhosCabecalho, Icone, ModalFiltros, useCelular } from '../../componentes/filtros/Filtros';
 import { formatarMoeda } from '../../utilitarios/formatadores';
 const unitLabel: Record<BillingUnit, string> = { SQUARE_METER: 'm²', LINEAR_METER: 'Metro linear', UNIT: 'Unidade', FIXED: 'Valor fixo' };
 const empty = { name: '', category: '', billingUnit: 'SQUARE_METER' as BillingUnit, price: '', isActive: true };
@@ -24,6 +24,8 @@ const materialFilters: { id: MaterialFilter; label: string }[] = [
   { id: 'ULTRACOMPACT', label: 'Ultracompacto' },
 ];
 
+const temFoto = (material: Material) => Boolean(material.images?.length);
+const temValor = (material: Material) => Number(material.currentPrice) > 0;
 const normalizar = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
 const imageSrc = (material: Material) => {
   const url = material.images?.find(image => image.isPrimary)?.url ?? material.images?.[0]?.url;
@@ -71,17 +73,16 @@ export default function AdministrationPage() {
   const rows = useMemo(() => {
     const term = normalizar(search);
     if (tab === 'materials') return materials.filter((material) => {
-      const hasImage = Boolean(material.images?.length);
-      const hasPrice = Number(material.currentPrice) > 0;
       return material.isActive
         && atendeFiltro(material, materialFilter)
-        && (photoFilter === 'ALL' || (photoFilter === 'WITH_IMAGE' ? hasImage : !hasImage))
-        && (priceFilter === 'ALL' || (priceFilter === 'WITH_PRICE' ? hasPrice : !hasPrice))
+        && (photoFilter === 'ALL' || (photoFilter === 'WITH_IMAGE') === temFoto(material))
+        && (priceFilter === 'ALL' || (priceFilter === 'WITH_PRICE') === temValor(material))
         && normalizar(`${material.name} ${material.category}`).includes(term);
     });
     return services.filter(service => normalizar(`${service.name} ${service.category}`).includes(term));
   }, [materials, services, tab, materialFilter, photoFilter, priceFilter, search]);
   const archivedMaterials = useMemo(() => materials.filter((material) => !material.isActive), [materials]);
+  const ativos = useMemo(() => materials.filter((material) => material.isActive), [materials]);
   const editingMaterial = useMemo(() => editing && tab === 'materials' ? materials.find((material) => material.id === editing) ?? null : null, [editing, materials, tab]);
 
   const closeForm = () => { setEditing(null); setForm(empty); };
@@ -151,11 +152,28 @@ export default function AdministrationPage() {
     }
   }
 
+  // Pedra, foto e valor ficam em "Mais filtros" (no celular, numa janela).
+  const [maisFiltros, setMaisFiltros] = useState(false);
+  const celular = useCelular();
+  const filtrosAtivos = [materialFilter !== 'ALL', photoFilter !== 'ALL', priceFilter !== 'ALL'].filter(Boolean).length;
+  const limparFiltros = () => { setSearch(''); setMaterialFilter('ALL'); setPhotoFilter('ALL'); setPriceFilter('ALL'); };
+  const abasMaterial = <>
+    <AbasFiltro variante="grade" rotulo="Filtrar por pedra" valor={materialFilter} aoEscolher={setMaterialFilter} grupos={[{ titulo: 'Pedra', opcoes: materialFilters.map((filter) => ({ valor: filter.id, rotulo: filter.label, icone: filter.id === 'ALL' ? 'todos' : 'pedra', total: ativos.filter((material) => atendeFiltro(material, filter.id)).length })) }]} />
+    <AbasFiltro variante="grade" rotulo="Filtrar por foto" valor={photoFilter} aoEscolher={setPhotoFilter} grupos={[{ titulo: 'Foto', opcoes: [
+      { valor: 'ALL', rotulo: 'Todas', icone: 'todos', total: ativos.length },
+      { valor: 'WITH_IMAGE', rotulo: 'Com foto', icone: 'foto', total: ativos.filter(temFoto).length },
+      { valor: 'WITHOUT_IMAGE', rotulo: 'Sem foto', icone: 'inativo', total: ativos.filter((material) => !temFoto(material)).length },
+    ] }]} />
+    <AbasFiltro variante="grade" rotulo="Filtrar por valor" valor={priceFilter} aoEscolher={setPriceFilter} grupos={[{ titulo: 'Valor', opcoes: [
+      { valor: 'ALL', rotulo: 'Todos', icone: 'todos', total: ativos.length },
+      { valor: 'WITH_PRICE', rotulo: 'Com valor', icone: 'valor', total: ativos.filter(temValor).length },
+      { valor: 'WITHOUT_PRICE', rotulo: 'Sem valor', icone: 'inativo', total: ativos.filter((material) => !temValor(material)).length },
+    ] }]} />
+  </>;
   return <main className="list-page catalog-admin-page">
     <header className="list-header">
-      <Link href="/">← Orçamento</Link>
-      <div><span className="catalog-eyebrow">CATÁLOGO DA MARMORARIA</span><h1>Materiais e serviços</h1></div>
-      <Link href="/orcamentos">Orçamentos</Link>
+      <div className="titulo-no-topo"><span className="catalog-eyebrow">CATÁLOGO DA MARMORARIA</span><h1>Materiais e serviços</h1></div>
+      <AtalhosCabecalho />
     </header>
 
     <div className="admin-tabs" role="tablist" aria-label="Catálogo">
@@ -163,26 +181,22 @@ export default function AdministrationPage() {
       <button type="button" role="tab" aria-selected={tab === 'services'} onClick={() => changeTab('services')} className={tab === 'services' ? 'selected' : ''}>Serviços e acabamentos</button>
     </div>
 
-    {tab === 'materials' && <div className="material-filter-bar" role="group" aria-label="Filtrar materiais">
-      <span>Pedra</span>
-      {materialFilters.map(filter => <button type="button" key={filter.id} aria-pressed={materialFilter === filter.id} className={materialFilter === filter.id ? 'selected' : ''} onClick={() => setMaterialFilter(filter.id)}>{filter.label}</button>)}
-      <i className="material-filter-separator" aria-hidden="true" />
-      <span>Foto</span>
-      <button type="button" aria-pressed={photoFilter === 'ALL'} className={photoFilter === 'ALL' ? 'selected' : ''} onClick={() => setPhotoFilter('ALL')}>Todas</button>
-      <button type="button" aria-pressed={photoFilter === 'WITH_IMAGE'} className={photoFilter === 'WITH_IMAGE' ? 'selected' : ''} onClick={() => setPhotoFilter('WITH_IMAGE')}>Com foto</button>
-      <button type="button" aria-pressed={photoFilter === 'WITHOUT_IMAGE'} className={photoFilter === 'WITHOUT_IMAGE' ? 'selected' : ''} onClick={() => setPhotoFilter('WITHOUT_IMAGE')}>Sem foto</button>
-      <i className="material-filter-separator" aria-hidden="true" />
-      <span>Valor</span>
-      <button type="button" aria-pressed={priceFilter === 'ALL'} className={priceFilter === 'ALL' ? 'selected' : ''} onClick={() => setPriceFilter('ALL')}>Todos</button>
-      <button type="button" aria-pressed={priceFilter === 'WITH_PRICE'} className={priceFilter === 'WITH_PRICE' ? 'selected' : ''} onClick={() => setPriceFilter('WITH_PRICE')}>Com valor</button>
-      <button type="button" aria-pressed={priceFilter === 'WITHOUT_PRICE'} className={priceFilter === 'WITHOUT_PRICE' ? 'selected' : ''} onClick={() => setPriceFilter('WITHOUT_PRICE')}>Sem valor</button>
-    </div>}
-
-    <div className="catalog-toolbar">
-      <input className="search" placeholder={tab === 'materials' ? 'Buscar material...' : 'Buscar serviço...'} value={search} onChange={event => setSearch(event.target.value)} />
-      {tab === 'materials' && <button className="secondary-button catalog-archive-button" type="button" onClick={() => setArchiveOpen(true)}>Arquivados <b>{archivedMaterials.length}</b></button>}
-      <button className="primary-button" type="button" onClick={() => { setForm(empty); setEditing(''); }}>+ Criar novo {tab === 'materials' ? 'material' : 'serviço'}</button>
+    <div className="barra-lista">
+      {tab === 'materials' && <button className="botao-contorno catalog-archive-button" type="button" onClick={() => setArchiveOpen(true)}>Arquivados <b>{archivedMaterials.length}</b></button>}
+      <button className="botao-destaque" type="button" onClick={() => { setForm(empty); setEditing(''); }}><Icone nome="mais" />Criar novo {tab === 'materials' ? 'material' : 'serviço'}</button>
     </div>
+
+    <form className="barra-filtros" role="search" aria-label="Buscar no catálogo" onSubmit={(event) => event.preventDefault()}>
+      <label className="barra-filtros-busca"><Icone nome="buscar" tamanho={20} /><input type="search" aria-label={tab === 'materials' ? 'Buscar material' : 'Buscar serviço'} placeholder={tab === 'materials' ? 'Nome ou categoria do material' : 'Nome ou categoria do serviço'} value={search} onChange={event => setSearch(event.target.value)} /></label>
+      {tab === 'materials' && <button type="button" className="botao-contorno" aria-expanded={maisFiltros} onClick={() => setMaisFiltros((aberto) => !aberto)}><Icone nome="filtro" />{celular ? 'Filtros' : 'Mais filtros'}{filtrosAtivos ? <b>{filtrosAtivos}</b> : null}</button>}
+      <i className="barra-filtros-separador" aria-hidden="true" />
+      <button type="button" className="botao-contorno" disabled={!search && !filtrosAtivos} onClick={limparFiltros}><Icone nome="limpar" />Limpar</button>
+      {tab === 'materials' && !celular && maisFiltros && <div className="barra-filtros-mais">{abasMaterial}</div>}
+    </form>
+    {tab === 'materials' && celular && <ModalFiltros aberto={maisFiltros} aoFechar={() => setMaisFiltros(false)} titulo="Filtros de materiais"
+      rodape={<><button type="button" className="botao-contorno" disabled={!filtrosAtivos} onClick={limparFiltros}><Icone nome="limpar" />Limpar</button><button type="button" className="botao-destaque" onClick={() => setMaisFiltros(false)}>Ver resultados</button></>}>
+      {abasMaterial}
+    </ModalFiltros>}
 
     {error && <p className="form-error" role="alert">{error}</p>}
     {notice && <p className="catalog-notice" role="status">{notice}</p>}

@@ -13,15 +13,34 @@ export const trackingSchema = z.object({
   deadlineConfirmed: z.boolean().optional(),
   deadlineNote: z.string().trim().max(500).nullable().optional(),
 }).strict();
+/** Ordens da lista de orçamentos; "prazo" usa o prazo final (montagem ou, sem ela, a data acordada). */
+export const ORDENS_ORCAMENTO = ['recentes', 'antigos', 'prazo', 'maior-valor', 'cliente'] as const;
+export type OrdemOrcamentos = typeof ORDENS_ORCAMENTO[number];
+export const ORDEM_ORCAMENTOS: Record<Exclude<OrdemOrcamentos, 'prazo'>, Prisma.QuoteOrderByWithRelationInput[]> = {
+  recentes: [{ createdAt: 'desc' }],
+  antigos: [{ createdAt: 'asc' }],
+  'maior-valor': [{ netTotal: 'desc' }, { createdAt: 'desc' }],
+  cliente: [{ customerNameSnapshot: 'asc' }, { createdAt: 'desc' }],
+};
+type ComPrazo = { installationDeadline: Date | null; deliveryDeadline: Date | null; createdAt: Date };
+const prazoFinal = (quote: ComPrazo) => (quote.installationDeadline ?? quote.deliveryDeadline)?.toISOString().slice(0, 10);
+/** Prazo mais próximo primeiro; sem prazo no fim; empate pelo mais recente. */
+export function compararPorPrazo(a: ComPrazo, b: ComPrazo) {
+  const pa = prazoFinal(a), pb = prazoFinal(b);
+  if (pa !== pb) return !pa ? 1 : !pb ? -1 : pa.localeCompare(pb);
+  return b.createdAt.getTime() - a.createdAt.getTime();
+}
 export const historySchema = schemaConsultaPaginada({
   scope: z.enum(['active', 'history']).optional(), search: z.string().trim().max(200).optional(),
   status: z.enum(['DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED']).optional(),
-  workStatus: z.enum(WORK_STATUSES).optional(), situacaoPrazoInterno: z.enum(DEADLINE_STATUSES).optional(),
+  // Uma ou mais situações separadas por vírgula (ex.: entrega e montagem pendentes juntas).
+  workStatus: z.preprocess((valor) => typeof valor === 'string' ? valor.split(',').filter(Boolean) : valor, z.array(z.enum(WORK_STATUSES)).min(1).optional()), situacaoPrazoInterno: z.enum(DEADLINE_STATUSES).optional(),
   sellerId: z.string().cuid().optional(), customerId: z.string().cuid().optional(), responsibleId: z.string().cuid().optional(),
   from: calendarDateSchema.optional(), to: calendarDateSchema.optional(),
   approvedFrom: calendarDateSchema.optional(), approvedTo: calendarDateSchema.optional(),
   deliveryFrom: calendarDateSchema.optional(), deliveryTo: calendarDateSchema.optional(),
   installationFrom: calendarDateSchema.optional(), installationTo: calendarDateSchema.optional(),
+  ordem: z.enum(ORDENS_ORCAMENTO).default('recentes'),
 }).superRefine((value, context) => {
   for (const [from, to] of [['from', 'to'], ['approvedFrom', 'approvedTo'], ['deliveryFrom', 'deliveryTo'], ['installationFrom', 'installationTo']] as const) {
     if (value[from] && value[to] && value[from]! > value[to]!) context.addIssue({ code: 'custom', path: [to], message: 'A data final deve ser igual ou posterior à inicial.' });
@@ -48,12 +67,12 @@ export function filtroPrazo(status: CustomerDeadlineStatus, now = new Date()): P
   }
   return { AND: [{ NOT: completed }, { OR: [{ installationDeadline: range }, { installationDeadline: null, deliveryDeadline: range }] }] };
 }
-export function montarFiltrosOrcamento(query: QuoteFilters, now = new Date()): Prisma.QuoteWhereInput {
+export function montarFiltrosOrcamento(query: Omit<QuoteFilters, 'ordem'>, now = new Date()): Prisma.QuoteWhereInput {
   const conditions: Prisma.QuoteWhereInput[] = [];
   const closed: Prisma.QuoteWhereInput = { OR: [{ status: { in: ['REJECTED', 'CANCELLED', 'EXPIRED'] } }, { executionStatus: 'COMPLETED' }] };
   if (query.scope === 'history') conditions.push(closed);
   if (query.scope === 'active') conditions.push({ NOT: closed });
-  if (query.workStatus) conditions.push(filtroStatusTrabalho(query.workStatus));
+  if (query.workStatus?.length) conditions.push({ OR: query.workStatus.map(filtroStatusTrabalho) });
   if (query.status) conditions.push({ status: query.status });
   if (query.situacaoPrazoInterno) conditions.push(filtroPrazo(query.situacaoPrazoInterno, now));
   if (query.sellerId) conditions.push({ createdById: query.sellerId });

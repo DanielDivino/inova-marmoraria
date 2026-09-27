@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { posicaoEntre, situacaoPrazoFluxo } from './fluxo';
+import { dataConclusaoAoMover, faseOrcamentoFluxo, posicaoEntre, situacaoPrazoFluxo } from './fluxo';
 
 describe('prazo do fluxo de trabalho', () => {
   it('marca vencido, próximo em até 7 dias e no prazo pela data de calendário', () => {
@@ -22,5 +22,25 @@ describe('posição do cartão no fluxo de trabalho', () => {
     expect(posicaoEntre(4)).toBe(5);
     expect(posicaoEntre(undefined, 0)).toBe(-1);
     expect(posicaoEntre()).toBe(0);
+  });
+});
+
+describe('fase do orçamento no quadro', () => {
+  it('separa aguardando aprovação, aprovado sem início e em execução; histórico fica fora', () => {
+    expect(faseOrcamentoFluxo({ status: 'SENT', executionStatus: 'NOT_STARTED' })).toBe('AWAITING_APPROVAL');
+    expect(faseOrcamentoFluxo({ status: 'DRAFT' })).toBe('AWAITING_APPROVAL');
+    expect(faseOrcamentoFluxo({ status: 'APPROVED', executionStatus: 'NOT_STARTED' })).toBe('AWAITING_START');
+    for (const executionStatus of ['IN_PROGRESS', 'REWORK', 'READY', 'INSTALLATION_PENDING']) expect(faseOrcamentoFluxo({ status: 'APPROVED', executionStatus })).toBe('IN_EXECUTION');
+    for (const quote of [{ status: 'APPROVED', executionStatus: 'COMPLETED' }, { status: 'REJECTED' }, { status: 'CANCELLED' }, { status: 'EXPIRED' }]) expect(faseOrcamentoFluxo(quote)).toBeNull();
+  });
+});
+
+describe('data de conclusão ao mover', () => {
+  it('preenche ao concluir, mantém até a entrega e limpa ao voltar para antes', () => {
+    expect(dataConclusaoAoMover({ status: 'IN_PROGRESS', completedAt: null }, 'DONE', 'hoje')).toBe('hoje');
+    expect(dataConclusaoAoMover({ status: 'IN_PROGRESS', completedAt: null }, 'DELIVERED', 'hoje')).toBe('hoje');
+    expect(dataConclusaoAoMover({ status: 'DONE', completedAt: 'ontem' }, 'DONE', 'hoje')).toBe('ontem');
+    expect(dataConclusaoAoMover({ status: 'DONE', completedAt: 'ontem' }, 'DELIVERED', 'hoje')).toBe('ontem');
+    expect(dataConclusaoAoMover({ status: 'DONE', completedAt: 'ontem' }, 'IN_PROGRESS', 'hoje')).toBeNull();
   });
 });

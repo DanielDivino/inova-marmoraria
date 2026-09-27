@@ -1,21 +1,27 @@
 /* Fluxo de trabalho: Kanban de projetos e resumo por orçamento. */
-.fluxo-barra { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.fluxo-barra .admin-tabs { margin: 0; }
-.fluxo-filtros { display: flex; flex-wrap: wrap; gap: 10px; }
-.fluxo-filtros label { display: grid; gap: 4px; color: var(--muted); font-size: 11px; font-weight: 700; }
-.fluxo-filtros select { min-width: 200px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 13px; }
 .fluxo-legenda { display: flex; gap: 16px; margin: 0 0 14px; color: var(--muted); font-size: 11px; }
 .fluxo-legenda span::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
 .fluxo-legenda .legenda-vencido::before { background: #f6d5d1; border: 1px solid #d9796e; }
 .fluxo-legenda .legenda-proximo::before { background: #fbecc0; border: 1px solid #d8b24e; }
 
-/* As colunas esticam até a mais alta: dá para soltar um cartão em qualquer altura de uma coluna vazia. */
-.fluxo-quadro { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+.fluxo-aviso { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid #b9dcc4; border-radius: 10px; background: #eef7f0; color: var(--ink); font-size: 13px; }
+.fluxo-aviso .text-button { padding: 0; }
+
+/* As colunas esticam até a mais alta: dá para soltar um cartão em qualquer altura de uma coluna vazia.
+   As 5 etapas ficam sempre lado a lado; se a tela não comporta, o quadro rola para o lado (nunca quebra linha). */
+.fluxo-quadro { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 10px; align-items: stretch; overflow-x: auto; padding-bottom: 6px; }
 .fluxo-coluna { display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); transition: box-shadow .15s; }
 .fluxo-coluna-alvo { box-shadow: 0 0 0 2px var(--green); }
 .fluxo-coluna > header { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
 .fluxo-coluna h2 { margin: 0; font-size: 14px; }
 .fluxo-coluna > header span { min-width: 24px; padding: 2px 8px; border-radius: 999px; background: var(--surface, #fff); color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; }
+/* "Aguardando início" é só consulta: borda tracejada, sem fundo, cartões sem arrastar. */
+.fluxo-coluna-aguardando { border-style: dashed; background: transparent; }
+.fluxo-coluna-nota { margin: -6px 4px 0; color: var(--muted); font-size: 11px; }
+.fluxo-cartao-fixo { cursor: pointer; }
+.fluxo-fase { justify-self: start; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-style: normal; font-weight: 700; }
+.fluxo-fase.fase-awaiting_approval { background: #eceae4; color: #5f5a52; }
+.fluxo-fase.fase-awaiting_start { background: #dcecf8; color: #24527a; }
 .fluxo-lista { display: grid; align-content: start; gap: 8px; flex: 1; min-height: 90px; margin: 0; padding: 0; list-style: none; }
 .fluxo-vazio { display: grid; place-items: center; min-height: 90px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; }
 
@@ -23,7 +29,7 @@
 .fluxo-cartao:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .fluxo-cartao strong { font-size: 14px; overflow-wrap: anywhere; }
 .fluxo-cartao small { color: var(--muted); font-size: 12px; }
-.fluxo-cartao-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fluxo-cartao-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; }
 .fluxo-pecas { flex: none; color: var(--ink); font-size: 11px; font-weight: 700; }
 .fluxo-responsavel { display: inline-flex; align-items: center; gap: 6px; }
 .fluxo-responsavel i { flex: none; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1px #0000001f; }
@@ -56,12 +62,32 @@
 .fluxo-status.status-todo { background: #eceae4; color: #5f5a52; }
 .fluxo-status.status-in_progress { background: #fbecc0; color: #7a5600; }
 .fluxo-status.status-done { background: #d7eedd; color: #1d6b39; }
+.fluxo-status.status-delivered { background: #dcecf8; color: #24527a; }
 
 /* No celular as colunas ficam lado a lado com rolagem, uma por vez na tela. */
+.fluxo-atalhos { display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px; }
+.fluxo-atalhos button { flex: none; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+.fluxo-atalhos b { margin-left: 4px; color: var(--muted); }
+
+/* "Mover para" só aparece no celular, encaixado embaixo do cartão. */
+.fluxo-mover { display: flex; padding: 6px 10px 6px 13px; border: 1px solid var(--line); border-top: 0; border-left: 5px solid var(--cor-orcamento); border-radius: 0 0 10px 10px; background: var(--soft); }
+.fluxo-mover select { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 16px; font-weight: 600; }
+.fluxo-lista li:has(> .fluxo-mover) > .fluxo-cartao { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+
+/* Celular: o título fica só no cabeçalho do app, filtros recolhidos, barra fixa de etapas e uma etapa por vez. */
 @media (max-width: 760px) {
-  .fluxo-quadro { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(250px, 86%); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
-  .fluxo-coluna { scroll-snap-align: start; }
-  .fluxo-filtros, .fluxo-filtros label, .fluxo-filtros select { width: 100%; min-width: 0; }
+  .fluxo-page > .list-header { display: none; }
+  .fluxo-legenda { margin-bottom: 8px; }
+  .fluxo-etapas { position: sticky; top: 0; z-index: 5; margin: 0 0 10px; padding: 8px 0; background: var(--surface, #fffdf9); box-shadow: 0 8px 8px -10px #00000059; }
+  .fluxo-etapas button { padding: 9px 13px; font-size: 13px; }
+  .fluxo-etapas button[aria-pressed='true'] { border-color: var(--green); background: var(--accent-soft, #fff3d8); font-weight: 700; }
+  .fluxo-quadro { display: block; overflow: visible; padding: 0; }
+  .fluxo-coluna { display: none; padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .fluxo-coluna.ativa { display: flex; }
+  .fluxo-coluna > header { display: none; }
+  .fluxo-coluna-nota { margin: 0 2px; }
+  .fluxo-cartao { padding: 12px 14px 12px 15px; }
+  .fluxo-cartao strong { font-size: 16px; }
 }
 
 @media screen {
@@ -70,9 +96,13 @@
   html.inova-dark .inova-theme .prazo-vencido .fluxo-prazo { color: #f0aaa2; }
   html.inova-dark .inova-theme .prazo-proximo .fluxo-prazo { color: #e9c786; }
   html.inova-dark .inova-theme .fluxo-resumo-item.finalizado { background: #1f2c23; }
+  html.inova-dark .inova-theme .fluxo-aviso { background: #1f2c23; border-color: #35503f; }
   html.inova-dark .inova-theme :is(.fluxo-finalizado, .fluxo-status.status-done) { background: #264232; color: #a9dcb7; }
+  html.inova-dark .inova-theme .fluxo-status.status-delivered { background: #1f2f3d; color: #a9c9e6; }
   html.inova-dark .inova-theme .fluxo-status.status-in_progress { background: #3b3324; color: #e9c786; }
   html.inova-dark .inova-theme .fluxo-status.status-todo { background: #2c302d; color: var(--muted); }
+  html.inova-dark .inova-theme .fluxo-fase.fase-awaiting_approval { background: #2c302d; color: var(--muted); }
+  html.inova-dark .inova-theme .fluxo-fase.fase-awaiting_start { background: #1f2f3d; color: #a9c9e6; }
   html.inova-dark .inova-theme .fluxo-legenda .legenda-vencido::before { background: #3a2422; border-color: #7a3d36; }
   html.inova-dark .inova-theme .fluxo-legenda .legenda-proximo::before { background: #372f1c; border-color: #75622f; }
 }

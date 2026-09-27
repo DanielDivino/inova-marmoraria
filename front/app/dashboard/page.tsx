@@ -6,6 +6,7 @@ import { ROLE_LABELS, type DashboardCounts, type DashboardData } from '@inova/do
 import { api } from '../../utilitarios/api';
 import { formatarMoeda } from '../../utilitarios/formatadores';
 import './dashboard.css';
+import { CampoFiltro, PainelFiltros } from '../../componentes/filtros/Filtros';
 
 type Seller = { id: string; name: string; isActive: boolean };
 const stages: [keyof DashboardCounts, string][] = [
@@ -37,14 +38,13 @@ export default function DashboardPage() {
     return `/orcamentos?${query}`;
   };
   return <main className="list-page dashboard-page">
-    <header className="list-header"><div><span className="catalog-eyebrow">VISÃO DA MARMORARIA</span><h1>Dashboard</h1></div><Link className="secondary-button" href="/usuarios">Gerenciar vendedores</Link></header>
-    <form className="dashboard-filters" onSubmit={event => { event.preventDefault(); setApplied(new URLSearchParams(Object.entries(filters).filter(([, value]) => value)).toString()); setRefresh(value => value + 1); }}>
-      <label>Emissão a partir de<input type="date" value={filters.from} onChange={event => setFilters({ ...filters, from: event.target.value })} /></label>
-      <label>Emissão até<input type="date" min={filters.from || undefined} value={filters.to} onChange={event => setFilters({ ...filters, to: event.target.value })} /></label>
-      <label>Vendedor / responsável<select value={filters.sellerId} onChange={event => setFilters({ ...filters, sellerId: event.target.value })}><option value="">Todos os responsáveis</option>{sellers.map(seller => <option key={seller.id} value={seller.id}>{seller.name}{seller.isActive ? '' : ' (inativo)'}</option>)}</select></label>
-      <button className="primary-button" disabled={loading}>Atualizar painel</button>
-      <button className="secondary-button" type="button" onClick={() => { setFilters({ from: '', to: '', sellerId: '' }); setApplied(''); setRefresh(value => value + 1); }}>Limpar filtros</button>
-    </form>
+    <header className="list-header"><div className="titulo-no-topo"><span className="catalog-eyebrow">VISÃO DA MARMORARIA</span><h1>Dashboard</h1></div><Link className="secondary-button" href="/usuarios">Gerenciar vendedores</Link></header>
+    <PainelFiltros rotulo="Filtros do dashboard" ativos={[filters.from, filters.to, filters.sellerId].filter(Boolean).length} ocupado={loading} rotuloBuscar="Atualizar"
+      aoBuscar={() => { setApplied(new URLSearchParams(Object.entries(filters).filter(([, value]) => value)).toString()); setRefresh(value => value + 1); }}
+      aoLimpar={() => { setFilters({ from: '', to: '', sellerId: '' }); setApplied(''); setRefresh(value => value + 1); }}>
+      <CampoFiltro rotulo="Período de emissão" icone="calendario" grupo><input type="date" aria-label="Emissão a partir de" value={filters.from} onChange={event => setFilters({ ...filters, from: event.target.value })} /><small>até</small><input type="date" aria-label="Emissão até" min={filters.from || undefined} value={filters.to} onChange={event => setFilters({ ...filters, to: event.target.value })} /></CampoFiltro>
+      <CampoFiltro rotulo="Vendedor / responsável" icone="vendedor"><select value={filters.sellerId} onChange={event => setFilters({ ...filters, sellerId: event.target.value })}><option value="">Todos os responsáveis</option>{sellers.map(seller => <option key={seller.id} value={seller.id}>{seller.name}{seller.isActive ? '' : ' (inativo)'}</option>)}</select></CampoFiltro>
+    </PainelFiltros>
     <p className="customer-help">O período considera a data de emissão dos orçamentos. Vendas são orçamentos aprovados, incluindo os já entregues. Valores representam propostas e vendas, não recebimentos de caixa.</p>
     {error && <p className="form-error" role="alert">{error}</p>}
     {loading && <p role="status">Atualizando indicadores…</p>}

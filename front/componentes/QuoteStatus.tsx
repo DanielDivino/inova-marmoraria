@@ -1,9 +1,19 @@
 import { DEADLINE_LABELS, DEADLINE_TONES, obterStatusPrazo, obterStatusTrabalho, WORK_STATUS_LABELS, WORK_STATUS_TONES, STATUS_LEGEND, type QuoteProgress } from '@inova/domain';
 
-export function StatusOrcamento({ quote }: { quote: QuoteProgress }) {
+/** Selo da situação do trabalho (ex.: "Em produção"). */
+export function SeloTrabalho({ quote }: { quote: QuoteProgress }) {
   const work = obterStatusTrabalho(quote);
+  return <span className={`status status-${WORK_STATUS_TONES[work]}`}>{quote.status === 'CANCELLED' ? 'Cancelado' : quote.status === 'EXPIRED' ? 'Expirado' : WORK_STATUS_LABELS[work]}</span>;
+}
+
+/** Selo da situação do prazo (ex.: "Próximo do prazo"). */
+export function SeloPrazo({ quote }: { quote: QuoteProgress }) {
   const deadline = obterStatusPrazo(quote);
-  return <div className="status-badges"><span className={`status status-${WORK_STATUS_TONES[work]}`}>{quote.status === 'CANCELLED' ? 'Cancelado' : quote.status === 'EXPIRED' ? 'Expirado' : WORK_STATUS_LABELS[work]}</span><span className={`status status-${DEADLINE_TONES[deadline]}`}>{DEADLINE_LABELS[deadline]}</span></div>;
+  return <span className={`status status-${DEADLINE_TONES[deadline]}`}>{DEADLINE_LABELS[deadline]}</span>;
+}
+
+export function StatusOrcamento({ quote }: { quote: QuoteProgress }) {
+  return <div className="status-badges"><SeloTrabalho quote={quote} /><SeloPrazo quote={quote} /></div>;
 }
 
 export function StatusLegend() {

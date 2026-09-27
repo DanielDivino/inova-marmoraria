@@ -636,7 +636,7 @@ export default function EditorOrcamento() {
     <ResumoMovel total={formatarMoeda(summaries[activeIndex]?.total ?? 0)} label="Total do projeto atual" />
     <header className="project-topbar">
       {!headerTabsTarget && clientTabs}
-      <div className="project-topbar-main"><div className="project-title-client"><h1>{editingQuote ? `Editar ${editingQuote.number}` : 'Novo Projeto'}</h1>
+      <div className="project-topbar-main"><div className="project-title-client"><h1 className={editingQuote ? undefined : 'titulo-no-topo'}>{editingQuote ? `Editar ${editingQuote.number}` : 'Novo Projeto'}</h1>
         <div className="compact-customer">{customer ? <><span title={customer.name}>Cliente: <strong>{customer.name}</strong></span><button type="button" onClick={openCustomerSearch}>Trocar cliente</button><button type="button" onClick={editCustomer} aria-label="Editar cliente">✎</button></> : <><button type="button" onClick={openCustomerSearch}>Selecionar cliente</button><span aria-hidden="true">|</span><button type="button" onClick={openNewCustomer}>Novo cliente</button></>}</div>
       </div>
       <div className="project-tabs-bar"><div className="project-tabs" role="tablist" aria-label="Projetos">{items.map((draft, index) => <div className={`project-tab ${index === activeIndex ? 'active' : ''}`} key={draft.id}>

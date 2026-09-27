@@ -1,14 +1,16 @@
-import { PROJECT_WORKFLOW_STATUSES, posicaoEntre, type ProjectWorkflowStatus } from '@inova/domain';
+import { dataConclusaoAoMover, etapaConcluida, PROJECT_WORKFLOW_STATUSES, posicaoEntre, type FaseOrcamentoFluxo, type ProjectWorkflowStatus } from '@inova/domain';
 
 export type ResponsavelFluxo = { id: string; name: string | null; color: string };
 export type CartaoFluxo = {
   id: string; name: string; status: ProjectWorkflowStatus; position: number; completedAt: string | null; pieces: number;
-  quote: { id: string; number: string; customerId: string; customerName: string; deadline: string | null; worker: ResponsavelFluxo | null };
+  quote: { id: string; number: string; customerId: string; customerName: string; deadline: string | null; worker: ResponsavelFluxo | null; phase: FaseOrcamentoFluxo };
 };
+/** Resposta do movimento: `quoteDelivered` indica que o último projeto foi entregue e o orçamento foi para o Histórico. */
+export type CartaoMovido = CartaoFluxo & { quoteDelivered: boolean };
 /** `workerId` aceita também SEM_RESPONSAVEL, para achar orçamentos sem funcionário definido. */
 export type FiltroFluxo = { customerId: string; quoteId: string; workerId: string };
 export const SEM_RESPONSAVEL = 'sem-responsavel';
-export type ResumoOrcamentoFluxo = { quote: CartaoFluxo['quote']; projetos: CartaoFluxo[]; concluidos: number; total: number; finalizado: boolean };
+export type ResumoOrcamentoFluxo = { quote: CartaoFluxo['quote']; projetos: CartaoFluxo[]; concluidos: number; entregues: number; total: number; finalizado: boolean };
 
 /** Tons distintos entre si e legíveis nos dois temas; sem vermelho, que no quadro significa prazo vencido. */
 const CORES_ORCAMENTO = ['#2f6fb0', '#2e8b57', '#b0602f', '#8a4fb3', '#a0439c', '#1f8a8a', '#9a7b1c', '#5a6fb8', '#6b8e23', '#4f6d7a', '#7a5c3e', '#3d7f9e'];
@@ -31,8 +33,19 @@ export const rotuloPecas = (pecas: number) => `${pecas} ${pecas === 1 ? 'peça' 
 
 const ordemDoQuadro = (a: CartaoFluxo, b: CartaoFluxo) => a.position - b.position || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
+/** Colunas arrastáveis: projetos de orçamentos em execução, até o último ser entregue (aí o orçamento vai para o Histórico). */
 export function colunasFluxo(cartoes: CartaoFluxo[]) {
-  return Object.fromEntries(PROJECT_WORKFLOW_STATUSES.map((status) => [status, cartoes.filter((cartao) => cartao.status === status).sort(ordemDoQuadro)])) as Record<ProjectWorkflowStatus, CartaoFluxo[]>;
+  const emExecucao = cartoes.filter((cartao) => cartao.quote.phase === 'IN_EXECUTION');
+  return Object.fromEntries(PROJECT_WORKFLOW_STATUSES.map((status) => [status, emExecucao.filter((cartao) => cartao.status === status).sort(ordemDoQuadro)])) as Record<ProjectWorkflowStatus, CartaoFluxo[]>;
+}
+
+const ORDEM_FASE: Record<FaseOrcamentoFluxo, number> = { IN_EXECUTION: 0, AWAITING_START: 1, AWAITING_APPROVAL: 2 };
+const porPrazoENumero = (a: CartaoFluxo['quote'], b: CartaoFluxo['quote']) => (a.deadline ?? '9999-12-31').localeCompare(b.deadline ?? '9999-12-31') || a.number.localeCompare(b.number);
+
+/** Coluna "Aguardando início": aprovados sem início primeiro, depois os que aguardam aprovação; prazo mais próximo antes. */
+export function aguardandoInicio(cartoes: CartaoFluxo[]) {
+  return cartoes.filter((cartao) => cartao.quote.phase !== 'IN_EXECUTION')
+    .sort((a, b) => ORDEM_FASE[a.quote.phase] - ORDEM_FASE[b.quote.phase] || porPrazoENumero(a.quote, b.quote) || (a.id < b.id ? -1 : 1));
 }
 
 /**
@@ -49,24 +62,30 @@ export function moverCartaoLocal(cartoes: CartaoFluxo[], id: string, status: Pro
   const position = afterId || beforeId ? posicaoEntre(posicaoDe(afterId), posicaoDe(beforeId)) : ultima + 1;
   const atualizados = cartoes.map((cartao) => cartao.id !== id ? cartao : {
     ...cartao, status, position,
-    completedAt: status !== 'DONE' ? null : cartao.status === 'DONE' ? cartao.completedAt : agora.toISOString(),
+    completedAt: dataConclusaoAoMover(cartao, status, agora.toISOString()),
   });
   return { cartoes: atualizados, afterId, beforeId };
 }
 
-/** Um resumo por orçamento: pendentes primeiro, pelo prazo mais próximo; finalizados no fim. */
+/** Um resumo por orçamento, com o progresso dos projetos e o prazo mais próximo primeiro dentro de cada fase. */
 export function resumirPorOrcamento(cartoes: CartaoFluxo[]): ResumoOrcamentoFluxo[] {
   const grupos = new Map<string, CartaoFluxo[]>();
   for (const cartao of cartoes) grupos.set(cartao.quote.id, [...(grupos.get(cartao.quote.id) ?? []), cartao]);
   const resumos = [...grupos.values()].map((projetos) => {
-    const concluidos = projetos.filter((projeto) => projeto.status === 'DONE').length;
+    const concluidos = projetos.filter((projeto) => etapaConcluida(projeto.status)).length;
+    const entregues = projetos.filter((projeto) => projeto.status === 'DELIVERED').length;
     // Mesma ordem dos projetos no orçamento (ids criados em sequência).
     const ordenados = [...projetos].sort((a, b) => (a.id < b.id ? -1 : 1));
-    return { quote: projetos[0].quote, projetos: ordenados, concluidos, total: projetos.length, finalizado: concluidos === projetos.length };
+    return { quote: projetos[0].quote, projetos: ordenados, concluidos, entregues, total: projetos.length, finalizado: projetos[0].quote.phase === 'IN_EXECUTION' && concluidos === projetos.length };
   });
-  return resumos.sort((a, b) => Number(a.finalizado) - Number(b.finalizado)
-    || (a.quote.deadline ?? '9999-12-31').localeCompare(b.quote.deadline ?? '9999-12-31')
-    || a.quote.number.localeCompare(b.quote.number));
+  // Em execução primeiro, depois os finalizados (prontos para entregar), por fim os que ainda não iniciaram.
+  return resumos.sort((a, b) => ORDEM_FASE[a.quote.phase] - ORDEM_FASE[b.quote.phase] || Number(a.finalizado) - Number(b.finalizado) || porPrazoENumero(a.quote, b.quote));
+}
+
+/** Soltar este cartão em "Entregue" completa o orçamento: todos os outros projetos dele já foram entregues. */
+export function entregaFinalDoOrcamento(cartoes: CartaoFluxo[], id: string) {
+  const cartao = cartoes.find((entrada) => entrada.id === id);
+  return !!cartao && cartoes.filter((entrada) => entrada.quote.id === cartao.quote.id && entrada.id !== id).every((entrada) => entrada.status === 'DELIVERED');
 }
 
 /** Data de calendário (AAAA-MM-DD) em dd/mm/aaaa, sem passar por fuso horário. */
