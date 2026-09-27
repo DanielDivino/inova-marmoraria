@@ -14,6 +14,7 @@ import { registrarRotasAuditoria } from './modulos/auditoria/audit.routes.js';
 import { registrarRotasNotificacoes } from './modulos/notificacoes/notification.routes.js';
 import { registrarRotasDesenhos } from './modulos/desenhos/design.routes.js';
 import { registrarRotasFuncionarios } from './modulos/funcionarios/worker.routes.js';
+import { registrarRotasFluxo } from './modulos/fluxo/workflow.routes.js';
 import { AppError } from './compartilhado/http.js';
 import { registrarRotasRemontagem } from './modulos/remontagem/remount.routes.js';
 
@@ -35,6 +36,7 @@ export async function criarAplicacao() {
   app.register(registrarRotasNotificacoes, { prefix: '/notifications' });
   app.register(registrarRotasDesenhos);
   app.register(registrarRotasFuncionarios, { prefix: '/workers' });
+  app.register(registrarRotasFluxo, { prefix: '/workflow' });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof ZodError) {

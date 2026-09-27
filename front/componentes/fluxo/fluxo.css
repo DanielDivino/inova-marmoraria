@@ -1,0 +1,78 @@
+/* Fluxo de trabalho: Kanban de projetos e resumo por orçamento. */
+.fluxo-barra { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.fluxo-barra .admin-tabs { margin: 0; }
+.fluxo-filtros { display: flex; flex-wrap: wrap; gap: 10px; }
+.fluxo-filtros label { display: grid; gap: 4px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.fluxo-filtros select { min-width: 200px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 13px; }
+.fluxo-legenda { display: flex; gap: 16px; margin: 0 0 14px; color: var(--muted); font-size: 11px; }
+.fluxo-legenda span::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
+.fluxo-legenda .legenda-vencido::before { background: #f6d5d1; border: 1px solid #d9796e; }
+.fluxo-legenda .legenda-proximo::before { background: #fbecc0; border: 1px solid #d8b24e; }
+
+/* As colunas esticam até a mais alta: dá para soltar um cartão em qualquer altura de uma coluna vazia. */
+.fluxo-quadro { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+.fluxo-coluna { display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); transition: box-shadow .15s; }
+.fluxo-coluna-alvo { box-shadow: 0 0 0 2px var(--green); }
+.fluxo-coluna > header { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
+.fluxo-coluna h2 { margin: 0; font-size: 14px; }
+.fluxo-coluna > header span { min-width: 24px; padding: 2px 8px; border-radius: 999px; background: var(--surface, #fff); color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; }
+.fluxo-lista { display: grid; align-content: start; gap: 8px; flex: 1; min-height: 90px; margin: 0; padding: 0; list-style: none; }
+.fluxo-vazio { display: grid; place-items: center; min-height: 90px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; }
+
+.fluxo-cartao { display: grid; gap: 3px; padding: 10px 12px 10px 13px; border: 1px solid var(--line); border-left: 5px solid var(--cor-orcamento); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); cursor: grab; touch-action: manipulation; user-select: none; -webkit-user-select: none; box-shadow: 0 1px 2px #0000000d; }
+.fluxo-cartao:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.fluxo-cartao strong { font-size: 14px; overflow-wrap: anywhere; }
+.fluxo-cartao small { color: var(--muted); font-size: 12px; }
+.fluxo-cartao-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fluxo-pecas { flex: none; color: var(--ink); font-size: 11px; font-weight: 700; }
+.fluxo-responsavel { display: inline-flex; align-items: center; gap: 6px; }
+.fluxo-responsavel i { flex: none; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1px #0000001f; }
+.fluxo-responsavel.sem-responsavel { font-style: italic; }
+.fluxo-etiqueta { justify-self: start; padding: 2px 8px; border-radius: 999px; background: var(--cor-orcamento); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .02em; }
+.fluxo-cartao-origem { opacity: .35; }
+.fluxo-cartao-arrastando { cursor: grabbing; box-shadow: 0 12px 28px #0000002e; transform: rotate(1.5deg); }
+
+/* Prazo: vermelho vencido, amarelo vence em até 7 dias. */
+:is(.fluxo-cartao, .fluxo-resumo-item).prazo-vencido { border-color: #e0a39b; border-left-color: var(--cor-orcamento); background: #fdeeec; }
+:is(.fluxo-cartao, .fluxo-resumo-item).prazo-proximo { border-color: #e6cc80; border-left-color: var(--cor-orcamento); background: #fff7df; }
+.prazo-vencido .fluxo-prazo { color: #b3261e; }
+.prazo-proximo .fluxo-prazo { color: #8a6100; }
+
+.fluxo-resumo { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.fluxo-resumo-item { border: 1px solid var(--line); border-left: 5px solid var(--cor-orcamento); border-radius: 12px; background: var(--surface, #fff); }
+.fluxo-resumo-item.finalizado { background: #eef7f0; }
+.fluxo-resumo-item summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 14px; cursor: pointer; }
+.fluxo-resumo-item summary strong { font-size: 15px; }
+.fluxo-resumo-item summary small { color: var(--muted); font-size: 12px; }
+.fluxo-finalizado { padding: 2px 8px; border-radius: 999px; background: #d7eedd; color: #1d6b39; font-size: 11px; font-style: normal; font-weight: 700; }
+.fluxo-progresso { display: block; flex: 1 1 100%; height: 8px; overflow: hidden; border-radius: 999px; background: var(--line); }
+.fluxo-progresso i { display: block; height: 100%; border-radius: inherit; background: #2e8b57; transition: width .25s; }
+.fluxo-contagem { flex: 1 1 100%; }
+.fluxo-resumo-projetos { display: grid; gap: 6px; margin: 0; padding: 0 14px 14px; list-style: none; }
+.fluxo-resumo-projetos li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--soft); font-size: 13px; }
+.fluxo-resumo-projetos a { color: var(--ink); }
+.fluxo-resumo-projetos small { margin-right: auto; color: var(--muted); font-size: 12px; }
+.fluxo-status { flex: none; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.fluxo-status.status-todo { background: #eceae4; color: #5f5a52; }
+.fluxo-status.status-in_progress { background: #fbecc0; color: #7a5600; }
+.fluxo-status.status-done { background: #d7eedd; color: #1d6b39; }
+
+/* No celular as colunas ficam lado a lado com rolagem, uma por vez na tela. */
+@media (max-width: 760px) {
+  .fluxo-quadro { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(250px, 86%); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+  .fluxo-coluna { scroll-snap-align: start; }
+  .fluxo-filtros, .fluxo-filtros label, .fluxo-filtros select { width: 100%; min-width: 0; }
+}
+
+@media screen {
+  html.inova-dark .inova-theme :is(.fluxo-cartao, .fluxo-resumo-item).prazo-vencido { background: #3a2422; border-color: #7a3d36; border-left-color: var(--cor-orcamento); }
+  html.inova-dark .inova-theme :is(.fluxo-cartao, .fluxo-resumo-item).prazo-proximo { background: #372f1c; border-color: #75622f; border-left-color: var(--cor-orcamento); }
+  html.inova-dark .inova-theme .prazo-vencido .fluxo-prazo { color: #f0aaa2; }
+  html.inova-dark .inova-theme .prazo-proximo .fluxo-prazo { color: #e9c786; }
+  html.inova-dark .inova-theme .fluxo-resumo-item.finalizado { background: #1f2c23; }
+  html.inova-dark .inova-theme :is(.fluxo-finalizado, .fluxo-status.status-done) { background: #264232; color: #a9dcb7; }
+  html.inova-dark .inova-theme .fluxo-status.status-in_progress { background: #3b3324; color: #e9c786; }
+  html.inova-dark .inova-theme .fluxo-status.status-todo { background: #2c302d; color: var(--muted); }
+  html.inova-dark .inova-theme .fluxo-legenda .legenda-vencido::before { background: #3a2422; border-color: #7a3d36; }
+  html.inova-dark .inova-theme .fluxo-legenda .legenda-proximo::before { background: #372f1c; border-color: #75622f; }
+}
