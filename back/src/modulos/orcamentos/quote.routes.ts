@@ -13,7 +13,7 @@ import { adicionarItemOrcamento, criarOrcamento, editarOrcamento, incluirOrcamen
 import { editQuoteSchema } from './quote.schema.js';
 import { renderizarPdfOrcamento, renderizarPdfDesenhoProjeto } from './quote.pdf.js';
 import { quotePdfOptionsSchema } from './quote.pdf-options.js';
-import { montarFiltrosOrcamento, historySchema } from './quote.tracking.js';
+import { compararPorPrazo, montarFiltrosOrcamento, historySchema, ORDEM_ORCAMENTOS } from './quote.tracking.js';
 import { trackingSchema } from './quote.tracking.js';
 
 const asNumber = (value: unknown) => Number(value);
@@ -28,7 +28,17 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
   app.get('/', authenticated, async (request, reply) => {
     const query = historySchema.parse(request.query);
     const where = { AND: [montarFiltrosOrcamento(query), escopoOrcamentos(request.user)] };
-    const [data, total] = await prisma.$transaction([prisma.quote.findMany({ where, include: { customer: true, workerAssignments: { where: { releasedAt: null }, include: { worker: { select: { id: true, name: true, workColor: true } } } }, items: { select: { projectName: true } } }, orderBy: { createdAt: 'desc' }, skip: (query.page - 1) * query.limit, take: query.limit }), prisma.quote.count({ where })]);
+    const include = { customer: true, createdBy: { select: { id: true, name: true } }, workerAssignments: { where: { releasedAt: null }, include: { worker: { select: { id: true, name: true, workColor: true } } } }, items: { select: { projectName: true } } } satisfies Prisma.QuoteInclude;
+    const skip = (query.page - 1) * query.limit;
+    const total = await prisma.quote.count({ where });
+    let data;
+    if (query.ordem === 'prazo') {
+      // O prazo final junta dois campos: ordena os ids no servidor e busca só a página.
+      const ordenados = (await prisma.quote.findMany({ where, select: { id: true, installationDeadline: true, deliveryDeadline: true, createdAt: true } })).sort(compararPorPrazo);
+      const ids = ordenados.slice(skip, skip + query.limit).map((quote) => quote.id);
+      const pagina = await prisma.quote.findMany({ where: { id: { in: ids } }, include });
+      data = ids.map((id) => pagina.find((quote) => quote.id === id)!);
+    } else data = await prisma.quote.findMany({ where, include, orderBy: ORDEM_ORCAMENTOS[query.ordem], skip, take: query.limit });
     const counterBase = { AND: [montarFiltrosOrcamento({ ...query, page: 1, limit: 1, workStatus: undefined, situacaoPrazoInterno: undefined }), escopoOrcamentos(request.user)] };
     const statuses = ['PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'WAITING_MATERIAL', 'PENDING_WORK', 'REWORK', 'READY', 'DELIVERY_PENDING', 'INSTALLATION_PENDING', 'DELIVERED', 'REJECTED'] as const;
     const counts = Object.fromEntries(await Promise.all(statuses.map(async (status) => [status, await prisma.quote.count({ where: { AND: [counterBase, (status === 'DELIVERED' ? { status: 'APPROVED', executionStatus: 'COMPLETED' } : status === 'PENDING_APPROVAL' ? { status: { in: ['DRAFT', 'SENT'] } } : status === 'REJECTED' ? { status: { in: ['REJECTED', 'CANCELLED', 'EXPIRED'] } } : { status: WORK_STATUS_STORAGE[status].status, executionStatus: WORK_STATUS_STORAGE[status].executionStatus })] } })])));

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { colunasFluxo, corOrcamento, filtrarCartoes, formatarDataFluxo, moverCartaoLocal, resumirPorOrcamento, rotuloPecas, SEM_RESPONSAVEL, type CartaoFluxo } from './fluxo';
+import { aguardandoInicio, colunasFluxo, corOrcamento, entregaFinalDoOrcamento, filtrarCartoes, formatarDataFluxo, moverCartaoLocal, resumirPorOrcamento, rotuloPecas, SEM_RESPONSAVEL, type CartaoFluxo } from './fluxo';
 
-const quote = (id: string, deadline: string | null = null, worker: CartaoFluxo['quote']['worker'] = null) => ({ id, number: `SET-2026-${id}`, customerId: `cliente-${id}`, customerName: `Cliente ${id}`, deadline, worker });
+const quote = (id: string, deadline: string | null = null, worker: CartaoFluxo['quote']['worker'] = null, phase: CartaoFluxo['quote']['phase'] = 'IN_EXECUTION') => ({ id, number: `SET-2026-${id}`, customerId: `cliente-${id}`, customerName: `Cliente ${id}`, deadline, worker, phase });
 const cartao = (id: string, status: CartaoFluxo['status'], position: number, orcamento = quote('1')): CartaoFluxo => ({ id, name: `Projeto ${id}`, status, position, completedAt: null, pieces: 1, quote: orcamento });
 
 describe('Fluxo de trabalho no quadro', () => {
@@ -16,7 +16,7 @@ describe('Fluxo de trabalho no quadro', () => {
     expect(filtrarCartoes(cartoes, { customerId: '', quoteId: '', workerId: SEM_RESPONSAVEL }).map((entrada) => entrada.id)).toEqual(['a', 'b']);
   });
 
-  it('move entre vizinhos visíveis, marca a conclusão e a limpa ao sair de Concluído', () => {
+  it('move entre vizinhos visíveis, marca a conclusão e a limpa ao sair de Produzido', () => {
     const agora = new Date('2026-09-26T12:00:00Z');
     const concluido = moverCartaoLocal(cartoes, 'b', 'DONE', ['b', 'd'], agora);
     expect(concluido).toMatchObject({ afterId: null, beforeId: 'd' });
@@ -28,7 +28,7 @@ describe('Fluxo de trabalho no quadro', () => {
     expect(moverCartaoLocal(cartoes, 'a', 'IN_PROGRESS', ['a']).cartoes.find((entrada) => entrada.id === 'a')?.position).toBe(1);
   });
 
-  it('resume o progresso por orçamento e marca finalizado quando todos estão concluídos', () => {
+  it('resume o progresso por orçamento e marca a produção finalizada quando todos foram produzidos', () => {
     const resumos = resumirPorOrcamento([...cartoes, cartao('e', 'DONE', 4, quote('3', '2026-10-01'))]);
     expect(resumos.map((resumo) => [resumo.quote.id, resumo.concluidos, resumo.total, resumo.finalizado])).toEqual([['1', 0, 2, false], ['2', 1, 2, false], ['3', 1, 1, true]]);
   });
@@ -37,5 +37,29 @@ describe('Fluxo de trabalho no quadro', () => {
     expect(corOrcamento('cmuhoj3o20003iqqfmwt8ujni')).toBe(corOrcamento('cmuhoj3o20003iqqfmwt8ujni'));
     expect(formatarDataFluxo('2026-10-03')).toBe('03/10/2026');
     expect([rotuloPecas(1), rotuloPecas(10)]).toEqual(['1 peça', '10 peças']);
+  });
+
+  it('orçamento com tudo concluído continua no quadro até a entrega e aparece finalizado no resumo', () => {
+    const todos = [...cartoes, cartao('e', 'DONE', 4, quote('3')), cartao('f', 'DONE', 5, quote('3'))];
+    expect(colunasFluxo(todos).DONE.map((entrada) => entrada.id)).toEqual(['d', 'e', 'f']);
+    expect(resumirPorOrcamento(todos).find((resumo) => resumo.quote.id === '3')).toMatchObject({ concluidos: 2, entregues: 0, total: 2, finalizado: true });
+  });
+
+  it('identifica a entrega que completa o orçamento e mantém a data de conclusão até a entrega', () => {
+    const todos = [cartao('x', 'DELIVERED', 0, quote('6')), cartao('y', 'DONE', 1, quote('6')), cartao('z', 'IN_PROGRESS', 0, quote('7')), cartao('w', 'TODO', 0, quote('7'))];
+    expect(entregaFinalDoOrcamento(todos, 'y')).toBe(true);
+    expect(entregaFinalDoOrcamento(todos, 'z')).toBe(false);
+    const concluido = { ...cartao('k', 'DONE', 0), completedAt: '2026-09-20T10:00:00.000Z' };
+    expect(moverCartaoLocal([concluido], 'k', 'DELIVERED', ['k']).cartoes[0].completedAt).toBe('2026-09-20T10:00:00.000Z');
+    expect(moverCartaoLocal([concluido], 'k', 'IN_PROGRESS', ['k']).cartoes[0].completedAt).toBeNull();
+    expect(resumirPorOrcamento(todos).find((resumo) => resumo.quote.id === '6')).toMatchObject({ concluidos: 2, entregues: 1, finalizado: true });
+  });
+
+  it('orçamentos não iniciados ficam só em "Aguardando início", aprovados antes dos que aguardam aprovação', () => {
+    const todos = [...cartoes, cartao('g', 'TODO', 9, quote('4', '2026-10-10', null, 'AWAITING_APPROVAL')), cartao('h', 'TODO', 8, quote('5', '2026-12-01', null, 'AWAITING_START'))];
+    expect(aguardandoInicio(todos).map((entrada) => entrada.id)).toEqual(['h', 'g']);
+    expect(colunasFluxo(todos).TODO.map((entrada) => entrada.id)).toEqual(['a', 'b']);
+    expect(resumirPorOrcamento(todos).map((resumo) => resumo.quote.id)).toEqual(['1', '2', '5', '4']);
+    expect(resumirPorOrcamento(todos).find((resumo) => resumo.quote.id === '4')?.finalizado).toBe(false);
   });
 });

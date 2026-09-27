@@ -1,0 +1,269 @@
+/* Filtros das listas: abas com ícone e contagem, painel com um ícone por campo, botões Limpar/Buscar. */
+.inova-theme { --destaque-fundo: var(--green); --destaque-texto: #fff; }
+@media screen { html.inova-dark .inova-theme { --destaque-fundo: #d9b36a; --destaque-texto: #1d1606; } }
+
+.botao-destaque, .botao-contorno { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 18px; border-radius: 10px; font: inherit; font-size: 14px; font-weight: 700; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.botao-destaque { border: 1px solid var(--destaque-fundo); background: var(--destaque-fundo); color: var(--destaque-texto); }
+.botao-destaque:hover:not(:disabled) { filter: brightness(1.07); }
+.botao-contorno { border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); }
+.botao-contorno:hover:not(:disabled) { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
+:is(.botao-destaque, .botao-contorno):disabled { cursor: default; opacity: .55; }
+
+.abas-filtro { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 0 0 16px; }
+.abas-filtro-grupo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.abas-filtro-titulo { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.abas-filtro button { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 14px; white-space: nowrap; cursor: pointer; }
+.abas-filtro button > svg { flex: none; color: var(--muted); }
+.abas-filtro button b { min-width: 26px; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 12px; text-align: center; }
+.abas-filtro button:hover { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
+.abas-filtro button[aria-pressed='true'] { border-color: var(--green); background: var(--accent-soft, #f1eade); box-shadow: inset 0 0 0 1px var(--green); font-weight: 700; }
+.abas-filtro button[aria-pressed='true'] > svg { color: var(--green); }
+.abas-filtro button[aria-pressed='true'] b { background: var(--destaque-fundo); color: var(--destaque-texto); }
+
+.painel-filtros { margin: 0 0 18px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--soft); }
+.painel-filtros-alternar { display: none; }
+/* Campos esticam; os botões ficam compactos no fim da última linha. */
+.painel-filtros-campos { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 16px; }
+/* minmax(0, 1fr): um select com opção longa não alarga o campo além da célula do painel. */
+.campo-filtro { display: grid; grid-template-columns: minmax(0, 1fr); flex: 1 1 210px; gap: 8px; min-width: 0; margin: 0; }
+.campo-filtro-rotulo { color: var(--ink); font-size: 14px; font-weight: 700; }
+.campo-filtro-controle { position: relative; display: flex; min-width: 0; align-items: center; gap: 10px; min-height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); }
+.campo-filtro-controle > svg { flex: none; color: var(--muted); }
+.campo-filtro-controle:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent); }
+/* O controle é o próprio campo: tira a borda e o fundo que o tema dá a todo input/select (regra com vários :not). */
+.inova-theme .campo-filtro .campo-filtro-controle :is(input, select):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) { flex: 1 1 0; width: auto; min-width: 0; height: 44px; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; outline: 0; box-shadow: none; background: transparent; color: inherit; font: inherit; font-size: 14px; }
+.inova-theme .campo-filtro .campo-filtro-controle select:not([multiple]) { appearance: none; padding-right: 26px; cursor: pointer; }
+.campo-filtro-controle:has(> select)::after { content: ''; position: absolute; right: 17px; top: 50%; width: 7px; height: 7px; margin-top: -6px; border-right: 1.6px solid var(--muted); border-bottom: 1.6px solid var(--muted); transform: rotate(45deg); pointer-events: none; }
+.campo-filtro-grupo { flex: 2 1 380px; }
+.campo-filtro-grupo .campo-filtro-controle { gap: 8px; }
+.campo-filtro-grupo .campo-filtro-controle > small { color: var(--muted); font-size: 12px; }
+.painel-filtros-acoes { display: flex; flex: 0 0 auto; gap: 10px; margin-left: auto; }
+
+/* Celular: abas roláveis numa linha e o painel recolhido atrás do botão "Filtros". */
+@media (max-width: 760px) {
+  .abas-filtro, .abas-filtro-grupo { flex-wrap: nowrap; }
+  .abas-filtro { overflow-x: auto; padding-bottom: 4px; }
+  .abas-filtro button { flex: none; min-height: 40px; padding: 0 12px; }
+  .painel-filtros { padding: 10px; }
+  .painel-filtros-alternar { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 42px; padding: 0 6px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; }
+  .painel-filtros-alternar b { padding: 1px 8px; border-radius: 999px; background: var(--destaque-fundo); color: var(--destaque-texto); font-size: 12px; }
+  .painel-filtros-alternar > svg:last-child { margin-left: auto; transition: transform .15s; }
+  .painel-filtros.aberto .painel-filtros-alternar > svg:last-child { transform: rotate(180deg); }
+  .painel-filtros:not(.aberto) .painel-filtros-campos { display: none; }
+  .painel-filtros-campos { flex-direction: column; align-items: stretch; margin-top: 8px; }
+  .campo-filtro, .campo-filtro-grupo { flex: none; }
+  .painel-filtros-acoes { margin-left: 0; }
+  .painel-filtros-acoes > * { flex: 1; }
+  .inova-theme .campo-filtro .campo-filtro-controle :is(input, select):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) { font-size: 16px; }
+}
+
+/* Cabeçalho de página: ícone, caminho, título, etiquetas e ações (página do orçamento). */
+.cabecalho-pagina { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 20px; margin: 0 0 22px; }
+.cabecalho-pagina-icone { display: grid; place-items: center; flex: none; width: 60px; height: 60px; border: 1px solid var(--line); border-radius: 14px; background: var(--soft); color: var(--ink); }
+.cabecalho-pagina-titulo { display: grid; gap: 2px; flex: 1 1 280px; min-width: 0; }
+.cabecalho-pagina-titulo nav { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.cabecalho-pagina-titulo nav a { color: inherit; text-decoration: none; }
+.cabecalho-pagina-titulo nav a:hover { color: var(--ink); text-decoration: underline; }
+.cabecalho-pagina-titulo h1 { margin: 0; color: var(--ink); font-family: inherit; font-size: 30px; font-weight: 800; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.cabecalho-pagina-etiquetas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.etiqueta-destaque { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 12px; border-radius: 10px; background: var(--accent-soft, #f1eade); color: var(--green); font-size: 14px; font-weight: 700; text-decoration: none; }
+a.etiqueta-destaque:hover { text-decoration: underline; }
+.cabecalho-pagina-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+@media (max-width: 760px) {
+  .cabecalho-pagina-icone { width: 48px; height: 48px; border-radius: 12px; }
+  .cabecalho-pagina-titulo h1 { font-size: 24px; }
+  .cabecalho-pagina-acoes { width: 100%; }
+  .cabecalho-pagina-acoes > * { flex: 1 1 auto; }
+}
+
+/* Barra de ações acima do painel (ex.: "Novo cliente"), alinhada à direita. */
+.barra-lista { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; margin: 0 0 14px; }
+@media (max-width: 760px) { .barra-lista > .botao-destaque { flex: 1 1 auto; } }
+
+/* Atalhos do cabeçalho (Mostruário e Novo orçamento): com aparência de botão, não de link do cabeçalho. */
+.inova-theme .list-header > .atalhos-cabecalho { order: 0; display: flex; flex: none; flex-wrap: wrap; gap: 10px; margin-left: auto; }
+html .inova-theme .list-header .atalhos-cabecalho a.botao-contorno { min-height: 44px; margin: 0; color: var(--ink); font-size: 14px; font-weight: 700; }
+html .inova-theme .list-header .atalhos-cabecalho a.botao-contorno-destaque { color: var(--green); }
+@media (max-width: 760px) {
+  .inova-theme .list-header > .atalhos-cabecalho { width: 100%; }
+  .atalhos-cabecalho > a { flex: 1 1 0; }
+}
+
+/* Lista de orçamentos: cabeçalho com subtítulo, barra compacta e abas em grade. */
+.cabecalho-lista { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px 20px; margin: 0 0 20px; }
+.cabecalho-lista h1 { margin: 0; color: var(--ink); font-family: Georgia, 'Times New Roman', serif; font-size: 40px; font-weight: 700; line-height: 1.1; }
+.cabecalho-lista p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+.cabecalho-lista-acoes { display: flex; flex-wrap: wrap; gap: 12px; }
+.botao-contorno.botao-contorno-destaque { border-color: var(--green); color: var(--green); }
+
+.barra-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--soft); }
+.barra-filtros :is(.botao-contorno, .botao-destaque) { min-height: 52px; padding: 0 14px; }
+.barra-filtros .botao-contorno b { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--destaque-fundo); color: var(--destaque-texto); font-size: 12px; }
+.barra-filtros-fim { margin-left: auto; }
+.barra-filtros-separador { align-self: stretch; width: 1px; margin: 8px 2px; background: var(--line); }
+.barra-filtros-busca { display: flex; flex: 1 1 140px; align-items: center; gap: 12px; min-width: 0; min-height: 52px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); color: var(--muted); }
+.barra-filtros-busca:focus-within, .seletor-compacto:focus-visible { border-color: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent); }
+/* Sobra de espaço vai primeiro para os seletores (até caber o valor inteiro); o resto fica com a busca. */
+.menu-selecao { position: relative; display: flex; flex: 2 1 170px; min-width: 0; max-width: 232px; }
+.seletor-compacto { position: relative; display: flex; align-items: center; gap: 11px; width: 100%; min-width: 0; min-height: 52px; padding: 0 32px 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.seletor-compacto:hover, .seletor-compacto.aberto { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
+.seletor-compacto.aberto::after { margin-top: -2px; transform: rotate(225deg); }
+.seletor-compacto > svg { flex: none; color: var(--muted); }
+.seletor-compacto > span { display: grid; flex: 1; gap: 1px; min-width: 0; }
+.seletor-compacto small { color: var(--muted); font-size: 12px; line-height: 1.25; }
+.seletor-compacto strong { overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 500; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.seletor-compacto::after { content: ''; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px; margin-top: -6px; border-right: 1.6px solid var(--muted); border-bottom: 1.6px solid var(--muted); transform: rotate(45deg); pointer-events: none; }
+/* Busca e seletores da barra são o próprio campo: sem a borda e o fundo que o tema dá a todo input/select. */
+.inova-theme .barra-filtros .barra-filtros-busca input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) { width: 100%; min-width: 0; min-height: 0; height: auto; margin: 0; padding: 0; border: 0; border-radius: 0; outline: 0; box-shadow: none; background: transparent; color: var(--ink); font: inherit; font-size: 14px; }
+.inova-theme .barra-filtros .barra-filtros-busca input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) { height: 48px; font-size: 15px; text-overflow: ellipsis; }
+/* Menu dos seletores: segue o tema (claro/escuro), com a opção marcada em destaque. */
+.menu-selecao-lista { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; min-width: 100%; max-height: 320px; overflow-y: auto; margin: 0; padding: 6px; list-style: none; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); box-shadow: 0 14px 32px #00000038; outline: 0; }
+.menu-selecao-lista li { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 8px; color: var(--ink); font-size: 14px; white-space: nowrap; cursor: pointer; }
+.menu-selecao-lista li.ativo { background: var(--soft); }
+.menu-selecao-lista li[aria-selected='true'] { color: var(--green); font-weight: 700; }
+.menu-selecao-lista li > i { flex: none; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1px #0000001f; }
+.menu-selecao-lista li > svg { margin-left: auto; }
+/* Listas nativas que continuam (painel e janela do celular): opções com as cores do tema, senão somem no escuro. */
+.inova-theme :is(.campo-filtro-controle, .barra-filtros) select option { background-color: var(--surface, #fff); color: var(--ink); }
+/* Abas junto da busca (Funcionários, Usuários), na mesma altura dos campos da barra. */
+.barra-filtros:has(> .barra-filtros-abas) > .barra-filtros-busca { flex-basis: 280px; }
+.barra-filtros-abas { display: flex; flex: 0 1 auto; align-items: center; gap: 10px; min-width: 0; }
+.barra-filtros-abas > .abas-filtro { flex: 0 1 auto; min-width: 0; margin: 0; }
+.barra-filtros-abas .abas-filtro-grupo { gap: 8px; }
+.barra-filtros-abas .abas-filtro button { gap: 7px; min-height: 52px; padding: 0 11px; }
+.barra-filtros-abas > .botao-contorno { flex: none; }
+.barra-filtros-mais { display: grid; flex-basis: 100%; gap: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+:is(.barra-filtros-mais, .modal-filtros) .abas-filtro { margin: 0; }
+.barra-filtros-mais-campos { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 16px; }
+
+.abas-grade { display: grid; gap: 6px; margin: 0 0 18px; }
+.abas-grade .abas-filtro-grupo { display: grid; gap: 10px; }
+.abas-grade .abas-filtro-titulo { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.abas-grade .abas-filtro-titulo::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+/* Mesmas colunas em todos os grupos, para as abas ficarem alinhadas entre si. */
+.abas-grade .abas-filtro-botoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; }
+.abas-grade .abas-filtro-botoes > button { justify-content: flex-start; width: 100%; min-width: 0; min-height: 48px; }
+.abas-grade .abas-filtro-botoes > button span { white-space: normal; line-height: 1.2; text-align: left; }
+.abas-grade .abas-filtro-botoes > button b { margin-left: auto; }
+
+.lista-resumo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0 0 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.lista-resumo strong { font-size: 17px; }
+.lista-resumo-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-right: auto; }
+.etiqueta-filtro { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border: 1px solid var(--green); border-radius: 999px; background: var(--accent-soft, #f1eade); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.lista-resumo > :not(strong) { margin: 0; }
+
+/* Janela de filtros (celular): sobe da parte de baixo da tela. */
+body:has(.modal-filtros[open]) { overflow: hidden; }
+.modal-filtros { width: min(520px, calc(100vw - 24px)); max-height: 88dvh; padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface, #fff); color: var(--ink); }
+.modal-filtros[open] { display: flex; flex-direction: column; }
+.modal-filtros::backdrop { background: #101a16a6; backdrop-filter: blur(3px); }
+.modal-filtros > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); font-size: 16px; }
+.modal-filtros-fechar { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink); }
+/* Linhas no tamanho do conteúdo: quem rola sozinho (abas) não é espremido quando a janela rola. */
+.modal-filtros-campos { display: grid; grid-auto-rows: max-content; gap: 14px; padding: 16px; overflow-y: auto; }
+.modal-filtros > footer { display: flex; gap: 10px; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+.modal-filtros > footer > * { flex: 1; }
+.modal-filtros .campo-filtro-grupo { flex: none; }
+
+@media (max-width: 760px) {
+  .cabecalho-lista h1 { font-size: 30px; }
+  .cabecalho-lista-acoes { width: 100%; }
+  .cabecalho-lista-acoes > * { flex: 1 1 auto; }
+  .barra-filtros { gap: 10px; padding: 10px; }
+  .barra-filtros-busca { flex-basis: 100%; }
+  .barra-filtros:has(> .barra-filtros-abas) > .barra-filtros-busca { flex-basis: 100%; }
+  .barra-filtros-abas { flex-basis: 100%; flex-wrap: wrap; }
+  .barra-filtros-abas > .abas-filtro { flex-basis: 100%; }
+  .barra-filtros-abas .abas-filtro-grupo { flex-wrap: nowrap; }
+  .barra-filtros-abas .abas-filtro button { min-height: 42px; padding: 0 12px; }
+  .barra-filtros-abas > .botao-contorno { flex: 1 1 auto; min-height: 46px; }
+  .barra-filtros-separador { display: none; }
+  .barra-filtros > :is(.botao-contorno, .botao-destaque) { flex: 1 1 0; min-height: 46px; padding: 0 10px; }
+  .abas-grade .abas-filtro-botoes { display: flex; overflow-x: auto; padding-bottom: 4px; }
+  .abas-grade .abas-filtro-botoes > button { flex: none; width: auto; min-height: 42px; }
+  .modal-filtros { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 16px 16px 0 0; }
+  .modal-filtros .abas-grade .abas-filtro-botoes { flex-wrap: wrap; overflow: visible; }
+  .inova-theme .barra-filtros .barra-filtros-busca input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) { font-size: 16px; }
+}
+
+/* Texto só para leitor de tela. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* "Ordenar" acima da tabela. */
+.lista-resumo-ordem { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.menu-selecao.linha { flex: none; max-width: none; }
+.seletor-compacto.linha { gap: 8px; min-height: 40px; padding: 0 32px 0 12px; }
+.seletor-compacto.linha strong { font-size: 13px; }
+.menu-selecao.linha .menu-selecao-lista { left: auto; right: 0; }
+
+/* Tabela de orçamentos: a linha abre os desenhos dos projetos. */
+.tabela-orcamentos { overflow-x: auto; margin: 0 0 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); }
+.tabela-orcamentos table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tabela-orcamentos th { padding: 12px 10px; border-bottom: 1px solid var(--line); background: var(--soft); color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.tabela-orcamentos td { padding: 12px 10px; border-bottom: 1px solid var(--line); color: var(--ink); vertical-align: middle; }
+.tabela-orcamentos tbody tr:last-child td { border-bottom: 0; }
+.tabela-orcamentos :is(th, td).valor { text-align: right; white-space: nowrap; }
+.tabela-orcamentos td.valor { font-weight: 700; }
+.linha-orcamento { cursor: pointer; }
+.linha-orcamento:hover td { background: color-mix(in srgb, var(--soft) 65%, transparent); }
+.linha-orcamento.aberta td { border-bottom-color: transparent; background: var(--soft); }
+.linha-orcamento td:first-child a { color: var(--ink); font-weight: 700; text-decoration: none; white-space: nowrap; }
+.linha-orcamento td:first-child a:hover { text-decoration: underline; }
+.linha-orcamento td strong { display: block; }
+.linha-orcamento td small { display: block; max-width: 220px; margin-top: 2px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.linha-orcamento .quote-worker { margin-top: 0; }
+.tabela-orcamentos .status { white-space: nowrap; }
+.tabela-orcamentos :is(th, td):first-child { padding-left: 16px; }
+.tabela-orcamentos td.acao { width: 1%; padding-right: 14px; }
+.celula-vazia { color: var(--muted); }
+.celula-cliente { display: grid; min-width: 0; }
+.celula-prazo { display: grid; justify-items: start; gap: 4px; white-space: nowrap; }
+.botao-expandir { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink); cursor: pointer; }
+.botao-expandir svg { transition: transform .15s; }
+.botao-expandir[aria-expanded='true'] svg { transform: rotate(180deg); }
+.linha-projetos > td { padding: 4px 16px 18px; background: var(--soft); }
+.linha-projetos .detail-actions { margin-top: 12px; }
+
+/* Telas médias: letra e espaçamento menores para as 9 colunas caberem. */
+@media (min-width: 761px) and (max-width: 1400px) {
+  .tabela-orcamentos table { font-size: 13px; }
+  .tabela-orcamentos :is(th, td) { padding-inline: 7px; }
+  .linha-orcamento td small { max-width: 180px; }
+}
+/*
+ * Celular: cada orçamento vira um cartão compacto. Número, valor e o botão de abrir
+ * no topo, cliente em destaque, situação e prazo lado a lado e, embaixo, equipe e
+ * emissão com rótulo.
+ */
+@media (max-width: 760px) {
+  .tabela-orcamentos { overflow: visible; border: 0; background: transparent; }
+  .tabela-orcamentos :is(table, tbody, tr, td) { display: block; width: 100%; }
+  .tabela-orcamentos thead { display: none; }
+  .tabela-orcamentos .linha-orcamento {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center;
+    grid-template-areas: 'numero valor acao' 'cliente cliente cliente' 'situacao prazo prazo' 'funcionario funcionario funcionario' 'vendedor vendedor vendedor' 'emissao emissao emissao';
+    margin-top: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff);
+  }
+  .tabela-orcamentos .linha-orcamento.aberta { border-bottom: 0; border-radius: 14px 14px 0 0; background: var(--soft); }
+  .tabela-orcamentos .linha-orcamento td { width: auto; min-width: 0; padding: 0; border: 0; background: none; }
+  .tabela-orcamentos .linha-orcamento td.col-numero { grid-area: numero; font-size: 14px; }
+  .tabela-orcamentos .linha-orcamento td.valor { grid-area: valor; justify-self: end; padding-left: 12px; font-size: 16px; }
+  .tabela-orcamentos .linha-orcamento td.col-cliente { grid-area: cliente; margin-top: 6px; }
+  .linha-orcamento .celula-cliente strong { font-size: 16px; }
+  .linha-orcamento td small { max-width: none; }
+  .tabela-orcamentos .linha-orcamento :is(td.col-situacao, td.col-prazo) { margin-top: 10px; }
+  .tabela-orcamentos .linha-orcamento td.col-situacao { grid-area: situacao; }
+  .tabela-orcamentos .linha-orcamento td.col-prazo { grid-area: prazo; justify-self: end; padding-left: 12px; }
+  .celula-prazo { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  /* O selo já diz "Sem prazo". */
+  .celula-prazo .prazo-vazio { display: none; }
+  .tabela-orcamentos .linha-orcamento :is(td.col-funcionario, td.col-vendedor, td.col-emissao) { display: flex; align-items: center; gap: 8px; padding-top: 4px; font-size: 13px; overflow-wrap: anywhere; }
+  .tabela-orcamentos .linha-orcamento :is(td.col-funcionario, td.col-vendedor, td.col-emissao)::before { content: attr(data-rotulo); flex: 0 0 82px; color: var(--muted); font-size: 12px; }
+  .tabela-orcamentos .linha-orcamento td.col-funcionario { grid-area: funcionario; }
+  .tabela-orcamentos .linha-orcamento td.col-vendedor { grid-area: vendedor; }
+  .tabela-orcamentos .linha-orcamento td.col-emissao { grid-area: emissao; }
+  .tabela-orcamentos .linha-orcamento td.col-funcionario { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .tabela-orcamentos .linha-orcamento td.acao { grid-area: acao; width: auto; padding-left: 10px; }
+  .linha-projetos > td { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 14px 14px; }
+  .lista-resumo-ordem > span { display: none; }
+}

@@ -101,20 +101,21 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
   if (loading || !user) return <main className="session-screen"><img src="/inova-logo.png" alt="Inova Marmoraria" width={130} height={85} /><p role="status">{error || 'Verificando acesso…'}</p>{error && <><button className="primary-button" onClick={() => setAttempt((value) => value + 1)}>Tentar novamente</button><a href="/login">Ir para o login</a></>}</main>;
   const superArea = ['/administracao', '/funcionarios', '/usuarios', '/dashboard'].some(path => pathname === path || pathname.startsWith(path + '/'));
   const allowed = (!superArea || user.role === 'SUPER_ADMIN') && (!pathname.startsWith('/projetos/') || temPermissao(user.role, 'technical'));
-  const links = [
+  // `inclui`: outras páginas que ficam dentro do mesmo item do menu.
+  const links: { href: string; label: string; icon: string; inclui?: string[] }[] = [
     ...(temPermissao(user.role, 'dashboard') ? [{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' }] : []),
     { href: '/mostruario', label: 'Mostruário', icon: 'showcase' },
-    { href: '/', label: 'Novo Projeto', icon: 'project' },
+    { href: '/', label: 'Novo orçamento', icon: 'project' },
     { href: '/orcamentos', label: 'Orçamentos', icon: 'quotes' },
     { href: '/fluxo', label: 'Fluxo de trabalho', icon: 'workflow' },
     ...(user.role === 'SUPER_ADMIN' ? [{ href: '/administracao', label: 'Materiais e serviços', icon: 'materials' }] : []),
     { href: '/clientes', label: 'Clientes', icon: 'customers' },
-    ...(user.role === 'SUPER_ADMIN' ? [{ href: '/funcionarios', label: 'Funcionários', icon: 'workers' }] : []),
-    ...(temPermissao(user.role, 'administration') ? [{ href: '/usuarios', label: 'Usuários e vendedores', icon: 'customers' }] : []),
+    ...(user.role === 'SUPER_ADMIN' || temPermissao(user.role, 'administration') ? [{ href: user.role === 'SUPER_ADMIN' ? '/funcionarios' : '/usuarios', label: 'Funcionários', icon: 'workers', inclui: ['/funcionarios', '/usuarios'] }] : []),
     { href: '/historico', label: 'Histórico', icon: 'history' },
   ];
-  const navigation = <nav aria-label="Menu principal">{links.map((link) => { const selected = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href); return <Link key={link.href} href={link.href} onClick={() => mobileMenu.current?.close()} className={selected ? 'active' : ''} aria-current={selected ? 'page' : undefined}><span aria-hidden="true"><NavigationIcon name={link.icon} /></span>{link.label}</Link>; })}</nav>;
-  const mobileTitle = links.find(link => link.href === '/' ? pathname === '/' : pathname.startsWith(link.href))?.label ?? 'Inova Marmoraria';
+  const ativo = (link: typeof links[number]) => link.href === '/' ? pathname === '/' : [link.href, ...(link.inclui ?? [])].some((prefixo) => pathname.startsWith(prefixo));
+  const navigation = <nav aria-label="Menu principal">{links.map((link) => { const selected = ativo(link); return <Link key={link.href} href={link.href} onClick={() => mobileMenu.current?.close()} className={selected ? 'active' : ''} aria-current={selected ? 'page' : undefined}><span aria-hidden="true"><NavigationIcon name={link.icon} /></span>{link.label}</Link>; })}</nav>;
+  const mobileTitle = links.find(ativo)?.label ?? 'Inova Marmoraria';
   return <SessionContext.Provider value={user}><div className="application-frame">
     <aside className="application-sidebar"><Link className="application-brand" href="/" aria-label="Inova — novo orçamento"><img src="/inova-logo.png" alt="Inova Marmoraria" /></Link>
       <span className="sidebar-section-label">ÁREA DE TRABALHO</span>

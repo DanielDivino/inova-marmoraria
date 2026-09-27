@@ -110,6 +110,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .catalog-modal .admin-form label { display:grid; gap:5px; color:var(--muted); font-size:11px; }
 .catalog-modal .admin-form .active-toggle { display:flex; align-items:center; }
 .catalog-modal .admin-form .primary-button { min-height:40px; }
+.catalog-modal .admin-form > .form-error { grid-column:1 / -1; margin:0; }
 .material-photo-upload { display:grid; gap:5px; margin-top:18px; padding-top:15px; border-top:1px solid var(--line); }
 .material-photo-upload strong { color:var(--ink); }
 .material-photo-upload small { color:var(--muted); font-size:11px; }

@@ -4,7 +4,7 @@ export type WorkStatus = typeof WORK_STATUSES[number];
 export const WORK_STATUS_LABELS: Record<WorkStatus, string> = {
   PENDING_APPROVAL: 'Aguardando aprovação', APPROVED: 'Aprovado', IN_PRODUCTION: 'Em produção',
   WAITING_MATERIAL: 'Aguardando material', PENDING_WORK: 'Falta fazer', REWORK: 'Retrabalho',
-  READY: 'Pronto', DELIVERY_PENDING: 'Entrega pendente', INSTALLATION_PENDING: 'Montagem pendente',
+  READY: 'Finalizado', DELIVERY_PENDING: 'Entrega pendente', INSTALLATION_PENDING: 'Montagem pendente',
   DELIVERED: 'Entregue', REJECTED: 'Não aprovado',
 };
 export const WORK_STATUS_TONES: Record<WorkStatus, 'neutral' | 'green' | 'yellow' | 'red'> = {
