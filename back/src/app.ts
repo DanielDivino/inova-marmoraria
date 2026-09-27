@@ -14,6 +14,7 @@ import { registrarRotasAuditoria } from './modulos/auditoria/audit.routes.js';
 import { registrarRotasNotificacoes } from './modulos/notificacoes/notification.routes.js';
 import { registrarRotasDesenhos } from './modulos/desenhos/design.routes.js';
 import { registrarRotasFuncionarios } from './modulos/funcionarios/worker.routes.js';
+import { registrarRotasFluxo } from './modulos/fluxo/workflow.routes.js';
 import { AppError } from './compartilhado/http.js';
 import { registrarRotasRemontagem } from './modulos/remontagem/remount.routes.js';
 
@@ -35,9 +36,12 @@ export async function criarAplicacao() {
   app.register(registrarRotasNotificacoes, { prefix: '/notifications' });
   app.register(registrarRotasDesenhos);
   app.register(registrarRotasFuncionarios, { prefix: '/workers' });
+  app.register(registrarRotasFluxo, { prefix: '/workflow' });
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {
+      // A resposta só resume; o log guarda o caminho de cada campo recusado (sem os valores enviados).
+      request.log.warn({ issues: error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })) }, 'Dados inválidos');
       return reply.status(422).send({ error: 'VALIDATION_ERROR', message: 'Dados inválidos.', issues: error.flatten() });
     }
     if (error instanceof AppError) return reply.status(error.statusCode).send({ error: error.code, message: error.message });

@@ -18,6 +18,7 @@ function NavigationIcon({ name }: { name: string }) {
     customers: <><circle cx="9" cy="8" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3m1-16a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v3" /></>,
     workers: <><path d="M4 15a8 8 0 0 1 16 0" /><rect x="3" y="15" width="18" height="3" rx="1" /><path d="M12 6v3" /></>,
     dashboard: <><path d="M4 20V10m8 10V4m8 16v-7M2 21h20" /></>,
+    workflow: <><rect x="3" y="4" width="5" height="16" rx="1.5" /><rect x="10" y="4" width="5" height="11" rx="1.5" /><rect x="17" y="4" width="4" height="7" rx="1.5" /></>,
     history: <><path d="M3 11a9 9 0 1 1 2.6 7.4M3 4v7h7" /><path d="M12 7v5l3 2" /></>,
   };
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
@@ -105,6 +106,7 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
     { href: '/mostruario', label: 'Mostruário', icon: 'showcase' },
     { href: '/', label: 'Novo Projeto', icon: 'project' },
     { href: '/orcamentos', label: 'Orçamentos', icon: 'quotes' },
+    { href: '/fluxo', label: 'Fluxo de trabalho', icon: 'workflow' },
     ...(user.role === 'SUPER_ADMIN' ? [{ href: '/administracao', label: 'Materiais e serviços', icon: 'materials' }] : []),
     { href: '/clientes', label: 'Clientes', icon: 'customers' },
     ...(user.role === 'SUPER_ADMIN' ? [{ href: '/funcionarios', label: 'Funcionários', icon: 'workers' }] : []),

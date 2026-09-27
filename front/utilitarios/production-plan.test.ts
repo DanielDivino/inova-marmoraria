@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dadosEntradaProjeto } from '@inova/domain';
-import { pecaParaComponente, componenteParaPeca, reconciliarPlano, aplicarDivisaoIgual, aplicarDivisaoManual, aplicarSeguirDivisao, aceitarMudancaComercial } from './production-plan';
+import { pecaParaComponente, componenteParaPeca, reconciliarPlano, aplicarDivisaoIgual, aplicarDivisaoManual, aplicarSeguirDivisao, aceitarMudancaComercial, conciliarPlanoParaSalvar, lerPlanoDeProducao, gravarPlanoDeProducao } from './production-plan';
 import { criarComponenteRapido } from './quick-quote';
 import type { DraftItem } from '../componentes/orcamento/types';
 
@@ -179,5 +179,20 @@ describe('rodabanca seguindo a divisão da bancada', () => {
     expect(rodabancas).toHaveLength(3);
     expect(rodabancas.every((piece) => piece.widthMm === 100)).toBe(true);
     expect(rodabancas.map((piece) => piece.parentPieceId).sort()).toEqual(plano.pieces.filter((piece) => piece.componentType !== 'BACKSPLASH').map((piece) => piece.id).sort());
+  });
+});
+
+describe('conciliarPlanoParaSalvar', () => {
+  it('peça trocada por outra não deixa o plano apontando para o componente que saiu', () => {
+    const original = draft();
+    const salvo = { ...original, drawingData: gravarPlanoDeProducao(original.drawingData, reconciliarPlano(original, undefined)) };
+    const trocado = { ...salvo, components: [{ ...salvo.components[0], id: 'comp-novo' }] };
+    const plano = lerPlanoDeProducao(conciliarPlanoParaSalvar(trocado).drawingData)!;
+    expect(plano.sources.map((source) => source.componentId)).toEqual(['comp-novo']);
+    expect(plano.pieces.map((piece) => piece.sourceComponentId)).toEqual(['comp-novo']);
+  });
+  it('sem plano de produção, o rascunho segue igual', () => {
+    const item = draft();
+    expect(conciliarPlanoParaSalvar(item)).toBe(item);
   });
 });

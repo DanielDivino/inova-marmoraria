@@ -29,6 +29,13 @@ enum QuoteStatus {
   CANCELLED
 }
 
+/// Coluna do projeto no Kanban do fluxo de trabalho.
+enum ProjectWorkflowStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
 enum ExecutionStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -482,12 +489,18 @@ model QuoteItem {
   materialSubtotal      Decimal     @db.Decimal(12, 2)
   servicesSubtotal      Decimal     @default(0) @db.Decimal(12, 2)
   total                 Decimal     @db.Decimal(12, 2)
+  /// Fluxo de trabalho: coluna, ordem dentro da coluna e quando foi concluído.
+  workflowStatus        ProjectWorkflowStatus @default(TODO)
+  workflowPosition      Float       @default(0)
+  workflowCompletedAt   DateTime?
   quote                 Quote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   productType           ProductType @relation(fields: [productTypeId], references: [id])
   material              Material    @relation(fields: [materialId], references: [id])
   services              QuoteItemService[]
   components            QuoteItemComponent[]
   cutouts               QuoteItemCutout[]
+
+  @@index([workflowStatus, workflowPosition])
 }
 
 model QuoteItemComponent {

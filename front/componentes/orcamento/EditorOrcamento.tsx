@@ -22,7 +22,7 @@ import { ResumoMovel } from './MobileQuoteSummary';
 import { criarId } from '../../utilitarios/id';
 import { aplicarMaterialProjeto, arredondarMedidaParaCima, prepararItemRapido } from '../../utilitarios/quick-quote';
 import './quick-quote.css';
-import { reconciliarPlano, aplicarDivisaoIgual, aplicarDivisaoManual, aplicarSeguirDivisao, aceitarMudancaComercial, lerPlanoDeProducao, gravarPlanoDeProducao, componenteParaPeca, planoParaDesenho, type ProductionPlan, type ProductionPiece } from '../../utilitarios/production-plan';
+import { conciliarPlanoParaSalvar, reconciliarPlano, aplicarDivisaoIgual, aplicarDivisaoManual, aplicarSeguirDivisao, aceitarMudancaComercial, lerPlanoDeProducao, gravarPlanoDeProducao, componenteParaPeca, planoParaDesenho, type ProductionPlan, type ProductionPiece } from '../../utilitarios/production-plan';
 import { AssistenteDivisaoProducao } from './ProductionSplitAssistant';
 import { RecortesProducao } from './ProductionCutouts';
 import { SeguirDivisaoRodabanca } from './FollowSplitBacksplash';
@@ -610,7 +610,7 @@ export default function EditorOrcamento() {
     setSaving(true);
     try {
       const defaultProductTypeId = catalog?.productTypes[0]?.id ?? '';
-      const payload = { customerId: activeWorkspace.customer!.id, parentQuoteId: activeWorkspace.parentQuote?.id, expectedUpdatedAt: editingQuote?.updatedAt, notes: activeWorkspace.notes.trim() || null, validUntil: activeWorkspace.validUntil || null, discountAmount: activeWorkspace.discount.trim() ? currency(activeWorkspace.discount) : 0, items: itemsToSave.map((draft) => { const prepared = prepareDraftForSave(draft); const normalized = prepared.productTypeId ? prepared : { ...prepared, productTypeId: defaultProductTypeId }; return rascunhoParaEntradaItem(normalized, snapshotFor(draft)); }) };
+      const payload = { customerId: activeWorkspace.customer!.id, parentQuoteId: activeWorkspace.parentQuote?.id, expectedUpdatedAt: editingQuote?.updatedAt, notes: activeWorkspace.notes.trim() || null, validUntil: activeWorkspace.validUntil || null, discountAmount: activeWorkspace.discount.trim() ? currency(activeWorkspace.discount) : 0, items: itemsToSave.map((draft) => { const prepared = conciliarPlanoParaSalvar(prepareDraftForSave(draft), servicesFor(draft)); const normalized = prepared.productTypeId ? prepared : { ...prepared, productTypeId: defaultProductTypeId }; return rascunhoParaEntradaItem(normalized, snapshotFor(draft)); }) };
       const saved = await api<{ id: string }>(quoteId ? `/quotes/${quoteId}` : '/quotes', { method: quoteId ? 'PUT' : 'POST', body: JSON.stringify(payload) });
       const savedActiveId = saved.id;
       if (!quoteId) await api(`/quotes/${saved.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'SENT' }) });
