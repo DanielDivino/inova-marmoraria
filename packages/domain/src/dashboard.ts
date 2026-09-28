@@ -1,6 +1,6 @@
 export type DashboardCounts = {
   issued: number; pending: number; sold: number; cancelled: number; rejected: number; expired: number;
-  approved: number; production: number; waitingMaterial: number; pendingWork: number; rework: number;
+  approved: number; production: number; waitingMaterial: number; pendingWork: number; rework: number; paused: number;
   ready: number; deliveryPending: number; installationPending: number; delivered: number; overdue: number;
   quotedValue: number; soldValue: number; conversion: number;
 };

@@ -1,10 +1,11 @@
-import { centimetrosParaMilimetros, pecaInicial, dividirComponente, dividirIgualmente, validarDivisao, calcularUltimaPeca, seguirDivisao, planoDeProducao, comPlanoDeProducao, precisaRevisao,
-  type ProductionPlan, type ProductionPiece, type ProductionSource, type ProductionCutout, type ProductionEdge, type ProductionEdgeSide, type ResultadoDivisao, type ProductionSplitAxis } from '@inova/domain';
+import { centimetrosParaMilimetros, pecaInicial, dividirComponente, dividirPorMedida, dividirIgualmente, validarDivisao, calcularUltimaPeca, seguirDivisao, planoDeProducao, comPlanoDeProducao, precisaRevisao,
+  type ProductionPlan, type ProductionPiece, type ProductionSource, type ProductionCutout, type ProductionEdge, type ProductionEdgeSide, type ResultadoDivisao, type ProductionSplitAxis, type PecaPorMedida } from '@inova/domain';
 import type { DraftComponent, DraftCutout, DraftItem } from '../componentes/orcamento/types';
 import { criarId } from './id';
 
-export type { ProductionPlan, ProductionPiece, ProductionSource, ProductionCutout, ProductionEdge, ProductionEdgeSide, ResultadoDivisao, ProductionSplitAxis };
+export type { ProductionPlan, ProductionPiece, ProductionSource, ProductionCutout, ProductionEdge, ProductionEdgeSide, ResultadoDivisao, ProductionSplitAxis, PecaPorMedida };
 export { dividirIgualmente, validarDivisao, calcularUltimaPeca, planoDeProducao, precisaRevisao };
+export { areaDaOrigemMm2, quantidadeAteAcabar, validarDivisaoPorMedida } from '@inova/domain';
 
 const cm = (mm?: number) => mm === undefined || mm <= 0 ? undefined : String(mm / 10);
 const mm = (value?: string) => { if (!value?.trim()) return undefined; try { const parsed = centimetrosParaMilimetros(value); return parsed; } catch { return undefined; } };
@@ -140,6 +141,17 @@ export function aplicarDivisaoManual(plano: ProductionPlan, source: ProductionSo
   const novasPecas = dividirComponente({ id: source.componentId, label: componentSnapshot.label, componentType: componentSnapshot.componentType, orientation: componentSnapshot.orientation,
     lengthMm: source.splitAxis === 'LENGTH' ? source.snapshotLengthMm : outraMedida, widthMm: source.splitAxis === 'LENGTH' ? outraMedida : source.snapshotWidthMm,
     quantity: source.snapshotQuantity, edges: componentSnapshot.edges }, medidasMm, source.splitAxis, newId);
+  const idsAntigos = new Set(plano.pieces.filter((piece) => piece.sourceComponentId === source.componentId).map((piece) => piece.id));
+  return {
+    ...plano,
+    pieces: [...plano.pieces.filter((piece) => piece.sourceComponentId !== source.componentId), ...novasPecas],
+    cutouts: plano.cutouts.filter((cutout) => !idsAntigos.has(cutout.pieceId)),
+  };
+}
+
+/** Confirma a divisão por medida (comprimento × largura repetidos), já validada com validarDivisaoPorMedida. */
+export function aplicarDivisaoPorMedida(plano: ProductionPlan, source: ProductionSource, componentSnapshot: { label: string; componentType: ProductionPiece['componentType']; orientation: ProductionPiece['orientation']; edges: ProductionPiece['edges'] }, pecas: PecaPorMedida[]): ProductionPlan {
+  const novasPecas = dividirPorMedida({ id: source.componentId, ...componentSnapshot }, pecas, newId);
   const idsAntigos = new Set(plano.pieces.filter((piece) => piece.sourceComponentId === source.componentId).map((piece) => piece.id));
   return {
     ...plano,

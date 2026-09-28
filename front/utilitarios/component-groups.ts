@@ -16,6 +16,20 @@ export function restaurarNomesComponentes(items: DraftItem[], version = 0): Draf
   })) }));
 }
 
+/** Muda a posição de uma peça na lista; os recortes continuam presos à mesma peça. */
+export function moverComponente(item: Pick<DraftItem, 'components' | 'cutouts'>, de: number, para: number) {
+  const components = [...item.components];
+  const [movido] = components.splice(de, 1);
+  if (!movido) return { components: item.components, cutouts: item.cutouts };
+  components.splice(para, 0, movido);
+  const cutouts = item.cutouts.map((cutout) => {
+    if (cutout.componentIndex === undefined) return cutout;
+    const componentIndex = components.findIndex((entry) => entry.id === item.components[cutout.componentIndex!]?.id);
+    return { ...cutout, componentIndex: componentIndex >= 0 ? componentIndex : undefined };
+  });
+  return { components, cutouts };
+}
+
 export function removerGrupoComponentes(item: DraftItem, index: number) {
   const target = item.components[index];
   const removed = new Set([target.id, ...item.components.filter((entry) => entry.parentComponentId === target.id).map((entry) => entry.id)]);

@@ -1,7 +1,6 @@
 'use client';
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type SetStateAction } from 'react';
-import { createPortal } from 'react-dom';
 import { arredondarMoeda, valorAplicadoComponente, podeEditarOrcamento, type SavedQuoteItem, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularTotalOrcamento, centimetrosParaMilimetros, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
 import { EditorComponentes } from './ComponentEditor';
 import { DesenhoTecnico } from './TechnicalDrawing';
@@ -16,16 +15,18 @@ import { TituloEtapaProjeto } from './ProjectStageHeading';
 import '../../app/project-builder.css';
 import { useSession } from '../ApplicationShell';
 import { EtapasProjeto } from './ProjectStepper';
-import { calcularTotalCartao, projetoTemDesenho, dadosEntradaProjeto, modoEntradaOrcamento, type QuoteEntryMode } from '@inova/domain';
+import { calcularTotalCartao, projetoTemDesenho, dadosEntradaProjeto, trocarModoEntrada, modoEntradaOrcamento, type QuoteEntryMode } from '@inova/domain';
 import { EditorOrcamentoRapido } from './QuickQuoteEditor';
 import { ResumoMovel } from './MobileQuoteSummary';
 import { criarId } from '../../utilitarios/id';
-import { aplicarMaterialProjeto, arredondarMedidaParaCima, prepararItemRapido } from '../../utilitarios/quick-quote';
+import { alterouOrcamentoRapido, arredondarMedidaParaCima, normalizarPedrasDasPecas, prepararItemRapido } from '../../utilitarios/quick-quote';
 import './quick-quote.css';
-import { conciliarPlanoParaSalvar, reconciliarPlano, aplicarDivisaoIgual, aplicarDivisaoManual, aplicarSeguirDivisao, aceitarMudancaComercial, lerPlanoDeProducao, gravarPlanoDeProducao, componenteParaPeca, planoParaDesenho, type ProductionPlan, type ProductionPiece } from '../../utilitarios/production-plan';
+import { conciliarPlanoParaSalvar, reconciliarPlano, aplicarDivisaoIgual, aplicarDivisaoManual, aplicarDivisaoPorMedida, aceitarMudancaComercial, lerPlanoDeProducao, gravarPlanoDeProducao, componenteParaPeca, planoParaDesenho, type ProductionPlan, type ProductionPiece } from '../../utilitarios/production-plan';
 import { AssistenteDivisaoProducao } from './ProductionSplitAssistant';
-import { RecortesProducao } from './ProductionCutouts';
-import { SeguirDivisaoRodabanca } from './FollowSplitBacksplash';
+import { createPortal } from 'react-dom';
+import { Icone, useCelular } from '../filtros/Filtros';
+import { BarraAtendimento } from './BarraAtendimento';
+import { RecortesDaPeca } from './ProductionCutouts';
 
 type BillingUnit = 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED';
 type MaterialImage = { id: string; url: string; alt?: string | null; isPrimary: boolean };
@@ -36,7 +37,6 @@ type Customer = { id: string; name: string; phone: string; document?: string | n
 type Catalog = { materials: Material[]; services: Service[]; productTypes: ProductType[] };
 type ClientWorkspace = { id: string; customer: Customer | null; items: DraftItem[]; activeIndex: number; discount: string; validUntil: string; notes: string; parentQuote: QuoteLink | null };
 type CustomerTarget = { kind: 'WORKSPACE'; workspaceId: string } | { kind: 'NEW_WORKSPACE' };
-type ClientTabDialog = { kind: 'ADD' } | { kind: 'ACTIONS'; workspaceId: string } | { kind: 'DELETE'; workspaceId: string };
 
 const projetoPreenchido = (project: DraftItem) => !!project.projectName.trim() || !!project.materialId || !!project.manualM2 || !!project.manualJustification || project.components.length > 1 || project.cutouts.length > 0 || project.serviceIds.length > 0 || project.components.some(component => !!component.label.trim() || !!component.materialId || !!component.lengthCm || !!component.widthCm || component.quantity !== 1 || component.componentType !== 'TOP' || component.edges.length > 0 || component.appliedTotal !== undefined);
 
@@ -72,10 +72,13 @@ export default function EditorOrcamento() {
   const [editingQuote, setEditingQuote] = useState<EditingQuote | null>(null);
   const [workspaces, setWorkspaces] = useState<ClientWorkspace[]>(() => [newClientWorkspace()]);
   const [activeClientIndex, setActiveClientIndex] = useState(0);
+  // No computador, a barra do atendimento vai para a barra de cima (ao lado do sino); no celular fica na página.
+  const celular = useCelular();
+  const [alvoCabecalho, setAlvoCabecalho] = useState<HTMLElement | null>(null);
+  useEffect(() => { setAlvoCabecalho(document.getElementById('application-header-tabs')); }, []);
   const [error, setError] = useState('');
   const [customerMode, setCustomerMode] = useState<'NEW' | 'EXISTING' | null>(null);
   const [customerTarget, setCustomerTarget] = useState<CustomerTarget | null>(null);
-  const [clientTabDialog, setClientTabDialog] = useState<ClientTabDialog | null>(null);
   const [customerError, setCustomerError] = useState('');
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
@@ -86,18 +89,19 @@ export default function EditorOrcamento() {
   const [currentStep, setCurrentStep] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [reviewedSteps, setReviewedSteps] = useState<number[]>([]);
-  const [headerTabsTarget, setHeaderTabsTarget] = useState<HTMLElement | null>(null);
   const navigateStep = (step: number) => {
     setCurrentStep(step);
     window.setTimeout(() => {
       const target = document.getElementById(`project-step-${step}`);
-      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Não desce a tela (clicar em 1 ou 2 no topo fica onde está); só volta ao começo
+      // da etapa quando ele ficou acima da área visível (ex.: "Conferir produção" no fim da página).
+      if (target && target.getBoundingClientRect().top < 0) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       target?.focus({ preventScroll: true });
     }, 0);
   };
   const nextStep = () => {
     if (currentStep >= 2) setReviewedSteps((steps) => [...new Set([...steps, currentStep])]);
-    navigateStep(Math.min(currentStep + 1, 3));
+    navigateStep(Math.min(currentStep + 1, 2));
   };
   const [saving, setSaving] = useState(false);
   const [pdfIndividualPrices, setPdfIndividualPrices] = useState(false);
@@ -105,7 +109,6 @@ export default function EditorOrcamento() {
   const [componentNamesVersion, setComponentNamesVersion] = useState(0);
   const savedRef = useRef(false);
   const latestDraft = useRef<string>('');
-  useEffect(() => { setHeaderTabsTarget(document.getElementById('application-header-tabs')); }, []);
   const linearServices = useMemo(() => catalog?.services.filter((service) => service.billingUnit === 'LINEAR_METER') ?? [], [catalog]);
   const workspace = workspaces[activeClientIndex] ?? workspaces[0];
   const customer = workspace.customer;
@@ -159,7 +162,7 @@ export default function EditorOrcamento() {
       const stored = localStorage.getItem(quoteDraftStorageKey) ?? (currentUser?.role === 'SUPER_ADMIN' ? localStorage.getItem(legacyQuoteDraftStorageKey) : null);
       if (stored) {
         const draft = JSON.parse(stored) as Partial<{ customer: Customer | null; customerMode: 'NEW' | 'EXISTING' | null; customerForm: typeof customerForm; items: DraftItem[]; activeIndex: number; discount: string; validUntil: string; notes: string; parentQuote: QuoteLink | null; componentNamesVersion: number; workspaces: Partial<ClientWorkspace>[]; activeClientIndex: number }>;
-        const normalizeItems = (entries: DraftItem[] | undefined) => entries?.length ? restaurarNomesComponentes(entries, draft.componentNamesVersion).map((entry) => ({ ...entry, projectName: entry.projectName ?? '', components: entry.components.map(component => ({ ...component, materialId: component.materialId ?? entry.materialId })), serviceAppliedValues: entry.serviceAppliedValues ?? {} })) : [newItem()];
+        const normalizeItems = (entries: DraftItem[] | undefined) => entries?.length ? restaurarNomesComponentes(entries, draft.componentNamesVersion).map((entry) => ({ ...entry, projectName: entry.projectName ?? '', components: normalizarPedrasDasPecas(entry, entry.components), serviceAppliedValues: entry.serviceAppliedValues ?? {} })) : [newItem()];
         if (Array.isArray(draft.workspaces) && draft.workspaces.length) {
           setWorkspaces(draft.workspaces.map((entry) => ({ ...newClientWorkspace(), ...entry, id: entry.id ?? newId(), customer: entry.customer ?? null, items: normalizeItems(entry.items), activeIndex: Math.min(Math.max(0, entry.activeIndex ?? 0), Math.max(0, (entry.items?.length ?? 1) - 1)), discount: entry.discount ?? '0', validUntil: entry.validUntil ?? '', notes: entry.notes ?? '', parentQuote: entry.parentQuote ?? null })));
           if (typeof draft.activeClientIndex === 'number') setActiveClientIndex(Math.min(Math.max(0, draft.activeClientIndex), draft.workspaces.length - 1));
@@ -218,7 +221,7 @@ export default function EditorOrcamento() {
         try {
           const stored = JSON.parse(localStorage.getItem(quoteDraftStorageKey) || 'null');
           if (stored?.expectedUpdatedAt === quote.updatedAt && stored.items?.length) {
-            setItems(stored.items.map((entry: DraftItem) => ({ ...entry, components: entry.components.map(component => ({ ...component, materialId: component.materialId ?? entry.materialId })) }))); setDiscount(stored.discount); setValidUntil(stored.validUntil);
+            setItems(stored.items.map((entry: DraftItem) => ({ ...entry, components: normalizarPedrasDasPecas(entry, entry.components) }))); setDiscount(stored.discount); setValidUntil(stored.validUntil);
             if (typeof stored.notes === 'string') setNotes(stored.notes);
             if (stored.customer) setCustomer(stored.customer);
           }
@@ -228,7 +231,7 @@ export default function EditorOrcamento() {
           const index = quote.items.findIndex(entry => entry.id === detailId);
           if (index >= 0) {
             setItems(current => current.map((entry, i) => i === index ? { ...entry, drawingData: dadosEntradaProjeto(entry.drawingData, 'DETAILED') } : entry));
-            setActiveIndex(index); setCurrentStep(3);
+            setActiveIndex(index); setCurrentStep(2);
           }
         }
         setComponentNamesVersion(1);
@@ -278,6 +281,8 @@ export default function EditorOrcamento() {
   };
   const item = items[activeIndex] ?? items[0];
   const quickMode = modoEntradaOrcamento(item.drawingData) === 'QUICK';
+  const temDesenho = projetoTemDesenho(item.drawingData);
+  const concluirDetalhamento = () => { const problem = projectProblem(item); if (problem) { setError(problem.message); return; } updateItem({ drawingData: { ...item.drawingData, detailingStatus: 'COMPLETED' } }); };
   const activeServices = servicesFor(item);
   const drawingServices = editingQuote ? activeServices.filter((service) => service.billingUnit === 'LINEAR_METER') : linearServices;
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
@@ -397,9 +402,9 @@ export default function EditorOrcamento() {
   const updateProductionPlan = (updater: (plan: ProductionPlan) => ProductionPlan) => updateItem({ drawingData: gravarPlanoDeProducao(item.drawingData, updater(productionPlan)) });
   const productionSourceSnapshots: Record<string, Pick<ProductionPiece, 'label' | 'componentType' | 'orientation' | 'edges'>> = Object.fromEntries(productionPlan.sources.map((source) => {
     const piece = productionPlan.pieces.find((entry) => entry.sourceComponentId === source.componentId && !entry.parentPieceId);
-    return piece ? [source.componentId, { label: piece.label, componentType: piece.componentType, orientation: piece.orientation, edges: piece.edges }] as const : null;
+    const comercial = item.components.find((component) => component.id === source.componentId);
+    return piece ? [source.componentId, { label: comercial?.label ?? piece.label, componentType: comercial?.componentType ?? piece.componentType, orientation: piece.orientation, edges: piece.edges }] as const : null;
   }).filter((entry): entry is [string, Pick<ProductionPiece, 'label' | 'componentType' | 'orientation' | 'edges'>] => entry !== null));
-  const productionRootPieces = productionPlan.pieces.filter((piece) => !piece.parentPieceId);
   const { components: productionPieceDraftComponents, cutouts: productionCutoutsAsDraft } = planoParaDesenho(productionPlan);
   const updateProductionPieces = (components: DraftComponent[]) => updateProductionPlan((plan) => {
     const porId = new Map(plan.pieces.map((piece) => [piece.id, piece]));
@@ -420,10 +425,8 @@ export default function EditorOrcamento() {
   const productionDrawingCutouts = useDeferredValue(productionCutoutsAsDraft);
   const changeEntryMode = (mode: QuoteEntryMode) => {
     if (mode === 'QUICK' && item.calculationMode === 'MANUAL_M2') { setError('Este projeto usa área manual. Adicione um projeto para informar peças no orçamento rápido.'); return; }
-    const materialIds = new Set(item.components.map(component => component.materialId || item.materialId).filter(Boolean));
-    if (mode === 'QUICK' && materialIds.size > 1) { setError('Este projeto tem materiais diferentes por peça. Use um projeto rápido separado para cada material.'); return; }
     const prepared = prepararItemRapido(item);
-    updateItem({ ...(prepared.components.length ? { components: prepared.components, cutouts: prepared.cutouts } : {}), ...(mode === 'QUICK' ? aplicarMaterialProjeto(item, item.components[0]?.materialId || item.materialId) : {}), drawingData: dadosEntradaProjeto(item.drawingData, mode) });
+    updateItem({ ...(prepared.components.length ? { components: prepared.components, cutouts: prepared.cutouts } : {}), ...(mode === 'QUICK' && !item.materialId ? { materialId: item.components[0]?.materialId ?? '' } : {}), drawingData: trocarModoEntrada(item.drawingData, mode) });
     setError(''); setCurrentStep(1);
   };
   const selectProject = (index: number) => { setActiveIndex(index); setSummarySelection(index); setReviewedSteps([]); };
@@ -468,9 +471,8 @@ export default function EditorOrcamento() {
     const empty = workspaces.find(entry => !entry.customer && !entry.parentQuote && entry.items.every(project => !projetoPreenchido(project)));
     return empty ? { kind: 'WORKSPACE', workspaceId: empty.id } : { kind: 'NEW_WORKSPACE' };
   };
-  const addNewCustomerFromTab = () => { setCustomerTarget(customerTargetForNewTab()); setClientTabDialog(null); openNewCustomer(); };
-  const selectExistingCustomerFromTab = () => { setCustomerTarget(customerTargetForNewTab()); setClientTabDialog(null); openCustomerSearch(); };
-  const changeWorkspaceCustomer = (workspaceId: string) => { setCustomerTarget({ kind: 'WORKSPACE', workspaceId }); setClientTabDialog(null); openCustomerSearch(); };
+  // "+ Outro cliente": escolhe (ou cadastra) o cliente e só então abre o novo atendimento.
+  const adicionarOutroCliente = () => { setCustomerTarget(customerTargetForNewTab()); openCustomerSearch(); };
   async function salvarCliente(event: FormEvent) {
     event.preventDefault();
     if (savingCustomer) return;
@@ -494,15 +496,6 @@ export default function EditorOrcamento() {
     setReviewedSteps([]);
   }
   const workspaceHasData = (entry: ClientWorkspace) => !!entry.customer || entry.items.some((project) => projetoPreenchido(project));
-  function adicionarEspacoCliente() {
-    const fresh = newClientWorkspace();
-    fresh.items = [{ ...fresh.items[0], productTypeId: catalog?.productTypes[0]?.id ?? '' }];
-    setWorkspaces((current) => [...current, fresh]);
-    setActiveClientIndex(workspaces.length);
-    setSummarySelection(0);
-    setReviewedSteps([]);
-    setCurrentStep(1);
-  }
   function removerEspacoCliente(index: number, confirmed = false) {
     const entry = workspaces[index];
     if (!entry) return;
@@ -527,12 +520,6 @@ export default function EditorOrcamento() {
     setReviewedSteps([]);
     setCurrentStep(1);
   }
-  const openClientTabActions = (workspaceId: string) => setClientTabDialog({ kind: 'ACTIONS', workspaceId });
-  const confirmRemoveClientTab = (workspaceId: string) => {
-    const index = workspaces.findIndex(entry => entry.id === workspaceId);
-    if (index >= 0) removerEspacoCliente(index, true);
-    setClientTabDialog(null);
-  };
   const projectProblem = (draft: DraftItem): { message: string; componentId?: string } | null => {
     draft = prepararItemRapido(draft);
     const quickDraft = modoEntradaOrcamento(draft.drawingData) === 'QUICK';
@@ -625,26 +612,22 @@ export default function EditorOrcamento() {
   }
   if (quoteId && !editingQuote) return <main className="shell"><Link href="/orcamentos">← Orçamentos</Link><p className={error ? 'form-error' : 'empty'}>{error || 'Abrindo orçamento para edição…'}</p></main>;
   if (!catalog) return <main className="shell"><p className="empty">{error || 'Carregando catálogo…'}</p></main>;
-  const clientTabs = !quoteId ? <div className="client-tabs-bar" role="tablist" aria-label="Clientes"><span className="client-tabs-label">Clientes</span>{workspaces.map((entry, index) => <div className={`client-tab ${index === activeClientIndex ? 'active' : ''}`} key={entry.id}>
-    <button type="button" role="tab" aria-selected={index === activeClientIndex} onClick={() => selecionarEspacoCliente(index)}>{entry.customer?.name || `Cliente ${index + 1}`}</button>
-    <button type="button" className="close-client-tab desktop-client-close" aria-label={`Excluir ${entry.customer?.name || 'Cliente ' + (index + 1)}`} onClick={() => removerEspacoCliente(index)}>×</button>
-    <button type="button" className="mobile-client-pencil" aria-label={`Opções de ${entry.customer?.name || 'Cliente ' + (index + 1)}`} onClick={() => openClientTabActions(entry.id)}>✎</button>
-  </div>)}<button type="button" className="add-client-tab desktop-add-client" aria-label="Adicionar cliente" onClick={adicionarEspacoCliente}>+</button><button type="button" className="add-client-tab mobile-add-client" aria-label="Adicionar cliente" onClick={() => setClientTabDialog({ kind: 'ADD' })}>+</button></div> : null;
-  const clientTabWorkspace = clientTabDialog && clientTabDialog.kind !== 'ADD' ? workspaces.find(entry => entry.id === clientTabDialog.workspaceId) : null;
 
-  return <main className={`shell project-builder${!quoteId ? ' has-client-tabs' : ''}`}>
+  const barraNoTopo = !celular && !!alvoCabecalho;
+  const barraAtendimento = <BarraAtendimento clientes={quoteId ? [] : workspaces.map((entry) => ({ id: entry.id, nome: entry.customer?.name ?? null }))} clienteAtivo={activeClientIndex} clienteNome={customer?.name ?? null}
+    projetos={items.map((draft, index) => ({ id: draft.id, nome: draft.projectName.trim() || `Projeto ${index + 1}` }))} projetoAtivo={activeIndex}
+    aoEscolherCliente={selecionarEspacoCliente} aoSelecionarCliente={openCustomerSearch} aoCadastrarCliente={openNewCustomer}
+    aoOutroCliente={quoteId ? undefined : adicionarOutroCliente}
+    aoRemoverCliente={!quoteId && (workspaces.length > 1 || workspaceHasData(workspace)) ? () => removerEspacoCliente(activeClientIndex) : undefined}
+    aoEditarCliente={customer ? editCustomer : undefined}
+    aoEscolherProjeto={selectProject} aoAdicionarProjeto={adicionarProjeto} aoExcluirProjeto={() => removerProjeto(activeIndex)} />;
+  return <main className="shell project-builder">
     <ResumoMovel total={formatarMoeda(summaries[activeIndex]?.total ?? 0)} label="Total do projeto atual" />
-    <header className="project-topbar">
-      {!headerTabsTarget && clientTabs}
-      <div className="project-topbar-main"><div className="project-title-client"><h1 className={editingQuote ? undefined : 'titulo-no-topo'}>{editingQuote ? `Editar ${editingQuote.number}` : 'Novo Projeto'}</h1>
-        <div className="compact-customer">{customer ? <><span title={customer.name}>Cliente: <strong>{customer.name}</strong></span><button type="button" onClick={openCustomerSearch}>Trocar cliente</button><button type="button" onClick={editCustomer} aria-label="Editar cliente">✎</button></> : <><button type="button" onClick={openCustomerSearch}>Selecionar cliente</button><span aria-hidden="true">|</span><button type="button" onClick={openNewCustomer}>Novo cliente</button></>}</div>
-      </div>
-      <div className="project-tabs-bar"><div className="project-tabs" role="tablist" aria-label="Projetos">{items.map((draft, index) => <div className={`project-tab ${index === activeIndex ? 'active' : ''}`} key={draft.id}>
-        <button type="button" role="tab" id={`tab-${draft.id}`} aria-controls="active-project-panel" aria-selected={index === activeIndex} tabIndex={index === activeIndex ? 0 : -1} onClick={() => selectProject(index)} onKeyDown={event => { const target = event.key === 'ArrowRight' ? (index + 1) % items.length : event.key === 'ArrowLeft' ? (index + items.length - 1) % items.length : event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : -1; if (target >= 0) { event.preventDefault(); selectProject(target); document.getElementById(`tab-${items[target].id}`)?.focus(); } }}>{draft.projectName || `Projeto ${index + 1}`}</button>
-        <button type="button" className="close-project-tab" aria-label={`Excluir ${draft.projectName || 'Projeto ' + (index + 1)}`} onClick={() => removerProjeto(index)}>×</button>
-      </div>)}</div><button type="button" className="add-project-tab" aria-label="Adicionar projeto" onClick={adicionarProjeto}>+</button></div></div>
+    <header className={`project-topbar${barraNoTopo ? ' barra-no-topo' : ''}`}>
+      {editingQuote ? <h1 className="project-edit-title">Editar {editingQuote.number}</h1> : <h1 className="sr-only">Novo orçamento</h1>}
+      {!barraNoTopo && barraAtendimento}
     </header>
-    {headerTabsTarget && clientTabs && createPortal(clientTabs, headerTabsTarget)}
+    {barraNoTopo && alvoCabecalho && createPortal(barraAtendimento, alvoCabecalho)}
     {customerMode && <dialog className="customer-dialog" aria-label={editingCustomerId ? 'Editar cliente' : customerMode === 'NEW' ? 'Novo cliente' : 'Selecionar cliente'} ref={node => { if (node && !node.open) node.showModal(); }} onCancel={event => { if (savingCustomer) event.preventDefault(); else closeCustomerDialog(); }}>
       <div className="customer-dialog-heading"><strong>{editingCustomerId ? 'Editar cliente' : customerMode === 'NEW' ? 'Novo cliente' : 'Selecionar cliente'}</strong><button type="button" className="text-button" aria-label="Fechar seleção de cliente" disabled={savingCustomer} onClick={closeCustomerDialog}>×</button></div>
       <div className="customer-mode-tabs"><button type="button" disabled={savingCustomer} onClick={openCustomerSearch}>Selecionar cliente</button><button type="button" disabled={savingCustomer} onClick={openNewCustomer}>Novo cliente</button></div>
@@ -666,32 +649,19 @@ export default function EditorOrcamento() {
         {customerSearch.trim().length < 2 ? <p className="customer-help">Comece digitando para localizar um cliente cadastrado.</p> : customers.length ? <div className="customer-results">{customers.map((entry) => <button className="customer-result" key={entry.id} onClick={() => selectCustomer(entry)}><strong>{entry.name}</strong><small>{entry.phone}{entry.document ? ` · ${entry.document}` : ''}</small></button>)}</div> : <p className="customer-help">Nenhum cliente encontrado. <button type="button" className="text-button" onClick={openNewCustomer}>Cadastrar novo cliente</button></p>}
       </>}
     </dialog>}
-    {clientTabDialog && <dialog className="customer-dialog client-tabs-dialog" aria-label={clientTabDialog.kind === 'ADD' ? 'Adicionar cliente' : clientTabDialog.kind === 'DELETE' ? 'Excluir cliente?' : 'Opções do cliente'} ref={node => { if (node && !node.open) node.showModal(); }} onCancel={() => setClientTabDialog(null)}>
-      <div className="customer-dialog-heading"><strong>{clientTabDialog.kind === 'ADD' ? 'Adicionar cliente' : clientTabDialog.kind === 'DELETE' ? 'Excluir cliente?' : 'Opções do cliente'}</strong><button type="button" className="text-button" aria-label="Fechar opções do cliente" onClick={() => setClientTabDialog(null)}>×</button></div>
-      {clientTabDialog.kind === 'ADD' && <>
-        <p>Escolha como deseja adicionar o cliente a este orçamento.</p>
-        <div className="client-tab-dialog-actions"><button type="button" onClick={addNewCustomerFromTab}>Cadastrar novo cliente</button><button type="button" onClick={selectExistingCustomerFromTab}>Escolher cliente existente</button></div>
-      </>}
-      {clientTabDialog.kind === 'ACTIONS' && <>
-        <p className="client-tab-dialog-customer">{clientTabWorkspace?.customer?.name || 'Cliente sem cadastro'}</p>
-        <div className="client-tab-dialog-actions"><button type="button" onClick={() => changeWorkspaceCustomer(clientTabDialog.workspaceId)}>Trocar cliente</button><button type="button" className="client-tab-delete-action" onClick={() => setClientTabDialog({ kind: 'DELETE', workspaceId: clientTabDialog.workspaceId })}>Excluir cliente</button></div>
-      </>}
-      {clientTabDialog.kind === 'DELETE' && <>
-        <p>O cliente <strong>{clientTabWorkspace?.customer?.name || 'selecionado'}</strong> e os projetos desta aba serão removidos deste orçamento. O cadastro do cliente continuará salvo.</p>
-        <div className="client-tab-dialog-actions"><button type="button" onClick={() => setClientTabDialog(null)}>Cancelar</button><button type="button" className="client-tab-delete-action" onClick={() => confirmRemoveClientTab(clientTabDialog.workspaceId)}>Excluir cliente e projetos</button></div>
-      </>}
-    </dialog>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className={`quote-workspace${quickMode ? ' quick-workspace' : ''}`}><div className="quote-form-column" id="active-project-panel" role="tabpanel" aria-labelledby={`tab-${item.id}`}>
+    <div className={`quote-workspace${quickMode ? ' quick-workspace' : ''}`}><div className="quote-form-column" id="active-project-panel" role="region" aria-label={`Projeto: ${item.projectName.trim() || `Projeto ${activeIndex + 1}`}`}>
     {editingQuote && <p className="customer-help">Editando o orçamento salvo. Os preços registrados e os ajustes manuais são preservados; novos materiais e serviços usam o catálogo atual. <Link href={`/orcamentos/${quoteId}`} onClick={() => { savedRef.current = true; localStorage.removeItem(quoteDraftStorageKey); }}>Cancelar edição</Link></p>}
+    {/* Modo do orçamento e, no Detalhado, as etapas na mesma linha. */}
+    <div className="modo-e-etapas">
     <div className={`quote-mode-switch${quickMode ? ' is-quick-mode' : ''}`} role="group" aria-label="Modo do orçamento">
-      <button type="button" aria-pressed={quickMode} onClick={() => changeEntryMode('QUICK')}>Orçamento Rápido</button>
-      <button type="button" aria-pressed={!quickMode} onClick={() => changeEntryMode('DETAILED')}>Orçamento com Desenho / Detalhado</button>
-      <small>{projetoTemDesenho(item.drawingData) ? 'Desenho adicionado' : 'Desenho pendente'}</small>
-      {!quickMode && !projetoTemDesenho(item.drawingData) && <button type="button" onClick={() => { const problem = projectProblem(item); if (problem) { setError(problem.message); return; } updateItem({ drawingData: { ...item.drawingData, detailingStatus: 'COMPLETED' } }); }}>Concluir detalhamento</button>}
+      <button type="button" className="modo-botao" aria-pressed={quickMode} aria-label="Orçamento Rápido" onClick={() => changeEntryMode('QUICK')}><Icone nome="raio" tamanho={16} />Rápido</button>
+      <button type="button" className="modo-botao" aria-pressed={!quickMode} aria-label={`Orçamento com Desenho / Detalhado (${temDesenho ? 'desenho adicionado' : 'desenho pendente'})`} onClick={() => changeEntryMode('DETAILED')}><Icone nome="esquadro" tamanho={16} />Com desenho<span className={`modo-selo${temDesenho ? ' feito' : ''}`} title={temDesenho ? 'Desenho adicionado' : 'Desenho pendente'} aria-hidden="true">{temDesenho ? '✓' : '!'}</span></button>
     </div>
     {!quickMode && <div className="project-navigation"><EtapasProjeto current={currentStep} completed={completedSteps} onSelect={navigateStep} /><button type="button" className="view-all-button" aria-pressed={showAll} onClick={() => setShowAll((value) => !value)}>{showAll ? 'Ver por etapas' : 'Ver tudo'}</button></div>}
-    {quickMode && <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={patch => updateItem({ ...patch, drawingData: dadosEntradaProjeto(item.drawingData, 'QUICK') })} area={component => calculateDraftComponent(component, item.arredondarM2)?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
+    {!quickMode && !temDesenho && <button type="button" className="botao-contorno botao-contorno-destaque concluir-detalhamento" onClick={concluirDetalhamento}><Icone nome="marcado" />Concluir detalhamento</button>}
+    </div>
+    {quickMode && <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={item.materialId ? materialFor(item) : materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={patch => updateItem({ ...patch, drawingData: alterouOrcamentoRapido(item, { ...item, ...patch }) ? dadosEntradaProjeto(item.drawingData, 'QUICK') : item.drawingData })} area={component => calculateDraftComponent(component, item.arredondarM2)?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
     {!quickMode && <>
     <div className="project-stage-group project-setup-grid" hidden={quickMode || (!showAll && currentStep !== 1)}>
     <section className="section measurements-card" id="project-step-1" tabIndex={-1} onFocusCapture={() => setCurrentStep(1)}>
@@ -699,31 +669,25 @@ export default function EditorOrcamento() {
       <AssistenteDivisaoProducao plan={productionPlan} componentSnapshots={productionSourceSnapshots}
         onSplitEqual={(source, snapshot, parts) => updateProductionPlan((plan) => aplicarDivisaoIgual(plan, source, snapshot, parts))}
         onSplitManual={(source, snapshot, lengths) => updateProductionPlan((plan) => aplicarDivisaoManual(plan, source, snapshot, lengths))}
+        onSplitBySize={(source, snapshot, pecas) => updateProductionPlan((plan) => aplicarDivisaoPorMedida(plan, source, snapshot, pecas))}
         onReconcile={(source) => updateProductionPlan((plan) => aceitarMudancaComercial(plan, item, source.componentId, true, activeServices))}
         onDismissReview={(source) => updateProductionPlan((plan) => aceitarMudancaComercial(plan, item, source.componentId, false, activeServices))}
         onResetSplit={(source) => updateProductionPlan((plan) => aceitarMudancaComercial(plan, item, source.componentId, true, activeServices))} />
       {productionPlan.pieces.length > 0 && <EditorComponentes
         materialFor={materialForPeca} components={productionPieceDraftComponents} cutouts={productionCutoutsAsDraft} linearServices={drawingServices}
+        renderCutouts={(index) => { const peca = productionPlan.pieces.find((entry) => entry.id === productionPieceDraftComponents[index]?.id); return peca && !peca.parentPieceId ? <RecortesDaPeca pieceId={peca.id} cutouts={productionPlan.cutouts} onChange={(cutouts) => updateProductionPlan((plan) => ({ ...plan, cutouts }))} /> : null; }}
         onChange={updateProductionPieces}
-        onAdd={(type, parentIndex) => { const parent = parentIndex === undefined ? undefined : productionPlan.pieces[parentIndex]; if (!parent && !productionRootPieces[0]) return; updateProductionPlan((plan) => ({ ...plan, pieces: [...plan.pieces, { id: newId(), sourceComponentId: parent?.sourceComponentId ?? productionRootPieces[0].sourceComponentId, label: '', componentType: type, orientation: (['TOP', 'COUNTER', 'BASE', 'VISTA', 'SILL', 'THRESHOLD', 'STEP'] as ComponentType[]).includes(type) ? 'HORIZONTAL' : 'VERTICAL', lengthMm: 1, widthMm: 1, quantity: 1, edges: [], parentPieceId: parent?.id } ] })); }}
         onRemove={(index) => { const removed = productionPieceDraftComponents[index]; if (!removed) return; updateProductionPlan((plan) => { const ids = new Set([removed.id, ...plan.pieces.filter((piece) => piece.parentPieceId === removed.id).map((piece) => piece.id)]); return { ...plan, pieces: plan.pieces.filter((piece) => !ids.has(piece.id)), cutouts: plan.cutouts.filter((cutout) => !ids.has(cutout.pieceId)) }; }); }} />}
     </section>
     </div>
     <div className="project-stage-group" id="project-step-2" tabIndex={-1} hidden={quickMode || (!showAll && currentStep !== 2)}>
-    <section className="section production-values">
-      <TituloEtapaProjeto number={2} title="Acabamentos e detalhes" description="Recortes, cubas e rodabanca das peças de produção. As alterações deste desenho não alteram o valor do orçamento." />
-      <div className="pricing-notice"><strong>Valor definido no Orçamento Rápido: {formatarMoeda(summaries[activeIndex]?.total ?? 0)}</strong><p>As alterações deste desenho não alteram o valor do orçamento.</p></div>
-      <RecortesProducao pieces={productionRootPieces} cutouts={productionPlan.cutouts} onChange={(cutouts) => updateProductionPlan((plan) => ({ ...plan, cutouts }))} />
-      {productionRootPieces.length > 1 && <SeguirDivisaoRodabanca label={productionSourceSnapshots[productionRootPieces[0]?.sourceComponentId]?.label || 'Peças divididas'} onConfirm={(side, heightMm) => updateProductionPlan((plan) => aplicarSeguirDivisao(plan, productionRootPieces[0].sourceComponentId, side, heightMm, 'BACKSPLASH'))} />}
+    {/* Etapa 2: só o desenho e a ordem de serviço, para conferir. */}
+    <section className="section">
+      <TituloEtapaProjeto number={2} title="Conferência / produção" description="Confira o desenho e a ordem de serviço antes de salvar o orçamento. As alterações deste desenho não alteram o valor do orçamento." />
+      {(showAll || currentStep === 2) && <DesenhoTecnico components={productionDrawingComponents} cutouts={productionDrawingCutouts} materialNames={Object.fromEntries(productionPlan.pieces.map((piece) => [piece.id, materialFor(item, item.components.find((entry) => entry.id === piece.sourceComponentId) ?? item.components[0])?.name ?? 'Material não selecionado']))} linearServices={drawingServices} services={activeServices} additionalServices={item.serviceIds.flatMap((id) => { const service = activeServices.find((entry) => entry.id === id); return service ? [{ name: service.name, quantity: service.billingUnit === 'UNIT' ? item.serviceQuantities[id] : undefined }] : []; })} notes={notes} />}
     </section>
     </div>
-    <div className="project-stage-group" id="project-step-3" tabIndex={-1} hidden={quickMode || (!showAll && currentStep !== 3)}>
-    <section className="section"><TituloEtapaProjeto number={3} title="Conferência / produção" description="Confira o desenho e a ordem de serviço antes de salvar o orçamento." />
-      <div className="pricing-notice"><strong>Valor definido no Orçamento Rápido: {formatarMoeda(summaries[activeIndex]?.total ?? 0)}</strong><p>As alterações deste desenho não alteram o valor do orçamento.</p></div>
-      {(showAll || currentStep === 3) && <DesenhoTecnico components={productionDrawingComponents} cutouts={productionDrawingCutouts} materialNames={Object.fromEntries(productionPlan.pieces.map((piece) => [piece.id, materialFor(item, item.components.find((entry) => entry.id === piece.sourceComponentId) ?? item.components[0])?.name ?? 'Material não selecionado']))} linearServices={drawingServices} services={activeServices} additionalServices={item.serviceIds.flatMap((id) => { const service = activeServices.find((entry) => entry.id === id); return service ? [{ name: service.name, quantity: service.billingUnit === 'UNIT' ? item.serviceQuantities[id] : undefined }] : []; })} notes={notes} />}
-    </section>
-    </div>
-    <div className="project-stage-actions" hidden={quickMode}><button type="button" className="secondary-button" onClick={() => navigateStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>← Voltar</button><span>{`Etapa ${currentStep} de 3`}</span>{currentStep < 3 ? <button type="button" className="save-quote-button" onClick={nextStep}>{currentStep === 1 ? 'Acabamentos e detalhes' : 'Conferir produção'} <span aria-hidden="true">→</span></button> : <button type="button" className="save-quote-button" onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'} <span aria-hidden="true">✓</span></button>}</div>
+    <div className="project-stage-actions" hidden={quickMode}><button type="button" className="secondary-button" onClick={() => navigateStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>← Voltar</button><span>{`Etapa ${currentStep} de 2`}</span>{currentStep < 2 ? <button type="button" className="save-quote-button" onClick={nextStep}>Conferir produção <span aria-hidden="true">→</span></button> : <button type="button" className="save-quote-button" onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'} <span aria-hidden="true">✓</span></button>}</div>
     </>}
     </div>
 <aside id="quote-summary-card" className="quote-summary-card" aria-label="Resumo do orçamento"><div className="quote-visual-card"><p>Projetos únicos<br />para espaços<br />incríveis.</p><i /></div><strong>Resumo do orçamento</strong><label className="summary-project-select">Projeto em edição<select aria-label="Projeto em edição" value={summarySelection} onChange={(event) => { const value = event.target.value; if (value === 'TOTAL') { setSummarySelection('TOTAL'); return; } selectProject(Number(value)); }}>{items.map((draft, index) => <option key={draft.id} value={index}>{draft.projectName || `Projeto ${index + 1}`}</option>)}<option value="TOTAL">Total</option></select></label>{summaryIsTotal ? <div className="summary-project-totals">{items.map((draft, index) => <span key={draft.id}><span>{draft.projectName || `Projeto ${index + 1}`}</span><b>{formatarMoeda(summaries[index]?.total ?? 0)}</b></span>)}<span className="summary-grand-total"><span>Total dos projetos</span><b>{formatarMoeda(gross)}</b></span></div> : <><span>Projetos adicionados <b>{items.length}</b></span><span>Área total <b>{(selectedSummary?.area ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²</b></span>{selectedComponentBreakdown.length ? selectedComponentBreakdown.map((component) => <span key={component.id}>{component.name} <b>{formatarMoeda(component.amount)}</b></span>) : <span>Material <b>{formatarMoeda(selectedSummary?.materialSubtotal ?? 0)}</b></span>}{selectedServiceBreakdown.length ? selectedServiceBreakdown.map((service) => <span key={service.id}>{service.name} <b>{formatarMoeda(service.amount)}</b></span>) : <span>Serviços, recortes e cubas <b>{formatarMoeda(0)}</b></span>}<span>Descontos individuais <b>{formatarMoeda(selectedSummary?.individualDiscountTotal ?? 0)}</b></span><span className="summary-grand-total">Total do projeto <b>{formatarMoeda(selectedSummary?.total ?? 0)}</b></span></>}<label className="quote-validity-field">Validade do orçamento<input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></label><section className="summary-notes"><label htmlFor="quote-notes">Observações do orçamento</label><textarea id="quote-notes" rows={4} maxLength={3000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ex.: conferir medidas no local e alinhar os veios das peças." aria-describedby="quote-notes-help" /><p id="quote-notes-help">Estas observações aparecem no PDF do orçamento.</p></section>{!quoteId && <VincularOrcamento value={parentQuote} onChange={(quote) => { setParentQuote(quote); if (quote) selectCustomer(quote.customer); }} />}<small className="quote-summary-note">As medidas e os acabamentos atualizam o orçamento automaticamente.</small>{quickMode && <label>Desconto autorizado (R$)<input aria-label="Desconto geral rápido" inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>}{quickMode && <><span>Total no Pix (10% de desconto) <b>{formatarMoeda(total)}</b></span><span>No cartão (+10%) <b>{formatarMoeda(calcularTotalCartao(total))}</b></span></>}<div className="quote-summary-actions">{quickMode && <><label className="quick-pdf-pricing"><span>PDF do orçamento</span><select aria-label="Valores no PDF" value={pdfIndividualPrices ? 'individual' : 'total'} onChange={event => setPdfIndividualPrices(event.target.value === 'individual')}><option value="total">Sem valores individuais (totais por projeto)</option><option value="individual">Com valores discriminados</option></select></label><button type="button" className="save-quote-button" disabled={saving} onClick={() => salvarOrcamento(true)}>Salvar e abrir PDF</button><button type="button" className="save-draft-button" onClick={() => changeEntryMode('DETAILED')}>Adicionar desenhos</button></>}{!quickMode && currentStep < 3 && <button type="button" className="save-quote-button" onClick={nextStep}>Continuar <span aria-hidden="true">→</span></button>}<button type="button" className={currentStep < 3 ? 'save-draft-button' : 'save-quote-button'} onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'}</button><small>Seu preenchimento é mantido neste navegador.</small></div></aside>

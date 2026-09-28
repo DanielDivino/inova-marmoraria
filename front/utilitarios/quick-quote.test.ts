@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { calcularComponente, calcularAcabamentoBorda, calcularTotalPix, projetoTemDesenho, dadosEntradaProjeto } from '@inova/domain';
-import { aplicarMaterialProjeto, arredondarMedidaParaCima, duplicarComponenteRapido, ehPeitorilDuplo, medidasEfetivasPeitorilDuplo, metrosParaCentimetrosRascunho, prepararItemRapido, criarComponenteRapido } from './quick-quote';
+import { calcularComponente, calcularAcabamentoBorda, calcularTotalPix, projetoTemDesenho, dadosEntradaProjeto, trocarModoEntrada } from '@inova/domain';
+import { alterouOrcamentoRapido, aplicarMaterialProjeto, escolherPedraDaPeca, normalizarPedrasDasPecas, arredondarMedidaParaCima, campoMetrosInicial, duplicarComponenteRapido, editarCampoMetros, formatarCampoMetros, ehPeitorilDuplo, medidasEfetivasPeitorilDuplo, metrosParaCentimetrosRascunho, prepararItemRapido, criarComponenteRapido } from './quick-quote';
 import { rascunhoParaEntradaItem } from './saved-quote';
+import { moverComponente } from './component-groups';
 import type { DraftItem } from '../componentes/orcamento/types';
 
 const draft = (): DraftItem => ({ id: 'p', projectName: 'Cozinha', materialId: 'stone', productTypeId: 'type', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [{ ...criarComponenteRapido('stone'), lengthCm: '70', widthCm: '30' }], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {}, drawingData: dadosEntradaProjeto(undefined, 'QUICK') });
@@ -62,5 +63,132 @@ describe('Orçamento rápido compartilha o modelo detalhado', () => {
     expect(projetoTemDesenho(next)).toBe(false);
     expect(next.componentDetails).toEqual([{ sillDetailMm: 20 }]);
     expect(projetoTemDesenho({ ...next, detailingStatus: 'COMPLETED' })).toBe(true);
+  });
+});
+
+describe('Campo de medida em metros do Orçamento Rápido', () => {
+  const digitar = (teclas: string, inicio = campoMetrosInicial('')) => [...teclas].reduce((campo, tecla) => editarCampoMetros(campo, campo.texto + tecla, { tipo: 'insertText', dado: tecla }), inicio);
+
+  it('só números: a vírgula entra sozinha e os dois últimos dígitos são os centímetros', () => {
+    expect(digitar('1').texto).toBe('0,01');
+    expect(digitar('12').texto).toBe('0,12');
+    expect(digitar('120').texto).toBe('1,20');
+    expect(digitar('45').texto).toBe('0,45');
+    expect(digitar('0240').texto).toBe('2,40');
+    expect(metrosParaCentimetrosRascunho(digitar('120').texto)).toBe('120');
+  });
+
+  it('vírgula digitada vale como está e não duplica', () => {
+    expect(digitar('1,2')).toEqual({ texto: '1,2', livre: true });
+    expect(digitar('12,5').texto).toBe('12,5');
+    expect(digitar(',5').texto).toBe('0,5');
+    expect(digitar('1,,2').texto).toBe('1,2');
+    expect(digitar('1,2,').texto).toBe('1,2');
+    expect(digitar('1.2').texto).toBe('1,2');
+    expect(digitar('1,2055').texto).toBe('1,205');
+    expect(metrosParaCentimetrosRascunho(digitar('1,2').texto)).toBe('120');
+    expect(metrosParaCentimetrosRascunho(digitar('1,').texto)).toBe('100');
+  });
+
+  it('apagar refaz a máscara; apagar a vírgula digitada volta a contar centímetros', () => {
+    expect(editarCampoMetros(digitar('120'), '1,2', { tipo: 'deleteContentBackward', dado: null }).texto).toBe('0,12');
+    expect(editarCampoMetros(digitar('1,'), '1', { tipo: 'deleteContentBackward', dado: null })).toEqual({ texto: '0,01', livre: false });
+    expect(editarCampoMetros(digitar('1'), '', { tipo: 'deleteContentBackward', dado: null })).toEqual({ texto: '', livre: false });
+  });
+
+  it('colar ou preencher de uma vez aceita com e sem vírgula', () => {
+    const atual = campoMetrosInicial('70');
+    expect(editarCampoMetros(atual, '2,40', { tipo: 'insertFromPaste', dado: null }).texto).toBe('2,40');
+    expect(editarCampoMetros(atual, '0.30', { tipo: 'insertText', dado: '0.30' }).texto).toBe('0,30');
+    expect(editarCampoMetros(atual, '240', { tipo: 'insertFromPaste', dado: null }).texto).toBe('2,40');
+    // Sem informação do evento, deduz pela diferença de texto.
+    expect(editarCampoMetros(campoMetrosInicial(''), '1,15').texto).toBe('1,15');
+    expect(editarCampoMetros(digitar('12'), '0,120').texto).toBe('1,20');
+  });
+
+  it('mostra a medida salva com duas casas, ou três quando há milímetros', () => {
+    expect(formatarCampoMetros('120')).toBe('1,20');
+    expect(formatarCampoMetros('70')).toBe('0,70');
+    expect(formatarCampoMetros('120.5')).toBe('1,205');
+    expect(formatarCampoMetros('')).toBe('');
+    expect(campoMetrosInicial('120.5')).toEqual({ texto: '1,205', livre: true });
+    expect(campoMetrosInicial('120')).toEqual({ texto: '1,20', livre: false });
+  });
+});
+
+describe('Desenho pendente só quando o Orçamento Rápido muda', () => {
+  const comDesenho = () => { const item = draft(); item.drawingData = { ...trocarModoEntrada(item.drawingData, 'DETAILED'), detailingStatus: 'COMPLETED' }; return item; };
+
+  it('trocar entre Rápido e Detalhado mantém o desenho adicionado', () => {
+    const item = comDesenho();
+    const rapido = trocarModoEntrada(item.drawingData, 'QUICK');
+    expect(projetoTemDesenho(rapido)).toBe(true);
+    expect(projetoTemDesenho(trocarModoEntrada(rapido, 'DETAILED'))).toBe(true);
+    // Projeto detalhado antigo, sem status gravado, também continua com desenho.
+    expect(projetoTemDesenho(trocarModoEntrada({ entryMode: 'DETAILED' }, 'QUICK'))).toBe(true);
+    // Pendente continua pendente.
+    expect(projetoTemDesenho(trocarModoEntrada(draft().drawingData, 'DETAILED'))).toBe(false);
+  });
+
+  it('alterar o Orçamento Rápido deixa o desenho pendente; linha vazia do Enter não conta', () => {
+    const item = { ...comDesenho(), drawingData: trocarModoEntrada(comDesenho().drawingData, 'QUICK') };
+    expect(alterouOrcamentoRapido(item, { ...item, components: [...item.components, criarComponenteRapido('stone')] })).toBe(false);
+    expect(alterouOrcamentoRapido(item, item)).toBe(false);
+    const alterado = { ...item, components: [{ ...item.components[0], lengthCm: '80' }] };
+    expect(alterouOrcamentoRapido(item, alterado)).toBe(true);
+    expect(alterouOrcamentoRapido(item, { ...item, serviceIds: ['montagem'] })).toBe(true);
+    expect(projetoTemDesenho(dadosEntradaProjeto(item.drawingData, 'QUICK'))).toBe(false);
+  });
+
+  it('arrastar para mudar a ordem não conta como alteração, e o recorte acompanha a peça', () => {
+    const base = { ...comDesenho(), drawingData: trocarModoEntrada(comDesenho().drawingData, 'QUICK') };
+    const item = { ...base, components: [...base.components, { ...criarComponenteRapido('stone'), lengthCm: '50', widthCm: '40' }], cutouts: [{ id: 'cuba', componentIndex: 1, cutoutType: 'SINK' as const, label: '', quantity: 1 }] };
+    const movido = { ...item, ...moverComponente(item, 1, 0) };
+    expect(movido.components.map((component) => component.lengthCm)).toEqual(['50', '70']);
+    expect(movido.cutouts[0].componentIndex).toBe(0);
+    expect(alterouOrcamentoRapido(item, movido)).toBe(false);
+    expect(moverComponente(item, 0, 0).components).toEqual(item.components);
+  });
+});
+
+describe('Pedra do projeto e pedra própria da peça', () => {
+  const projeto = () => { const item = draft(); item.components.push({ ...criarComponenteRapido('stone'), lengthCm: '180', widthCm: '60' }, { ...criarComponenteRapido('stone'), lengthCm: '90', widthCm: '60', ...escolherPedraDaPeca(item, 'alaska') }); return item; };
+  const pedras = (item: DraftItem) => item.components.map((component) => component.materialId);
+
+  it('trocar a pedra do projeto muda só as peças que seguem o projeto', () => {
+    const item = projeto();
+    const trocado = { ...item, ...aplicarMaterialProjeto(item, 'branco') };
+    expect(trocado.materialId).toBe('branco');
+    expect(pedras(trocado)).toEqual(['branco', 'branco', 'alaska']);
+  });
+
+  it('a pedra própria continua mesmo se o projeto passar por ela e voltar', () => {
+    let item = projeto();
+    item = { ...item, ...aplicarMaterialProjeto(item, 'alaska') };
+    expect(pedras(item)).toEqual(['alaska', 'alaska', 'alaska']);
+    item = { ...item, ...aplicarMaterialProjeto(item, 'branco') };
+    expect(pedras(item)).toEqual(['branco', 'branco', 'alaska']);
+  });
+
+  it('escolher na peça a pedra do projeto (ou "Usar pedra do projeto") volta a acompanhar o projeto', () => {
+    const item = projeto();
+    expect(escolherPedraDaPeca(item, 'stone')).toEqual({ materialId: 'stone', materialProprio: undefined });
+    expect(escolherPedraDaPeca(item, undefined)).toEqual({ materialId: 'stone', materialProprio: undefined });
+    expect(escolherPedraDaPeca(item, 'alaska')).toEqual({ materialId: 'alaska', materialProprio: true });
+  });
+
+  it('rascunho antigo: pedra diferente da do projeto vira pedra própria; peça sem pedra segue o projeto', () => {
+    const [a, b, c] = normalizarPedrasDasPecas({ materialId: 'stone' }, [{ ...criarComponenteRapido('stone') }, { ...criarComponenteRapido('alaska') }, { ...criarComponenteRapido(''), materialId: undefined }]);
+    expect([a.materialProprio, b.materialProprio, c.materialProprio]).toEqual([undefined, true, undefined]);
+    expect(c.materialId).toBe('stone');
+  });
+
+  it('ao salvar, a pedra do projeto não é trocada pela da primeira peça', () => {
+    const item = projeto();
+    item.components = [item.components[2], item.components[0], item.components[1]];
+    const entrada = rascunhoParaEntradaItem(item);
+    expect(entrada.materialId).toBe('stone');
+    expect(entrada.components.map((component) => component.materialId)).toEqual(['alaska', 'stone', 'stone']);
+    expect(rascunhoParaEntradaItem({ ...item, components: [{ ...item.components[1], materialId: undefined }] }).components[0].materialId).toBe('stone');
   });
 });

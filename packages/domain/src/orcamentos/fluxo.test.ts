@@ -30,6 +30,7 @@ describe('fase do orçamento no quadro', () => {
     expect(faseOrcamentoFluxo({ status: 'SENT', executionStatus: 'NOT_STARTED' })).toBe('AWAITING_APPROVAL');
     expect(faseOrcamentoFluxo({ status: 'DRAFT' })).toBe('AWAITING_APPROVAL');
     expect(faseOrcamentoFluxo({ status: 'APPROVED', executionStatus: 'NOT_STARTED' })).toBe('AWAITING_START');
+    expect(faseOrcamentoFluxo({ status: 'APPROVED', executionStatus: 'PAUSED' })).toBe('PAUSED');
     for (const executionStatus of ['IN_PROGRESS', 'REWORK', 'READY', 'INSTALLATION_PENDING']) expect(faseOrcamentoFluxo({ status: 'APPROVED', executionStatus })).toBe('IN_EXECUTION');
     for (const quote of [{ status: 'APPROVED', executionStatus: 'COMPLETED' }, { status: 'REJECTED' }, { status: 'CANCELLED' }, { status: 'EXPIRED' }]) expect(faseOrcamentoFluxo(quote)).toBeNull();
   });

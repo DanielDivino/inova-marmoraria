@@ -45,30 +45,33 @@ describe('Linhas comerciais do PDF', () => {
     expect(vistas).toHaveLength(1);
     expect(vistas[0]).toMatchObject({ measure: .11, unit: 'm²', total: 77 });
   });
-  it('agrupa rodabancas do mesmo projeto em uma linha e soma área, quantidade e valor', () => {
+  it('rodabancas: mesma medida vira uma linha com área, quantidade e valor somados; medidas diferentes ficam em linhas próprias com comprimento e largura', () => {
     const result = montarLinhasPdf([{ components: [
       { componentType: 'BACKSPLASH', label: 'Rodabanca 1', lengthMm: 1200, widthMm: 80, quantity: 1, billableArea: .096, subtotal: 57.60, edges: [] },
       { componentType: 'BACKSPLASH', label: 'Rodabanca 2', lengthMm: 700, widthMm: 80, quantity: 2, billableArea: .112, subtotal: 67.20, edges: [] },
+      { componentType: 'BACKSPLASH', label: 'Rodabanca 3', lengthMm: 1200, widthMm: 80, quantity: 1, billableArea: .096, subtotal: 57.60, edges: [] },
     ] }]);
     const rodabancas = result.items[0].filter((line) => line.description === 'Rodabanca');
-    expect(rodabancas).toHaveLength(1);
-    expect(rodabancas[0]).toMatchObject({ measure: .208, quantity: 3, total: 124.80 });
-    expect(rodabancas[0].lengthMm).toBeUndefined();
+    expect(rodabancas).toEqual([
+      expect.objectContaining({ lengthMm: 1200, widthMm: 80, measure: .192, quantity: 2, total: 115.20 }),
+      expect.objectContaining({ lengthMm: 700, widthMm: 80, measure: .112, quantity: 2, total: 67.20 }),
+    ]);
   });
-  it('consolida peças repetidas pelo tipo e descrição no PDF', () => {
+  it('junta só peças com a mesma descrição e a mesma medida (somando quantidade, m² e valor); comprimento e largura nunca somem', () => {
     const result = montarLinhasPdf([{ components: [
       { componentType: 'COUNTER', label: 'Bancada', lengthMm: 1200, widthMm: 600, quantity: 1, billableArea: .72, subtotal: 432, edges: [] },
       { componentType: 'COUNTER', label: 'Bancada', lengthMm: 900, widthMm: 600, quantity: 2, billableArea: 1.08, subtotal: 648, edges: [] },
+      { componentType: 'COUNTER', label: 'Bancada', lengthMm: 1200, widthMm: 600, quantity: 1, billableArea: .72, subtotal: 432, edges: [] },
       { componentType: 'VISTA', label: 'Vista', lengthMm: 900, widthMm: 50, quantity: 1, billableArea: .045, subtotal: 27, edges: [] },
       { componentType: 'VISTA', label: 'Vista', lengthMm: 700, widthMm: 50, quantity: 1, billableArea: .035, subtotal: 21, edges: [] },
     ] }]);
 
     expect(result.items[0]).toEqual([
-      expect.objectContaining({ description: 'Bancada', measure: 1.8, quantity: 3, total: 1080 }),
-      expect.objectContaining({ description: 'Vista', measure: .08, quantity: 2, total: 48 }),
+      expect.objectContaining({ description: 'Bancada', lengthMm: 1200, widthMm: 600, measure: 1.44, quantity: 2, total: 864 }),
+      expect.objectContaining({ description: 'Bancada', lengthMm: 900, widthMm: 600, measure: 1.08, quantity: 2, total: 648 }),
+      expect.objectContaining({ description: 'Vista', lengthMm: 900, widthMm: 50, measure: .045, quantity: 1, total: 27 }),
+      expect.objectContaining({ description: 'Vista', lengthMm: 700, widthMm: 50, measure: .035, quantity: 1, total: 21 }),
     ]);
-    expect(result.items[0][0].lengthMm).toBeUndefined();
-    expect(result.items[0][1].lengthMm).toBeUndefined();
   });
   it('preserva valores zero, área manual, recortes e precisão decimal', () => {
     const result = montarLinhasPdf([{ components: [], billedQuantity: 1.5, materialSubtotal: 500, services: [edge(.075, .1), edge(.025, .2)], cutouts: [{ label: 'Furo', quantity: 1, calculatedSubtotal: 30, appliedSubtotal: 0 }] }]);

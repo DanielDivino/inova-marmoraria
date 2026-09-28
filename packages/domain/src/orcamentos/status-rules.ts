@@ -3,7 +3,8 @@ export type StatusOrcamento = 'DRAFT' | 'SENT' | 'APPROVED' | 'REJECTED' | 'EXPI
 const transitions: Record<StatusOrcamento, StatusOrcamento[]> = {
   DRAFT: ['SENT', 'APPROVED', 'REJECTED', 'CANCELLED'],
   SENT: ['APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED'],
-  APPROVED: [],
+  // Aprovado → cancelado: "Cliente desistiu" (vai para o Histórico).
+  APPROVED: ['CANCELLED'],
   REJECTED: [],
   EXPIRED: ['DRAFT', 'CANCELLED'],
   CANCELLED: []

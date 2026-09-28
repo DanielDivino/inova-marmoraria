@@ -15,6 +15,7 @@ export const EXECUTION_STATUS_LABELS: Record<string, StatusBadge> = {
   IN_PROGRESS: { label: 'Em andamento', tone: 'yellow' },
   COMPLETED: { label: 'Entregue', tone: 'purple' },
   REWORK: { label: 'Em retrabalho', tone: 'blue' },
+  PAUSED: { label: 'Produção parada', tone: 'neutral' },
 };
 export const STATUS_LEGEND: StatusBadge[] = [
   { label: 'Fora do prazo', tone: 'red' },
@@ -23,7 +24,7 @@ export const STATUS_LEGEND: StatusBadge[] = [
   EXECUTION_STATUS_LABELS.COMPLETED,
   EXECUTION_STATUS_LABELS.REWORK,
 ];
-export type QuoteProgress = { status: string; executionStatus?: string | null; dueDate?: string | Date | null; validUntil?: string | Date | null };
+export type QuoteProgress = { status: string; executionStatus?: string | null; dueDate?: string | Date | null; validUntil?: string | Date | null; approvedAt?: string | Date | null };
 export function orcamentoEncerrado(quote: QuoteProgress) {
   return ['REJECTED', 'CANCELLED', 'EXPIRED'].includes(quote.status) || quote.executionStatus === 'COMPLETED';
 }

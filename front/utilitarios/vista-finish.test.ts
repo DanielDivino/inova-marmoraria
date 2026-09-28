@@ -29,7 +29,7 @@ describe('Vista no formulário e desenho', () => {
     expect(html.match(/class="drawing-miter-detail"/g)).toHaveLength(2);
   });
   it('mostra acabamentos compactos com medidas acessíveis e sem fórmulas', () => {
-    const html = renderToStaticMarkup(React.createElement(EditorComponentes, { components: [component], linearServices: services, onChange: vi.fn(), onAdd: vi.fn(), onRemove: vi.fn() }));
+    const html = renderToStaticMarkup(React.createElement(EditorComponentes, { components: [component], linearServices: services, onChange: vi.fn(), onRemove: vi.fn() }));
     expect(html).toContain('>Vista</span>');
     expect(html).toContain('Largura da vista (cm)');
     expect(html).toContain('Altura da saia (cm)');

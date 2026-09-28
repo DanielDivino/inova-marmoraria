@@ -4,7 +4,9 @@ export type Orientation = 'HORIZONTAL' | 'VERTICAL';
 export type EdgeSide = 'FRONT' | 'BACK' | 'LEFT' | 'RIGHT' | 'CUSTOM';
 export type CutoutType = 'SINK' | 'SCULPTED_SINK' | 'OVAL_SINK' | 'COOKTOP' | 'FAUCET_HOLE' | 'GENERIC_HOLE' | 'OTHER';
 export type DraftEdge = { id?: string; side: EdgeSide; serviceId: string; lengthCm?: string; heightCm?: string; quantity: number; customLabel?: string; appliedTotal?: string };
-export type DraftComponent = { materialId?: string; id: string; label: string; componentType: ComponentType; orientation: Orientation; lengthCm: string; widthCm: string; quantity: number; edges: DraftEdge[]; appliedTotal?: string; parentComponentId?: string; parentSide?: Exclude<EdgeSide, 'CUSTOM'>; sillDetailCm?: string; sillDetailHeightCm?: string;
+export type DraftComponent = { materialId?: string;
+  /** A peça tem pedra própria (escolhida nela): não acompanha a troca da pedra do projeto. Só existe no rascunho. */
+  materialProprio?: boolean; id: string; label: string; componentType: ComponentType; orientation: Orientation; lengthCm: string; widthCm: string; quantity: number; edges: DraftEdge[]; appliedTotal?: string; parentComponentId?: string; parentSide?: Exclude<EdgeSide, 'CUSTOM'>; sillDetailCm?: string; sillDetailHeightCm?: string;
   /** Orçamento Rápido, peitoril de duas pedras sobrepostas — ver DetalhePeitorilDuplo.
    * O comprimento é o normal (lengthCm, compartilhado pelas duas pedras); só a
    * largura se divide nesses 4 valores independentes (sem fórmula entre eles). */

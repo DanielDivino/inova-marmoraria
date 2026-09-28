@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { exigirPermissao } from '../../compartilhado/acesso.js';
 import { idSchema } from '../../compartilhado/http.js';
 import { prisma } from '../../config/prisma.js';
-import { listarProjetosFluxo, moverProjeto, moverProjetoSchema } from './workflow.service.js';
+import { faltaMaterialSchema, listarProjetosFluxo, marcarFaltaMaterial, moverProjeto, moverProjetoSchema } from './workflow.service.js';
 
 export async function registrarRotasFluxo(app: FastifyInstance) {
   const authenticated = { preHandler: [app.authenticate, exigirPermissao('commercial')] };
@@ -15,6 +15,14 @@ export async function registrarRotasFluxo(app: FastifyInstance) {
     const { card, previousStatus } = await prisma.$transaction((tx) => moverProjeto(tx, id, input, request.user));
     // Reordenar na mesma coluna é frequente e não é auditado; a troca de coluna é.
     if (previousStatus !== card.status) await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: id, action: 'WORKFLOW_STATUS_CHANGED', previous: { status: previousStatus }, current: { status: card.status, quoteId: card.quote.id } } });
+    return card;
+  });
+
+  app.patch('/projects/:id/material', authenticated, async (request) => {
+    const { id } = idSchema.parse(request.params);
+    const input = faltaMaterialSchema.parse(request.body);
+    const { card, previous } = await prisma.$transaction((tx) => marcarFaltaMaterial(tx, id, input, request.user));
+    if (previous !== card.materialMissing) await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: id, action: 'WORKFLOW_MATERIAL_CHANGED', previous: { materialMissing: previous }, current: { materialMissing: card.materialMissing, quoteId: card.quote.id } } });
     return card;
   });
 }

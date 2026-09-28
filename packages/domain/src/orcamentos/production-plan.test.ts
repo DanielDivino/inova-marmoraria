@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dividirIgualmente, validarDivisao, calcularUltimaPeca, ladoHerdado, dividirComponente, seguirDivisao, planoDeProducao, comPlanoDeProducao, precisaRevisao, type ProductionEdge, type ProductionPiece } from './production-plan.js';
+import { dividirIgualmente, validarDivisao, calcularUltimaPeca, ladoHerdado, dividirComponente, dividirPorMedida, quantidadeAteAcabar, validarDivisaoPorMedida, areaDaOrigemMm2, seguirDivisao, planoDeProducao, comPlanoDeProducao, precisaRevisao, type ProductionEdge, type ProductionPiece } from './production-plan.js';
 
 let counter = 0;
 const newId = () => `id-${++counter}`;
@@ -105,5 +105,33 @@ describe('leitura/gravação do plano em drawingData e detecção de mudança co
     expect(precisaRevisao(source, { lengthMm: 3600, widthMm: 600, quantity: 1, componentType: 'TOP', materialId: 'stone' })).toBe(false);
     expect(precisaRevisao(source, { lengthMm: 3800, widthMm: 600, quantity: 1, componentType: 'TOP', materialId: 'stone' })).toBe(true);
     expect(precisaRevisao(source, { lengthMm: 3600, widthMm: 600, quantity: 2, componentType: 'TOP', materialId: 'stone' })).toBe(true);
+  });
+});
+
+describe('divisão por medida (comprimento × largura repetidos)', () => {
+  const tampo = { snapshotLengthMm: 10250, snapshotWidthMm: 3900, snapshotQuantity: 1 };
+  it('repete a medida até a área acabar, arredondando para baixo', () => {
+    const area = areaDaOrigemMm2(tampo);
+    expect(area).toBe(39_975_000);
+    expect(quantidadeAteAcabar(area, 2050, 650)).toBe(30);
+    expect(quantidadeAteAcabar(area, 2000, 600)).toBe(33);
+    expect(quantidadeAteAcabar(area, 0, 600)).toBe(0);
+    expect(quantidadeAteAcabar(0, 2000, 600)).toBe(0);
+  });
+  it('confere a área usada: sobra permitida, excesso não', () => {
+    const area = areaDaOrigemMm2(tampo);
+    expect(validarDivisaoPorMedida(area, [{ lengthMm: 2050, widthMm: 650, quantity: 30 }])).toEqual({ status: 'completo', usadoMm: area });
+    expect(validarDivisaoPorMedida(area, [{ lengthMm: 2000, widthMm: 600, quantity: 33 }])).toEqual({ status: 'incompleto', usadoMm: 39_600_000, restanteMm: 375_000 });
+    expect(validarDivisaoPorMedida(area, [{ lengthMm: 2000, widthMm: 600, quantity: 34 }]).status).toBe('excedeu');
+  });
+  it('cada medida vira uma peça com a sua quantidade e os acabamentos com comprimento automático', () => {
+    const edges: ProductionEdge[] = [{ side: 'FRONT', serviceId: 's', serviceName: '45°', lengthMm: 10250, quantity: 1 }, { side: 'CUSTOM', serviceId: 'c', serviceName: 'Livre', lengthMm: 500, quantity: 1 }];
+    const pecas = dividirPorMedida({ id: 'c1', label: 'Tampo', componentType: 'TOP', orientation: 'HORIZONTAL', edges }, [{ lengthMm: 2000, widthMm: 600, quantity: 33 }, { lengthMm: 625, widthMm: 600, quantity: 1 }], newId);
+    expect(pecas.map(({ label, lengthMm, widthMm, quantity }) => ({ label, lengthMm, widthMm, quantity }))).toEqual([
+      { label: 'Tampo 1', lengthMm: 2000, widthMm: 600, quantity: 33 }, { label: 'Tampo 2', lengthMm: 625, widthMm: 600, quantity: 1 },
+    ]);
+    expect(pecas[0].edges).toEqual([{ side: 'FRONT', serviceId: 's', serviceName: '45°', lengthMm: undefined, quantity: 1 }]);
+    expect(dividirPorMedida({ id: 'c1', label: 'Tampo', componentType: 'TOP', orientation: 'HORIZONTAL', edges: [] }, [{ lengthMm: 2000, widthMm: 600, quantity: 5 }], newId)[0].label).toBe('Tampo');
+    expect(() => dividirPorMedida({ id: 'c1', label: '', componentType: 'TOP', orientation: 'HORIZONTAL', edges: [] }, [{ lengthMm: 2000, widthMm: 0, quantity: 1 }], newId)).toThrow('Largura');
   });
 });

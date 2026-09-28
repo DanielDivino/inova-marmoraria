@@ -50,26 +50,24 @@ export function montarLinhasPdf(items: any[]): { items: QuotePdfLine[][]; linear
       const material = Number(component.subtotal ?? Number(component.billableArea ?? 0) * Number(component.unitPriceSnapshot ?? item.unitPriceSnapshot ?? 0));
       const name = nomeExibicaoComponente(component) + (mixed ? ` · ${materialLabel(component)}` : '');
       const isBacksplash = component.componentType === 'BACKSPLASH';
-      const backsplashKey = component.materialId ?? materialLabel(component) ?? '';
+      // Só viram uma linha as peças com o mesmo nome E a mesma medida (quantidade e
+      // m² somados): comprimento e largura nunca somem do PDF.
+      const medidaKey = `${sillMm(component, component.lengthMm) ?? ''}x${sillMm(component, component.widthMm) ?? ''}`;
+      const backsplashKey = `${component.materialId ?? materialLabel(component) ?? ''}|${medidaKey}`;
       if (isBacksplash) {
         const group = backsplashes.get(backsplashKey) ?? { line: { description: 'Rodabanca' + (mixed ? ` · ${materialLabel(component)}` : ''), measure: 0, quantity: 0, total: 0, unit: 'm²', lengthMm: sillMm(component, component.lengthMm), widthMm: sillMm(component, component.widthMm) }, count: 0, adjustment: 0 };
         group.count++;
         group.line.measure = Math.round(((group.line.measure ?? 0) + Number(component.billableArea ?? 0)) * 10000) / 10000;
         group.line.quantity = (group.line.quantity ?? 0) + Number(component.quantity ?? 1);
         group.line.total = (cents(group.line.total) + cents(material)) / 100;
-        if (group.line.lengthMm !== component.lengthMm || group.line.widthMm !== component.widthMm) { group.line.lengthMm = undefined; group.line.widthMm = undefined; }
         backsplashes.set(backsplashKey, group);
       } else {
-        const key = name.trim().normalize('NFC').toLocaleLowerCase('pt-BR');
+        const key = name.trim().normalize('NFC').toLocaleLowerCase('pt-BR') + '|' + medidaKey;
         const group = components.get(key);
         if (group) {
           group.measure = Math.round(((group.measure ?? 0) + Number(component.billableArea ?? 0)) * 10000) / 10000;
           group.quantity = (group.quantity ?? 0) + Number(component.quantity ?? 1);
           group.total = (cents(group.total) + cents(material)) / 100;
-          if (group.lengthMm !== component.lengthMm || group.widthMm !== component.widthMm) {
-            group.lengthMm = undefined;
-            group.widthMm = undefined;
-          }
         } else {
           const line = {
             description: name,

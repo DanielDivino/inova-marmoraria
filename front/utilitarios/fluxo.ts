@@ -1,14 +1,43 @@
-import { dataConclusaoAoMover, etapaConcluida, PROJECT_WORKFLOW_STATUSES, posicaoEntre, type FaseOrcamentoFluxo, type ProjectWorkflowStatus } from '@inova/domain';
+import { dataAtualEmpresa, dataConclusaoAoMover, deslocarDataCalendario, etapaConcluida, PROJECT_WORKFLOW_STATUSES, posicaoEntre, type FaseOrcamentoFluxo, type ProjectWorkflowStatus } from '@inova/domain';
 
 export type ResponsavelFluxo = { id: string; name: string | null; color: string };
 export type CartaoFluxo = {
   id: string; name: string; status: ProjectWorkflowStatus; position: number; completedAt: string | null; pieces: number;
+  /** Projeto parado por falta de material (marcado no próprio cartão). */
+  materialMissing?: boolean;
   quote: { id: string; number: string; customerId: string; customerName: string; deadline: string | null; worker: ResponsavelFluxo | null; phase: FaseOrcamentoFluxo };
 };
 /** Resposta do movimento: `quoteDelivered` indica que o último projeto foi entregue e o orçamento foi para o Histórico. */
 export type CartaoMovido = CartaoFluxo & { quoteDelivered: boolean };
-/** `workerId` aceita também SEM_RESPONSAVEL, para achar orçamentos sem funcionário definido. */
-export type FiltroFluxo = { customerId: string; quoteId: string; workerId: string };
+/**
+ * `workerId` aceita também SEM_RESPONSAVEL, para achar orçamentos sem funcionário definido.
+ * `entrega` filtra pelo prazo final do orçamento (a mesma data do cartão); `material`, pela marca de falta de material.
+ */
+export type FiltroFluxo = { customerId: string; quoteId: string; workerId: string; entrega?: FiltroEntrega; entregaDe?: string; entregaAte?: string; material?: FiltroMaterial };
+export type FiltroEntrega = 'TODAS' | 'ATRASADAS' | 'HOJE' | 'SETE_DIAS' | 'TRINTA_DIAS' | 'SEM_DATA' | 'PERSONALIZADO';
+export const OPCOES_ENTREGA: { valor: FiltroEntrega; rotulo: string }[] = [
+  { valor: 'TODAS', rotulo: 'Todas as datas' }, { valor: 'ATRASADAS', rotulo: 'Atrasadas' }, { valor: 'HOJE', rotulo: 'Hoje' },
+  { valor: 'SETE_DIAS', rotulo: 'Próximos 7 dias' }, { valor: 'TRINTA_DIAS', rotulo: 'Próximos 30 dias' }, { valor: 'SEM_DATA', rotulo: 'Sem data' },
+  { valor: 'PERSONALIZADO', rotulo: 'Personalizado' },
+];
+export type FiltroMaterial = '' | 'FALTA' | 'OK';
+export const OPCOES_MATERIAL: { valor: FiltroMaterial; rotulo: string }[] = [
+  { valor: '', rotulo: 'Todos' }, { valor: 'FALTA', rotulo: 'Com falta de material' }, { valor: 'OK', rotulo: 'Sem falta de material' },
+];
+
+/** Data de entrega do cartão dentro do filtro escolhido (datas AAAA-MM-DD no fuso da empresa). */
+export function atendeEntrega(cartao: CartaoFluxo, filtro: Pick<FiltroFluxo, 'entrega' | 'entregaDe' | 'entregaAte'>, hoje = dataAtualEmpresa()) {
+  const data = cartao.quote.deadline;
+  switch (filtro.entrega ?? 'TODAS') {
+    case 'TODAS': return true;
+    case 'SEM_DATA': return !data;
+    case 'ATRASADAS': return !!data && data < hoje && cartao.status !== 'DELIVERED';
+    case 'HOJE': return data === hoje;
+    case 'SETE_DIAS': return !!data && data >= hoje && data <= deslocarDataCalendario(hoje, 7);
+    case 'TRINTA_DIAS': return !!data && data >= hoje && data <= deslocarDataCalendario(hoje, 30);
+    case 'PERSONALIZADO': return !!data && (!filtro.entregaDe || data >= filtro.entregaDe) && (!filtro.entregaAte || data <= filtro.entregaAte);
+  }
+}
 export const SEM_RESPONSAVEL = 'sem-responsavel';
 export type ResumoOrcamentoFluxo = { quote: CartaoFluxo['quote']; projetos: CartaoFluxo[]; concluidos: number; entregues: number; total: number; finalizado: boolean };
 
@@ -22,10 +51,12 @@ export function corOrcamento(quoteId: string) {
   return CORES_ORCAMENTO[hash % CORES_ORCAMENTO.length];
 }
 
-export function filtrarCartoes(cartoes: CartaoFluxo[], filtro: FiltroFluxo) {
+export function filtrarCartoes(cartoes: CartaoFluxo[], filtro: FiltroFluxo, hoje = dataAtualEmpresa()) {
   return cartoes.filter((cartao) => (!filtro.customerId || cartao.quote.customerId === filtro.customerId)
     && (!filtro.quoteId || cartao.quote.id === filtro.quoteId)
-    && (!filtro.workerId || (filtro.workerId === SEM_RESPONSAVEL ? !cartao.quote.worker : cartao.quote.worker?.id === filtro.workerId)));
+    && (!filtro.workerId || (filtro.workerId === SEM_RESPONSAVEL ? !cartao.quote.worker : cartao.quote.worker?.id === filtro.workerId))
+    && atendeEntrega(cartao, filtro, hoje)
+    && (!filtro.material || (filtro.material === 'FALTA') === !!cartao.materialMissing));
 }
 
 export const nomeResponsavel = (responsavel: ResponsavelFluxo) => responsavel.name?.trim() || 'Funcionário sem nome';
@@ -39,10 +70,10 @@ export function colunasFluxo(cartoes: CartaoFluxo[]) {
   return Object.fromEntries(PROJECT_WORKFLOW_STATUSES.map((status) => [status, emExecucao.filter((cartao) => cartao.status === status).sort(ordemDoQuadro)])) as Record<ProjectWorkflowStatus, CartaoFluxo[]>;
 }
 
-const ORDEM_FASE: Record<FaseOrcamentoFluxo, number> = { IN_EXECUTION: 0, AWAITING_START: 1, AWAITING_APPROVAL: 2 };
+const ORDEM_FASE: Record<FaseOrcamentoFluxo, number> = { IN_EXECUTION: 0, PAUSED: 1, AWAITING_START: 2, AWAITING_APPROVAL: 3 };
 const porPrazoENumero = (a: CartaoFluxo['quote'], b: CartaoFluxo['quote']) => (a.deadline ?? '9999-12-31').localeCompare(b.deadline ?? '9999-12-31') || a.number.localeCompare(b.number);
 
-/** Coluna "Aguardando início": aprovados sem início primeiro, depois os que aguardam aprovação; prazo mais próximo antes. */
+/** Coluna "Aguardando início": produção parada primeiro, depois aprovados sem início e os que aguardam aprovação; prazo mais próximo antes. */
 export function aguardandoInicio(cartoes: CartaoFluxo[]) {
   return cartoes.filter((cartao) => cartao.quote.phase !== 'IN_EXECUTION')
     .sort((a, b) => ORDEM_FASE[a.quote.phase] - ORDEM_FASE[b.quote.phase] || porPrazoENumero(a.quote, b.quote) || (a.id < b.id ? -1 : 1));

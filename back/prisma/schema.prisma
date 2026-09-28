@@ -45,6 +45,7 @@ enum ExecutionStatus {
   REWORK
   WAITING_MATERIAL
   PENDING_WORK
+  PAUSED
   READY
   DELIVERY_PENDING
   INSTALLATION_PENDING
@@ -495,6 +496,8 @@ model QuoteItem {
   workflowStatus        ProjectWorkflowStatus @default(TODO)
   workflowPosition      Float       @default(0)
   workflowCompletedAt   DateTime?
+  /// Projeto parado por falta de material (marcado no fluxo de trabalho).
+  workflowMaterialMissing Boolean   @default(false)
   quote                 Quote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   productType           ProductType @relation(fields: [productTypeId], references: [id])
   material              Material    @relation(fields: [materialId], references: [id])

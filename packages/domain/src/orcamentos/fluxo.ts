@@ -21,7 +21,8 @@ export function dataConclusaoAoMover<T>(anterior: { status: ProjectWorkflowStatu
 }
 
 /** Execuções que não podem ser movidas no quadro: ainda não iniciado ou já entregue (histórico). */
-export const EXECUCOES_FORA_DO_FLUXO = ['NOT_STARTED', 'COMPLETED'] as const;
+// Produção parada também sai das colunas de trabalho (os cartões ficam guardados na etapa em que estavam).
+export const EXECUCOES_FORA_DO_FLUXO = ['NOT_STARTED', 'PAUSED', 'COMPLETED'] as const;
 
 /**
  * Fase do orçamento no quadro. Antes de iniciar (aguardando aprovação ou
@@ -29,13 +30,14 @@ export const EXECUCOES_FORA_DO_FLUXO = ['NOT_STARTED', 'COMPLETED'] as const;
  * iniciado, entram em A fazer / Em andamento / Produzido / Entregue. Recusado, cancelado,
  * expirado e entregue ficam fora (histórico).
  */
-export type FaseOrcamentoFluxo = 'AWAITING_APPROVAL' | 'AWAITING_START' | 'IN_EXECUTION';
+export type FaseOrcamentoFluxo = 'AWAITING_APPROVAL' | 'AWAITING_START' | 'PAUSED' | 'IN_EXECUTION';
 export const FASE_ORCAMENTO_FLUXO_LABELS: Record<FaseOrcamentoFluxo, string> = {
-  AWAITING_APPROVAL: 'Aguardando aprovação', AWAITING_START: 'Aprovado · falta iniciar', IN_EXECUTION: 'Em execução',
+  AWAITING_APPROVAL: 'Aguardando aprovação', AWAITING_START: 'Aprovado · falta iniciar', PAUSED: 'Produção parada', IN_EXECUTION: 'Em execução',
 };
 export function faseOrcamentoFluxo(quote: { status: string; executionStatus?: string | null }): FaseOrcamentoFluxo | null {
   if (['DRAFT', 'SENT'].includes(quote.status)) return 'AWAITING_APPROVAL';
   if (quote.status !== 'APPROVED' || quote.executionStatus === 'COMPLETED') return null;
+  if (quote.executionStatus === 'PAUSED') return 'PAUSED';
   return !quote.executionStatus || quote.executionStatus === 'NOT_STARTED' ? 'AWAITING_START' : 'IN_EXECUTION';
 }
 

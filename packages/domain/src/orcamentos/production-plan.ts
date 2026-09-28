@@ -167,6 +167,41 @@ export function dividirComponente(source: { id: string; label: string; component
   }));
 }
 
+/** Peça definida por medida (comprimento × largura) repetida `quantity` vezes. */
+export type PecaPorMedida = { lengthMm: number; widthMm: number; quantity: number };
+
+/** Área (mm², inteiro) de uma origem: comprimento × largura × quantidade comercial. */
+export function areaDaOrigemMm2(source: { snapshotLengthMm: number; snapshotWidthMm: number; snapshotQuantity: number }): number {
+  return source.snapshotLengthMm * source.snapshotWidthMm * source.snapshotQuantity;
+}
+
+/** Quantas peças de comprimento × largura cabem na área que resta (arredonda para baixo). */
+export function quantidadeAteAcabar(areaRestanteMm2: number, lengthMm: number, widthMm: number): number {
+  if (lengthMm <= 0 || widthMm <= 0 || areaRestanteMm2 <= 0) return 0;
+  return Math.floor(areaRestanteMm2 / (lengthMm * widthMm));
+}
+
+/** Confere se as peças por medida cabem na área da origem (mm², sem float). A sobra menor que uma peça é permitida. */
+export function validarDivisaoPorMedida(areaTotalMm2: number, pecas: PecaPorMedida[]): ResultadoDivisao {
+  return validarDivisao(areaTotalMm2, pecas.map((peca) => peca.lengthMm * peca.widthMm * peca.quantity));
+}
+
+/**
+ * Divide um componente comercial em peças por medida: cada linha vira uma peça
+ * com a sua quantidade. A posição de cada peça na peça original não é conhecida,
+ * então os acabamentos são copiados com o comprimento automático (lado inteiro de
+ * cada peça), para o usuário conferir no editor.
+ */
+export function dividirPorMedida(source: { id: string; label: string; componentType: ComponentType; orientation: 'HORIZONTAL' | 'VERTICAL'; edges: ProductionEdge[] }, pecas: PecaPorMedida[], newId: () => string): ProductionPiece[] {
+  if (!pecas.length) throw new Error('Informe ao menos uma medida.');
+  pecas.forEach((peca) => { inteiroPositivo(peca.lengthMm, 'Comprimento'); inteiroPositivo(peca.widthMm, 'Largura'); inteiroPositivo(peca.quantity, 'Quantidade'); });
+  return pecas.map((peca, index) => ({
+    id: newId(), sourceComponentId: source.id, label: pecas.length > 1 ? `${source.label || 'Peça'} ${index + 1}` : source.label,
+    componentType: source.componentType, orientation: source.orientation, lengthMm: peca.lengthMm, widthMm: peca.widthMm, quantity: peca.quantity,
+    edges: source.edges.filter((edge) => edge.side !== 'CUSTOM').map((edge) => ({ ...edge, lengthMm: undefined })),
+  }));
+}
+
 /** Peças de rodabanca/saia/vista que seguem a mesma divisão de uma peça já dividida. */
 export function seguirDivisao(pecas: ProductionPiece[], parentSide: Exclude<ProductionEdgeSide, 'CUSTOM'>, heightMm: number, componentType: ComponentType, newId: () => string): ProductionPiece[] {
   return pecas.map((peca) => ({

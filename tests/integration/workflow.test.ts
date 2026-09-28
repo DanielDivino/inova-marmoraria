@@ -92,6 +92,67 @@ describe('Fluxo de trabalho dos projetos', () => {
     expect(conflict.statusCode).toBe(409);
   });
 
+  it('marca e tira a falta de material do projeto; ao produzir, a marca sai sozinha', async () => {
+    const quote = await approvedQuote(admin, ['Cozinha', 'Banheiro']);
+    let cards = await board(admin, quote.id);
+    expect(cards.every((card: any) => card.materialMissing === false)).toBe(true);
+    const cozinha = cards.find((card: any) => card.name === 'Cozinha').id;
+    const marcar = async (faltaMaterial: boolean) => {
+      const response = await request('PATCH', `/workflow/projects/${cozinha}/material`, admin, { faltaMaterial });
+      expect(response.statusCode, response.body).toBe(200); return response.json();
+    };
+    expect((await marcar(true)).materialMissing).toBe(true);
+    cards = await board(admin, quote.id);
+    expect(cards.find((card: any) => card.id === cozinha).materialMissing).toBe(true);
+    expect(cards.find((card: any) => card.name === 'Banheiro').materialMissing).toBe(false);
+    // Marcar não muda etapa nem ordem.
+    expect(column(cards, 'TODO')).toEqual(['Cozinha', 'Banheiro']);
+    expect((await marcar(false)).materialMissing).toBe(false);
+    await marcar(true);
+    await move(admin, cozinha, { status: 'IN_PROGRESS' });
+    expect((await board(admin, quote.id)).find((card: any) => card.id === cozinha).materialMissing).toBe(true);
+    const produzido = await move(admin, cozinha, { status: 'DONE' });
+    expect(produzido.materialMissing).toBe(false);
+    const invalido = await request('PATCH', `/workflow/projects/${cozinha}/material`, admin, { faltaMaterial: 'sim' });
+    expect(invalido.statusCode).toBe(422);
+  });
+
+  it('parar a produção tira os projetos das colunas (sem mover) e retomar devolve cada um para onde estava', async () => {
+    const quote = await approvedQuote(admin, ['Cozinha', 'Banheiro']);
+    let cards = await board(admin, quote.id);
+    const cozinha = cards.find((card: any) => card.name === 'Cozinha').id;
+    await move(admin, cozinha, { status: 'IN_PROGRESS' });
+    const status = async (payload: object) => {
+      const response = await request('PATCH', `/quotes/${quote.id}/status`, admin, payload);
+      expect(response.statusCode, response.body).toBe(200); return response.json();
+    };
+    const parado = await status({ status: 'APPROVED', executionStatus: 'PAUSED', reason: 'Produção parada' });
+    expect(parado.executionStatus).toBe('PAUSED');
+    cards = await board(admin, quote.id);
+    expect(cards.every((card: any) => card.quote.phase === 'PAUSED')).toBe(true);
+    const bloqueado = await request('PATCH', `/workflow/projects/${cozinha}/move`, admin, { status: 'DONE' });
+    expect(bloqueado.statusCode).toBe(404);
+    // Continua em Orçamentos (não é histórico) e aparece no filtro "Produção parada".
+    const ativos = (await request('GET', '/quotes?scope=active&workStatus=PAUSED&limit=100', admin)).json();
+    expect(ativos.data.some((entrada: any) => entrada.id === quote.id)).toBe(true);
+    await status({ status: 'APPROVED', executionStatus: 'IN_PROGRESS', reason: 'Produção retomada' });
+    cards = await board(admin, quote.id);
+    expect(cards.every((card: any) => card.quote.phase === 'IN_EXECUTION')).toBe(true);
+    expect(column(cards, 'IN_PROGRESS')).toEqual(['Cozinha']);
+    expect(column(cards, 'TODO')).toEqual(['Banheiro']);
+  });
+
+  it('cliente desistiu: orçamento em produção vai para o Histórico e sai do fluxo, sem apagar nada', async () => {
+    const quote = await approvedQuote(admin, ['Cozinha']);
+    const response = await request('PATCH', `/quotes/${quote.id}/status`, admin, { status: 'CANCELLED', reason: 'Cliente desistiu' });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'CANCELLED', approvedAt: expect.any(String) });
+    expect(await board(admin, quote.id)).toEqual([]);
+    const historico = (await request('GET', '/quotes?scope=history&limit=100', admin)).json();
+    expect(historico.data.some((entrada: any) => entrada.id === quote.id)).toBe(true);
+    expect((await request('GET', `/quotes/${quote.id}`, admin)).statusCode).toBe(200);
+  });
+
   it('leva até a entrega e, com o último projeto entregue, manda o orçamento para o Histórico', async () => {
     const quote = await approvedQuote(admin, ['Bancada', 'Soleira']);
     const cards = await board(admin, quote.id);

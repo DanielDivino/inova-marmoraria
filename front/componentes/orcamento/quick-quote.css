@@ -1,7 +1,30 @@
 .quote-mode-switch { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
 .quote-mode-switch button, .quick-quote button { border:1px solid #ded7ca; background:#fff; color:#71532c; border-radius:5px; padding:7px 10px; cursor:pointer; }
 .quote-mode-switch button[aria-pressed="true"] { background:#a17b3e; color:#fff; border-color:#a17b3e; }
-.quote-mode-switch small { color:#77766f; }
+/* Modo do orçamento: "Rápido | Com desenho", compacto, com o escolhido em mostarda. */
+html .inova-theme .project-builder div.quote-mode-switch { display:flex; width:fit-content; max-width:100%; gap:4px; margin:0 0 14px; padding:4px; border:1px solid var(--line); border-radius:12px; background:var(--soft); box-shadow:none; }
+html .inova-theme .project-builder .quote-mode-switch > button.modo-botao { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:38px; padding:0 14px; border:1px solid transparent; border-radius:9px; background:transparent; color:var(--muted); font-size:14px; font-weight:600; box-shadow:none; }
+html .inova-theme .project-builder .quote-mode-switch > button.modo-botao:hover:not([aria-pressed=true]) { background:transparent; border-color:transparent; color:var(--ink); }
+html .inova-theme .project-builder .quote-mode-switch > button.modo-botao[aria-pressed=true] { border-color:color-mix(in srgb, var(--green) 40%, transparent); background:color-mix(in srgb, var(--green) 20%, var(--surface, #fff)); color:var(--ink); font-weight:700; }
+html .inova-theme .project-builder .quote-mode-switch > button.modo-botao > svg { color:var(--green); }
+/* Situação do desenho: ✓ verde (adicionado) ou ! mostarda (pendente). */
+.modo-selo { display:inline-grid; place-items:center; min-width:20px; height:20px; padding:0 5px; border-radius:999px; background:#fbeed6; color:#86591a; font-size:11px; font-weight:800; line-height:1; }
+.modo-selo.feito { background:#d9eedf; color:#2f6040; }
+html.inova-dark .inova-theme .modo-selo { background:#3a2e17; color:#e6c17a; }
+html.inova-dark .inova-theme .modo-selo.feito { background:#1f3a28; color:#8fd3a3; }
+@media (max-width: 760px) {
+  html .inova-theme .project-builder div.quote-mode-switch { width:100%; }
+  html .inova-theme .project-builder .quote-mode-switch > button.modo-botao { flex:1 1 0; }
+}
+/* Modo do orçamento + etapas do Detalhado (1, 2, Ver tudo, Concluir) na mesma linha. */
+.modo-e-etapas { display:flex; flex-wrap:wrap; align-items:center; gap:10px 20px; margin:0 0 16px; }
+html .inova-theme .project-builder .modo-e-etapas > div.quote-mode-switch { flex:none; margin:0; }
+.project-builder .modo-e-etapas > .project-navigation { flex:1 1 320px; flex-wrap:wrap; gap:8px 12px; min-width:0; margin:0; }
+.project-builder .modo-e-etapas .project-stepper { flex:1 1 200px; min-width:0; }
+.project-builder .modo-e-etapas .project-step-label { font-size:11px; }
+.project-builder .modo-e-etapas .view-all-button { min-height:34px; padding:0 12px; border-radius:9px; background:var(--surface, #fff); color:var(--green); font-size:12px; font-weight:600; }
+/* "Concluir detalhamento" fica à direita; se não couber, desce sozinho para a linha de baixo. */
+.modo-e-etapas > .concluir-detalhamento { min-height:38px; margin-left:auto; }
 .quick-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
 .quick-heading h2 { margin:0 0 5px; font:600 21px Georgia,serif; }
 .quick-heading small, .quick-quote td small { display:block; color:#77766f; font-size:11px; }
@@ -11,12 +34,20 @@
 .quick-project-fields { display:grid; grid-template-columns:1fr 1fr; align-items:end; gap:10px; margin-bottom:12px; }
 .quick-project-fields label { display:grid; gap:5px; font-size:12px; }
 .quick-table-scroll { overflow-x:auto; margin-bottom:12px; }
-.quick-table { width:100%; min-width:690px; table-layout:fixed; border-collapse:collapse; font-size:12px; }
+.quick-table { width:100%; min-width:740px; table-layout:fixed; border-collapse:collapse; font-size:12px; }
 .quick-table th { background:#f7f6f3; padding:9px 6px; text-align:left; color:#625644; }
 .quick-table td { padding:7px 5px; border-bottom:1px solid #e8e4dd; vertical-align:top; }
 .quick-table input,.quick-table select { width:100%; min-width:60px; }
 .quick-table td:first-child { min-width:160px; }
 .quick-table td:first-child input { margin-top:4px; }
+/* Alça para arrastar a peça e mudar a ordem (a partir de 2 peças). Só a alça inicia o arraste. */
+.quick-quote .quick-drag-handle { display:grid; place-items:center; width:22px; height:33px; padding:0 !important; border:0 !important; background:transparent !important; color:var(--muted) !important; cursor:grab; touch-action:none; }
+.quick-quote .quick-drag-handle:active { cursor:grabbing; }
+.quick-quote .quick-drag-handle:focus-visible { outline:2px solid var(--green); outline-offset:1px; border-radius:6px; }
+.quick-drag-handle svg { width:16px; height:16px; fill:currentColor; }
+.quick-table td.quick-description:has(> .quick-drag-handle) { position:relative; padding-left:28px; }
+.quick-table td.quick-description > .quick-drag-handle { position:absolute; top:7px; left:4px; }
+.quick-item-group[data-dragging] { position:relative; z-index:2; box-shadow:0 10px 26px #00000033; }
 .type-description-field { display:grid; gap:4px; min-width:0; }
 .type-description-field > span { color:var(--muted); font-size:inherit; }
 .type-description-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:4px; margin-top:4px; }
@@ -57,21 +88,42 @@
 .quick-row-actions button { min-height:32px; padding:5px 8px; white-space:nowrap; font-size:11px; }
 .quick-row-actions .quick-options-button { font-size:11px; }
 .quick-row-actions button[aria-label^="Remover peça"] { width:32px; min-width:32px; padding:4px; }
+/* Símbolos da peça depois do ×: pedra própria (miniatura), 45° e outros acabamentos. */
+.quick-marcas { display:inline-flex; flex:none; align-items:center; gap:4px; margin-left:8px; }
+.quick-marca { display:inline-grid; place-items:center; height:20px; min-width:20px; padding:0 5px; border:1px solid var(--line); border-radius:999px; background:var(--soft); color:var(--muted); font-size:10px; font-weight:700; line-height:1; cursor:default; }
+.quick-marca-pedra { width:20px; padding:0; overflow:hidden; border-color:var(--green); }
+.quick-marca-pedra img { width:100%; height:100%; object-fit:cover; }
+.quick-marca-45 { border-color:color-mix(in srgb, var(--green) 55%, var(--line)); background:color-mix(in srgb, var(--green) 14%, transparent); color:var(--green); }
+.quick-marca-acabamento { display:inline-flex; gap:2px; }
 .quick-services { background:#faf9f6; padding:12px; display:grid; gap:12px; }
-.quick-material-override { display:grid; grid-template-columns:130px minmax(0,1fr); gap:10px; align-items:center; padding-bottom:12px; border-bottom:1px solid #e8e4dd; font-size:11px; color:#625644; }
-.quick-material-controls { display:flex; align-items:center; gap:8px; min-width:0; }
+/* Opções da peça: uma barra com a pedra desta peça e os acabamentos desta peça. */
+.quick-opcoes-barra { display:flex; align-items:center; gap:14px 18px; padding:10px 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface, #fff); }
+.quick-opcoes-grupo { display:flex; align-items:center; gap:12px; min-width:0; }
+.quick-opcoes-grupo.quick-material-override { flex:1 1 auto; }
+.quick-opcoes-rotulo { display:inline-flex; flex:none; align-items:center; gap:10px; color:var(--ink); font-size:14px; white-space:nowrap; }
+.quick-opcoes-rotulo > svg { color:var(--green); width:22px; height:22px; }
+.quick-opcoes-divisor { flex:none; align-self:stretch; width:1px; margin:4px 0; background:var(--line); }
+html .inova-theme .quick-quote .quick-opcoes-barra button.quick-add-acabamento { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 18px; border:1px solid var(--green); border-radius:10px; background:transparent; color:var(--green); font-size:14px; font-weight:700; white-space:nowrap; }
+html .inova-theme .quick-quote .quick-opcoes-barra button.quick-add-acabamento:hover:not(:disabled) { background:color-mix(in srgb, var(--green) 10%, transparent); border-color:var(--green); color:var(--green); }
+.quick-material-controls { display:flex; flex:1 1 auto; align-items:center; gap:8px; min-width:0; }
 .quick-material-controls .component-material-field { flex:1; min-width:0; }
 .quick-material-controls .component-material-label { display:none; }
 .quick-use-project-material { flex:0 0 auto; min-height:32px; padding:5px 8px; font-size:11px; white-space:nowrap; }
 .quick-piece-finishes { display:grid; gap:10px; }
-.quick-piece-finishes-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.quick-piece-finishes-heading strong { color:#625644; font-size:12px; }
-.quick-piece-finishes-heading .text-button { margin:0; }
+.quick-piece-finishes:empty { display:none; }
 .quick-sill-hint { margin:0 0 12px; padding-bottom:12px; border-bottom:1px solid #e8e4dd; font-size:11px; color:#625644; }
-.quick-sides { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
-.quick-sides b { display:block; margin-bottom:6px; }
-.quick-edge { display:grid; gap:4px; padding:6px 0; }
-.quick-edge label,.quick-price { display:grid; gap:4px; font-size:11px; }
+.quick-price { display:grid; gap:4px; font-size:11px; }
+/* Acabamentos da peça: uma linha curta por acabamento. */
+.quick-acabamentos { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
+.quick-acabamento { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; padding:6px 8px 6px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surface, #fff); color:var(--ink); font-size:13px; }
+.quick-acabamento-nome { flex:1 1 180px; min-width:0; overflow:hidden; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.quick-acabamento-lado { padding:2px 8px; border-radius:999px; background:var(--soft); color:var(--muted); font-size:12px; }
+.quick-acabamento-campo { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; }
+/* Mais específico que a regra de campos do tema (que fixa altura e preenchimento). */
+html .inova-theme .quick-quote .quick-acabamento .quick-acabamento-campo input:not([type='checkbox']):not([type='radio']) { width:56px; min-width:0; height:30px; min-height:30px; padding:0 8px; font-size:13px; }
+.quick-acabamento-ajuste { display:inline-flex; align-items:center; gap:4px; padding:2px 4px 2px 8px; border-radius:999px; background:color-mix(in srgb, var(--green) 12%, transparent); color:var(--green); font-size:12px; font-weight:600; }
+.quick-quote .quick-acabamento-ajuste button { min-height:0; padding:0 4px; border:0; background:transparent; color:inherit; font-size:13px; }
+.quick-quote .quick-acabamento button.quick-acabamento-remover { display:grid; place-items:center; width:28px; min-width:28px; height:28px; min-height:28px; padding:0; border-radius:8px; font-size:14px; line-height:1; }
 .quick-price { max-width:310px; }
 .quick-project-services { margin-top:14px; }
 .quick-project-services > summary { color:#71532c; cursor:pointer; padding:8px 0; }
@@ -82,7 +134,7 @@
 .quick-assembly-service span { display:flex; align-items:center; gap:6px; }
 .quick-assembly-service input[type="checkbox"] { width:auto; }
 .quick-assembly-service input[aria-label] { max-width:180px; }
-@media(max-width:800px) { .quick-project-fields { grid-template-columns:1fr; } .quick-sides { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:800px) { .quick-project-fields { grid-template-columns:1fr; } }
 @media(max-width:560px) { .quick-modal-service-list { grid-template-columns:1fr; } }
 
 .quick-table th:first-child { width:168px; }
@@ -90,8 +142,9 @@
 .quick-table th:nth-child(4) { width:58px; }
 .quick-table th:nth-child(5) { width:60px; }
 .quick-table th:nth-child(6) { width:92px; }
-.quick-table th:last-child { width:126px; }
+.quick-table th:last-child { width:176px; }
 .quick-table input, .quick-table select { min-width:0; }
 .quick-table th { box-sizing:border-box; }
+.quick-table th.quick-th-numero { text-align:right; }
 .quick-service-prices { display:grid; gap:10px; margin-top:10px; }
 .quick-service-prices label { display:grid; grid-template-columns:minmax(0,1fr) 130px; align-items:center; gap:12px; font-size:12px; }

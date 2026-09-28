@@ -36,6 +36,13 @@ const rowMaterial = async name => {
   await page.locator('.quick-services .quick-material-override .material-picker-panel button').filter({ hasText: name }).click();
 };
 const step = number => page.locator('.project-step').nth(number - 1).getByRole('button').click();
+// Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
+const selecionarCliente = async () => { await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click(); };
+const menuProjeto = async () => { await page.getByRole('button', { name: /^Projeto:/ }).click(); await expect(page.getByRole('menu')).toBeVisible(); };
+const escolherProjeto = async name => { await menuProjeto(); await page.getByRole('menu').getByRole('menuitemradio', { name, exact: true }).click(); };
+const contarProjetos = async () => { await menuProjeto(); const total = await page.getByRole('menu').getByRole('menuitemradio').count(); await page.keyboard.press('Escape'); return total; };
+const excluirProjeto = async name => { await escolherProjeto(name); await menuProjeto(); await page.getByRole('menu').getByRole('menuitem', { name: `Excluir ${name}`, exact: true }).click(); };
+const projetoAtivo = name => expect(page.getByRole('button', { name: /^Projeto:/ })).toHaveAccessibleName(`Projeto: ${name}`);
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
   // Um projeto novo começa em "Orçamento Rápido" — é onde todo dado comercial
@@ -43,15 +50,15 @@ try {
   // divide as peças já orçadas em produção, nunca recalcula o valor.
   await expect(page.getByRole('button', { name: 'Orçamento Rápido' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('dialog')).toHaveCount(0);
-  await expect(page.getByRole('tablist', { name: 'Projetos' }).getByRole('tab')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Selecionar cliente', exact: true }).click();
+  assert.equal(await contarProjetos(), 1);
+  await selecionarCliente();
   await page.getByRole('dialog').getByPlaceholder('Digite nome, telefone ou CPF').fill('João');
   await page.locator('.customer-result').click();
   await expect(page.locator('dialog')).toHaveCount(0);
-  await expect(page.locator('.compact-customer')).toContainText('Cliente: João da Silva');
-  await page.getByRole('button', { name: 'Trocar cliente' }).click();
+  await expect(page.locator('.atendimento-barra')).toContainText('João da Silva');
+  await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Trocar cliente', exact: true }).click();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.compact-customer')).toContainText('João da Silva');
+  await expect(page.locator('.atendimento-barra')).toContainText('João da Silva');
   await page.locator('#project-name').fill('Cozinha');
   await projectMaterial('Preto São Gabriel');
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('2,00');
@@ -75,45 +82,45 @@ try {
   await page.getByLabel('Largura da peça 3 (m)', { exact: true }).fill('0,10');
   await expect(page.locator('.summary-grand-total')).toContainText('1.070,00');
   await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
-  await step(3);
+  await step(2);
   await expect(page.locator('.technical-drawing .drawing-description')).toHaveCount(3);
   await expect(page.locator('.technical-drawing')).toContainText('Branco Itaúnas');
   await expect(page.locator('.manufacturing-description')).toContainText('100 × 10 cm');
   await step(1);
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
-  await expect(page.getByRole('tablist', { name: 'Projetos' }).getByRole('tab')).toHaveCount(2);
-  await expect(page.getByRole('tab', { name: 'Projeto 2', exact: true })).toHaveAttribute('aria-selected', 'true');
+  assert.equal(await contarProjetos(), 2);
+  await projetoAtivo('Projeto 2');
   // Um projeto novo começa em Orçamento Rápido, então o campo vazio a conferir é o
   // do editor rápido.
   await expect(page.locator('#project-name')).toHaveValue('');
-  await page.getByRole('button', { name: 'Excluir Projeto 2', exact: true }).click();
+  await excluirProjeto('Projeto 2');
   assert.equal(confirmations, 0);
-  await expect(page.getByRole('tab', { name: 'Cozinha', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await projetoAtivo('Cozinha');
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
   await page.locator('#project-name').fill('Janela');
   await projectMaterial('Branco Itaúnas');
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('1,00');
   await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,10');
-  await page.getByRole('tab', { name: 'Cozinha', exact: true }).click();
+  await escolherProjeto('Cozinha');
   // Cozinha já está em Detalhado (produção) desde o passo anterior — a etapa 1
-  // agora mostra as peças de produção (medidas em cm), não mais o Orçamento
-  // Rápido; o valor comercial continua o mesmo, definido lá.
+  // agora mostra as peças de produção (medidas em metros, como no Orçamento
+  // Rápido), não mais o Orçamento Rápido; o valor comercial continua o mesmo, definido lá.
   await step(1);
   const root = index => page.locator('.component-editor > .component-card').nth(index);
-  await expect(root(0).getByLabel('Comprimento (cm)', { exact: true })).toHaveValue('200');
+  await expect(root(0).getByLabel('Comprimento (m)', { exact: true })).toHaveValue('2,00');
   await expect(page.locator('.summary-grand-total')).toContainText('1.070,00');
-  await page.getByRole('button', { name: 'Excluir Janela', exact: true }).click();
+  await excluirProjeto('Janela');
   assert.equal(confirmations, 1);
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
   await page.locator('#project-name').fill('Banheiro');
   await projectMaterial('Branco Itaúnas');
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('1,00');
   await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,10');
-  await page.getByRole('tab', { name: 'Cozinha', exact: true }).click();
+  await escolherProjeto('Cozinha');
   await page.reload();
-  await expect(page.getByRole('tablist', { name: 'Projetos' }).getByRole('tab')).toHaveCount(2);
+  assert.equal(await contarProjetos(), 2);
   await step(1);
-  await expect(root(0).getByLabel('Comprimento (cm)', { exact: true })).toHaveValue('200');
+  await expect(root(0).getByLabel('Comprimento (m)', { exact: true })).toHaveValue('2,00');
   // O material por peça (definido no Orçamento Rápido) aparece na legenda do
   // desenho de cada peça de produção — a divisão nunca o altera.
   await expect(root(1).locator('.map-caption')).toContainText('Branco Itaúnas');
@@ -126,8 +133,6 @@ try {
   await expect(page.locator('#project-step-1')).toBeVisible();
   await step(2);
   await expect(page.locator('#project-step-2')).toBeVisible();
-  await step(3);
-  await expect(page.locator('#project-step-3')).toBeVisible();
   await page.locator('.quote-summary-actions').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
   await page.waitForURL('**/orcamentos');
   assert.equal(saved.items.length, 2);

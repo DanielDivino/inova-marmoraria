@@ -42,6 +42,8 @@ async function noOverflow(label) {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), label + ': página sem rolagem lateral');
   assert(await page.locator('.quick-table').evaluate(el => el.scrollWidth <= el.clientWidth + 1), label + ': peças sem rolagem lateral');
 }
+// Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
+const selecionarCliente = async () => { await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click(); };
 try {
   await page.goto(base + '/');
   await expect(page.locator('.quick-quote')).toBeVisible();
@@ -53,7 +55,7 @@ try {
   await page.keyboard.press('Escape');
   await expect(menu).not.toBeVisible();
   await expect(page.getByRole('button', { name: 'Abrir menu', exact: true })).toBeFocused();
-  await page.getByRole('button', { name: 'Selecionar cliente', exact: true }).click();
+  await selecionarCliente();
   await page.getByPlaceholder('Digite nome, telefone ou CPF').fill('Cliente');
   await page.locator('.customer-result').click();
   await page.locator('#project-name').fill('Cozinha no celular');

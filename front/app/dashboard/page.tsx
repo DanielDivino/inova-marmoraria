@@ -11,7 +11,7 @@ import { CampoFiltro, PainelFiltros } from '../../componentes/filtros/Filtros';
 type Seller = { id: string; name: string; isActive: boolean };
 const stages: [keyof DashboardCounts, string][] = [
   ['pending', 'Aguardando aprovação'], ['approved', 'Aprovados · não iniciados'], ['production', 'Em produção'],
-  ['waitingMaterial', 'Aguardando material'], ['pendingWork', 'Trabalho pendente'], ['rework', 'Em retrabalho'],
+  ['waitingMaterial', 'Aguardando material'], ['pendingWork', 'Trabalho pendente'], ['rework', 'Em retrabalho'], ['paused', 'Produção parada'],
   ['ready', 'Prontos'], ['deliveryPending', 'Entrega pendente'], ['installationPending', 'Montagem pendente'],
   ['delivered', 'Entregues'], ['cancelled', 'Cancelados'], ['rejected', 'Recusados'], ['expired', 'Expirados'],
 ];

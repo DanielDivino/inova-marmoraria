@@ -20,7 +20,7 @@ const escopoFluxo = (user: AuthUser) => ({ quote: { status: 'APPROVED', executio
 const escopoListagem = (user: AuthUser) => ({ quote: { ...escopoOrcamentos(user), OR: [{ status: { in: ['DRAFT', 'SENT'] } }, { status: 'APPROVED', executionStatus: { not: 'COMPLETED' } }] } }) satisfies Prisma.QuoteItemWhereInput;
 
 const selectCartao = {
-  id: true, projectName: true, workflowStatus: true, workflowPosition: true, workflowCompletedAt: true, quantity: true, drawingData: true,
+  id: true, projectName: true, workflowStatus: true, workflowPosition: true, workflowCompletedAt: true, workflowMaterialMissing: true, quantity: true, drawingData: true,
   productType: { select: { name: true } },
   components: { select: { quantity: true } },
   quote: { select: {
@@ -45,6 +45,7 @@ function paraCartao(item: Prisma.QuoteItemGetPayload<{ select: typeof selectCart
     status: item.workflowStatus,
     position: item.workflowPosition,
     completedAt: item.workflowCompletedAt,
+    materialMissing: item.workflowMaterialMissing,
     pieces: quantidadePecas(item),
     quote: {
       id: item.quote.id, number: item.quote.number, customerId: item.quote.customerId, customerName: item.quote.customerNameSnapshot, deadline: prazo ? dataCalendario(prazo) : null,
@@ -93,9 +94,21 @@ export async function moverProjeto(tx: Tx, itemId: string, input: z.infer<typeof
   if (!item) throw new AppError(404, 'Projeto não encontrado no fluxo de trabalho.', 'NOT_FOUND');
   const workflowPosition = await posicaoNaColuna(tx, input.status, itemId, input.afterId, input.beforeId);
   const workflowCompletedAt = dataConclusaoAoMover({ status: item.workflowStatus, completedAt: item.workflowCompletedAt }, input.status, new Date());
-  const updated = await tx.quoteItem.update({ where: { id: itemId }, data: { workflowStatus: input.status, workflowPosition, workflowCompletedAt }, select: selectCartao });
+  // Produzido ou entregue já não espera material: a marca sai sozinha.
+  const semFaltaMaterial = input.status === 'DONE' || input.status === 'DELIVERED' ? { workflowMaterialMissing: false } : {};
+  const updated = await tx.quoteItem.update({ where: { id: itemId }, data: { workflowStatus: input.status, workflowPosition, workflowCompletedAt, ...semFaltaMaterial }, select: selectCartao });
   const quoteDelivered = input.status === 'DELIVERED' && await entregarOrcamentoSeCompleto(tx, item.quote, user);
   return { card: { ...paraCartao(updated), quoteDelivered }, previousStatus: item.workflowStatus };
+}
+
+export const faltaMaterialSchema = z.object({ faltaMaterial: z.boolean() });
+
+/** Marca (ou tira) a falta de material de um projeto visível no fluxo; não muda a etapa nem a ordem. */
+export async function marcarFaltaMaterial(tx: Tx, itemId: string, input: z.infer<typeof faltaMaterialSchema>, user: AuthUser) {
+  const item = await tx.quoteItem.findFirst({ where: { id: itemId, ...escopoListagem(user) }, select: { workflowMaterialMissing: true } });
+  if (!item) throw new AppError(404, 'Projeto não encontrado no fluxo de trabalho.', 'NOT_FOUND');
+  const updated = await tx.quoteItem.update({ where: { id: itemId }, data: { workflowMaterialMissing: input.faltaMaterial }, select: selectCartao });
+  return { card: paraCartao(updated), previous: item.workflowMaterialMissing };
 }
 
 /**

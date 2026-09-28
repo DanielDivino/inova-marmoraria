@@ -2,8 +2,8 @@ type Step = { number: number; label: string; detail?: string };
 
 const steps: Step[] = [
   { number: 1, label: 'Divisão', detail: 'e peças' },
-  { number: 2, label: 'Acabamentos', detail: 'e detalhes' },
-  { number: 3, label: 'Conferência', detail: 'e produção' },
+  // Os acabamentos (recortes, cubas e rodabanca) ficam no começo da conferência.
+  { number: 2, label: 'Conferência', detail: 'e produção' },
 ];
 
 export function EtapasProjeto({ current, completed = [], onSelect }: { current: number; completed?: number[]; onSelect: (step: number) => void }) {

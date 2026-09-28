@@ -7,6 +7,10 @@ async function api(page: Page, method: string, path: string, data?: unknown) {
   return page.request.fetch(`/api${path}`, { method, headers: { authorization: `Bearer ${token}` }, data });
 }
 
+// Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
+async function selecionarCliente(page: Page) { await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click(); }
+async function menuProjeto(page: Page) { await page.getByRole('button', { name: /^Projeto:/ }).click(); await expect(page.getByRole('menu')).toBeVisible(); }
+async function escolherProjeto(page: Page, name: string) { await menuProjeto(page); await page.getByRole('menu').getByRole('menuitemradio', { name, exact: true }).click(); }
 test('Orçamento rápido: teclado, projetos, serviços, PDF e detalhamento no mesmo orçamento', async ({ page }) => {
   await page.goto('/login');
   await page.getByLabel('E-mail', { exact: true }).fill('admin@inovamarmoraria.local');
@@ -19,7 +23,7 @@ test('Orçamento rápido: teclado, projetos, serviços, PDF e detalhamento no me
   const miter = catalog.services.find((entry: any) => entry.name === 'Acabamento 45° — Granito/Mármore');
   const customerName = `Cliente rápido ${Date.now()}`;
   expect((await api(page, 'POST', '/customers', { name: customerName, phone: `929${String(Date.now()).slice(-8)}` })).status()).toBe(201);
-  await page.getByRole('button', { name: 'Selecionar cliente', exact: true }).click();
+  await selecionarCliente(page);
   await page.getByPlaceholder('Digite nome, telefone ou CPF').fill(customerName);
   await page.locator('.customer-result').filter({ hasText: customerName }).click();
   await page.getByRole('button', { name: 'Orçamento Rápido', exact: true }).click();
@@ -57,13 +61,13 @@ test('Orçamento rápido: teclado, projetos, serviços, PDF e detalhamento no me
   await quick.getByRole('button').filter({ hasText: /^Branco Dallas/ }).click();
   await quick.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('1,20');
   await quick.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,60');
-  await page.getByRole('tab', { name: 'Cozinha rápida', exact: true }).click();
-  await expect(quick.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('0,7');
+  await escolherProjeto(page, 'Cozinha rápida');
+  await expect(quick.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('0,70');
   await page.getByLabel('Observações do orçamento', { exact: true }).fill('Conferir medidas na obra.');
   await page.waitForTimeout(450);
   await page.reload();
   await expect(page.locator('.quick-quote')).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Banheiro rápido', exact: true })).toBeVisible();
+  await menuProjeto(page); await expect(page.getByRole('menu').getByRole('menuitemradio', { name: 'Banheiro rápido', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
   await page.screenshot({ path: '.test-artifacts/quick-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(quick).toBeVisible();

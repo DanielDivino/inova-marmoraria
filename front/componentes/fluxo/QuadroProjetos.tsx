@@ -6,7 +6,7 @@ import { closestCenter, closestCorners, DndContext, DragOverlay, KeyboardSensor,
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { FASE_ORCAMENTO_FLUXO_LABELS, PROJECT_WORKFLOW_LABELS, PROJECT_WORKFLOW_STATUSES, SITUACAO_PRAZO_FLUXO_LABELS, situacaoPrazoFluxo, type ProjectWorkflowStatus } from '@inova/domain';
-import { useCelular } from '../filtros/Filtros';
+import { Icone, useCelular } from '../filtros/Filtros';
 import { aguardandoInicio, colunasFluxo, corOrcamento, formatarDataFluxo, nomeResponsavel, rotuloPecas, type CartaoFluxo, type ResponsavelFluxo } from '../../utilitarios/fluxo';
 
 type Ordem = Record<ProjectWorkflowStatus, string[]>;
@@ -35,11 +35,22 @@ export function CartaoProjeto({ cartao, ...props }: { cartao: CartaoFluxo } & HT
     <strong>{cartao.name}</strong>
     <small>{cartao.quote.customerName}</small>
     <Responsavel responsavel={cartao.quote.worker} />
+    {cartao.materialMissing && <small className="fluxo-falta-material"><Icone nome="material" tamanho={13} />Falta de material</small>}
     <small className="fluxo-prazo">{cartao.quote.deadline ? `Prazo final: ${formatarDataFluxo(cartao.quote.deadline)}` : 'Sem prazo final'}{['VENCIDO', 'PROXIMO'].includes(situacao) && <b> · {SITUACAO_PRAZO_FLUXO_LABELS[situacao]}</b>}</small>
   </article>;
 }
 
-const descricaoCartao = (cartao: CartaoFluxo) => `${cartao.name}, ${rotuloPecas(cartao.pieces)}, ${cartao.quote.customerName}, orçamento ${cartao.quote.number}, ${cartao.quote.worker ? `responsável ${nomeResponsavel(cartao.quote.worker)}` : 'sem responsável'}`;
+const descricaoCartao = (cartao: CartaoFluxo) => `${cartao.name}, ${rotuloPecas(cartao.pieces)}, ${cartao.quote.customerName}, orçamento ${cartao.quote.number}, ${cartao.quote.worker ? `responsável ${nomeResponsavel(cartao.quote.worker)}` : 'sem responsável'}${cartao.materialMissing ? ', falta de material' : ''}`;
+
+/** Liga/desliga a falta de material, no canto do cartão (fora dele: não arrasta nem abre o orçamento). Produzido/entregue não tem. */
+function BotaoFaltaMaterial({ cartao, aoAlternar }: { cartao: CartaoFluxo; aoAlternar?: (cartao: CartaoFluxo) => void }) {
+  if (!aoAlternar || cartao.status === 'DONE' || cartao.status === 'DELIVERED') return null;
+  const ativo = !!cartao.materialMissing;
+  return <button type="button" className={`fluxo-material-botao${ativo ? ' ativo' : ''}`} aria-pressed={ativo}
+    aria-label={`${ativo ? 'Tirar' : 'Marcar'} falta de material em ${cartao.name}`} title={ativo ? 'Tirar falta de material' : 'Marcar falta de material'} onClick={() => aoAlternar(cartao)}>
+    <Icone nome="material" tamanho={15} />
+  </button>;
+}
 
 type ColunaId = 'AGUARDANDO' | ProjectWorkflowStatus;
 /** Rótulos curtos para a barra de etapas do celular. */
@@ -56,37 +67,37 @@ function MoverPara({ cartao, aoEscolher }: { cartao: CartaoFluxo; aoEscolher: (s
 }
 
 /** Orçamentos ainda não iniciados: só consulta. Os projetos entram em "A fazer" quando o serviço é iniciado. */
-function ColunaAguardando({ cartoes, abrir, ativa }: { cartoes: CartaoFluxo[]; abrir: (cartao: CartaoFluxo) => void; ativa: boolean }) {
+function ColunaAguardando({ cartoes, abrir, ativa, faltaMaterial }: { cartoes: CartaoFluxo[]; abrir: (cartao: CartaoFluxo) => void; ativa: boolean; faltaMaterial?: (cartao: CartaoFluxo) => void }) {
   return <section className={`fluxo-coluna fluxo-coluna-aguardando${ativa ? ' ativa' : ''}`} aria-labelledby="fluxo-AGUARDANDO">
     <header><h2 id="fluxo-AGUARDANDO">Aguardando início</h2><span>{cartoes.length}</span></header>
-    <p className="fluxo-coluna-nota">Entram em “A fazer” quando o serviço é iniciado.</p>
+    <p className="fluxo-coluna-nota">Entram em “A fazer” quando o serviço é iniciado. Com a produção parada, voltam para onde estavam ao retomar.</p>
     <ol className="fluxo-lista">
-      {cartoes.map((cartao) => <li key={cartao.id}><CartaoProjeto cartao={cartao} role="link" tabIndex={0} className="fluxo-cartao-fixo"
+      {cartoes.map((cartao) => <li key={cartao.id}><div className="fluxo-cartao-caixa"><CartaoProjeto cartao={cartao} role="link" tabIndex={0} className="fluxo-cartao-fixo"
         aria-label={`${descricaoCartao(cartao)}, ${FASE_ORCAMENTO_FLUXO_LABELS[cartao.quote.phase].toLowerCase()}. Enter para abrir.`}
-        onClick={() => abrir(cartao)} onKeyDown={(event) => { if (event.key === 'Enter') abrir(cartao); }} /></li>)}
+        onClick={() => abrir(cartao)} onKeyDown={(event) => { if (event.key === 'Enter') abrir(cartao); }} /><BotaoFaltaMaterial cartao={cartao} aoAlternar={faltaMaterial} /></div></li>)}
       {!cartoes.length && <li className="fluxo-vazio">Nenhum orçamento aguardando</li>}
     </ol>
   </section>;
 }
 
-function CartaoArrastavel({ cartao, abrir, moverPara }: { cartao: CartaoFluxo; abrir: (cartao: CartaoFluxo) => void; moverPara?: (cartao: CartaoFluxo, status: ProjectWorkflowStatus) => void }) {
+function CartaoArrastavel({ cartao, abrir, moverPara, faltaMaterial }: { cartao: CartaoFluxo; abrir: (cartao: CartaoFluxo) => void; moverPara?: (cartao: CartaoFluxo, status: ProjectWorkflowStatus) => void; faltaMaterial?: (cartao: CartaoFluxo) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cartao.id });
   return <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, '--cor-orcamento': corOrcamento(cartao.quote.id) } as CSSProperties} className={isDragging ? 'fluxo-cartao-origem' : undefined}>
-    <CartaoProjeto cartao={cartao} {...attributes} {...listeners}
+    <div className="fluxo-cartao-caixa"><CartaoProjeto cartao={cartao} {...attributes} {...listeners}
       aria-label={`${descricaoCartao(cartao)}. Espaço para mover, Enter para abrir.`}
       onClick={() => abrir(cartao)}
-      onKeyDown={(event) => { listeners?.onKeyDown?.(event); if (event.key === 'Enter' && !isDragging) abrir(cartao); }} />
+      onKeyDown={(event) => { listeners?.onKeyDown?.(event); if (event.key === 'Enter' && !isDragging) abrir(cartao); }} /><BotaoFaltaMaterial cartao={cartao} aoAlternar={faltaMaterial} /></div>
     {moverPara && <MoverPara cartao={cartao} aoEscolher={(status) => moverPara(cartao, status)} />}
   </li>;
 }
 
-function Coluna({ status, ids, porId, abrir, ativa, moverPara }: { status: ProjectWorkflowStatus; ids: string[]; porId: Map<string, CartaoFluxo>; abrir: (cartao: CartaoFluxo) => void; ativa: boolean; moverPara?: (cartao: CartaoFluxo, status: ProjectWorkflowStatus) => void }) {
+function Coluna({ status, ids, porId, abrir, ativa, moverPara, faltaMaterial }: { status: ProjectWorkflowStatus; ids: string[]; porId: Map<string, CartaoFluxo>; abrir: (cartao: CartaoFluxo) => void; ativa: boolean; moverPara?: (cartao: CartaoFluxo, status: ProjectWorkflowStatus) => void; faltaMaterial?: (cartao: CartaoFluxo) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: PREFIXO_COLUNA + status });
   return <section className={`fluxo-coluna${isOver ? ' fluxo-coluna-alvo' : ''}${ativa ? ' ativa' : ''}`} aria-labelledby={`fluxo-${status}`}>
     <header><h2 id={`fluxo-${status}`}>{PROJECT_WORKFLOW_LABELS[status]}</h2><span>{ids.length}</span></header>
     <SortableContext id={status} items={ids} strategy={verticalListSortingStrategy}>
       <ol ref={setNodeRef} className="fluxo-lista">
-        {ids.map((id) => <CartaoArrastavel key={id} cartao={porId.get(id)!} abrir={abrir} moverPara={moverPara} />)}
+        {ids.map((id) => <CartaoArrastavel key={id} cartao={porId.get(id)!} abrir={abrir} moverPara={moverPara} faltaMaterial={faltaMaterial} />)}
         {!ids.length && <li className="fluxo-vazio">{moverPara ? 'Nenhum projeto nesta etapa' : 'Arraste um projeto para cá'}</li>}
       </ol>
     </SortableContext>
@@ -97,7 +108,7 @@ function Coluna({ status, ids, porId, abrir, ativa, moverPara }: { status: Proje
  * Kanban de projetos. Durante o arraste a ordem fica local (`ordem`); ao soltar,
  * `onMover` recebe a coluna de destino e a ordem visível final dela.
  */
-export function QuadroProjetos({ cartoes, onMover }: { cartoes: CartaoFluxo[]; onMover: (id: string, status: ProjectWorkflowStatus, idsDestino: string[], origem?: 'menu') => void }) {
+export function QuadroProjetos({ cartoes, onMover, onFaltaMaterial }: { cartoes: CartaoFluxo[]; onMover: (id: string, status: ProjectWorkflowStatus, idsDestino: string[], origem?: 'menu') => void; onFaltaMaterial?: (cartao: CartaoFluxo) => void }) {
   const router = useRouter();
   const celular = useCelular();
   // No celular, abre na primeira etapa de trabalho; as outras ficam a um toque na barra de etapas.
@@ -212,8 +223,8 @@ export function QuadroProjetos({ cartoes, onMover }: { cartoes: CartaoFluxo[]; o
           {celular ? ROTULO_CURTO[coluna.id] ?? coluna.rotulo : coluna.rotulo} <b>{coluna.total}</b></button>)}
     </nav>}
     <div className="fluxo-quadro" ref={quadro}>
-      <ColunaAguardando cartoes={aguardando} abrir={abrir} ativa={colunaAtiva === 'AGUARDANDO'} />
-      {PROJECT_WORKFLOW_STATUSES.map((status) => <Coluna key={status} status={status} ids={ordem[status]} porId={porId} abrir={abrir} ativa={colunaAtiva === status} moverPara={celular ? moverPara : undefined} />)}
+      <ColunaAguardando cartoes={aguardando} abrir={abrir} ativa={colunaAtiva === 'AGUARDANDO'} faltaMaterial={onFaltaMaterial} />
+      {PROJECT_WORKFLOW_STATUSES.map((status) => <Coluna key={status} status={status} ids={ordem[status]} porId={porId} abrir={abrir} ativa={colunaAtiva === status} moverPara={celular ? moverPara : undefined} faltaMaterial={onFaltaMaterial} />)}
     </div>
     <DragOverlay>{ativo && porId.get(ativo) ? <CartaoProjeto cartao={porId.get(ativo)!} className="fluxo-cartao-arrastando" /> : null}</DragOverlay>
   </DndContext>;

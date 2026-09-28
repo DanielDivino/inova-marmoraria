@@ -12,6 +12,8 @@ export function itemSalvoParaRascunho(saved: SavedQuoteItem): DraftItem {
     manualM2: String(saved.billedQuantity), manualJustification: input.manualJustification ?? '',
     components: input.components.map((component, index) => ({
       ...component, materialId: component.materialId ?? saved.materialId, lengthCm: cm(component.lengthMm)!, widthCm: cm(component.widthMm)!,
+      // Pedra diferente da do projeto = pedra própria da peça (não acompanha a troca da pedra do projeto).
+      materialProprio: (!!component.materialId && component.materialId !== saved.materialId) || undefined,
       parentComponentId: input.components[detalheDesenhoComponente(input.drawingData, index).parentComponentIndex ?? -1]?.id,
       parentSide: detalheDesenhoComponente(input.drawingData, index).parentSide,
       sillDetailCm: cm(detalheDesenhoComponente(input.drawingData, index).sillDetailMm),
@@ -60,7 +62,8 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
   return {
     id: saved?.id, projectName: draft.projectName.trim() || null, environment: saved?.environment ?? null,
     ...(drawingData ? { drawingData } : {}),
-    productTypeId: draft.productTypeId, materialId: draft.calculationMode === 'DIMENSIONS' ? draft.components[0]?.materialId || draft.materialId : draft.materialId, calculationMode: draft.calculationMode,
+    productTypeId: draft.productTypeId, // A pedra do projeto é a escolhida em cima; a de cada peça vai no próprio componente.
+    materialId: draft.materialId || (draft.calculationMode === 'DIMENSIONS' ? draft.components[0]?.materialId ?? '' : ''), calculationMode: draft.calculationMode,
     manualJustification: draft.calculationMode === 'MANUAL_M2' ? draft.manualJustification : undefined,
     billedQuantity: draft.calculationMode === 'MANUAL_M2' ? decimal(draft.manualM2) : undefined, quantity: saved?.quantity ?? 1,
     components: draft.calculationMode === 'DIMENSIONS' ? draft.components.map((component, sortOrder) => ({
