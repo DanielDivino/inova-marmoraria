@@ -8,7 +8,8 @@ const unit = { SQUARE_METER: 'm²', LINEAR_METER: 'm', UNIT: 'un', FIXED: 'fixo'
 export const componentMaterialImage = (material?: Pick<ComponentMaterial, 'images'>) => material?.images?.find(image => image.isPrimary)?.url ?? material?.images?.[0]?.url;
 export const materialImageSrc = (url?: string) => !url ? undefined : url.startsWith('/api/') ? url : url.startsWith('/') ? `/api${url}` : url;
 
-export function SeletorMaterialComponente({ materials, selected, onSelect }: { materials: ComponentMaterial[]; selected?: ComponentMaterial; onSelect: (id: string) => void }) {
+/** `emJanela`: abre sempre a janela sobre a tela (dentro de tabelas que rolam, a lista suspensa seria cortada). */
+export function SeletorMaterialComponente({ materials, selected, onSelect, emJanela = false }: { materials: ComponentMaterial[]; selected?: ComponentMaterial; onSelect: (id: string) => void; emJanela?: boolean }) {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -30,7 +31,7 @@ export function SeletorMaterialComponente({ materials, selected, onSelect }: { m
   return <><div className="component-material-field">
     <span className="component-material-label" id={labelId}>Material</span>
     <details ref={details} className="material-picker component-material-picker">
-    <summary ref={trigger} className={`picker-summary${selected ? ' has-selection' : ''}`} aria-labelledby={`${labelId} ${selectionId}`} onClick={event => { if (window.matchMedia('(max-width: 760px)').matches) { event.preventDefault(); setSearch(''); setModalOpen(true); } }}>
+    <summary ref={trigger} className={`picker-summary${selected ? ' has-selection' : ''}`} aria-labelledby={`${labelId} ${selectionId}`} onClick={event => { if (emJanela || window.matchMedia('(max-width: 760px)').matches) { event.preventDefault(); setSearch(''); setModalOpen(true); } }}>
       {materialImageSrc(componentMaterialImage(selected)) && <img className="material-sample-image material-thumbnail" src={materialImageSrc(componentMaterialImage(selected))} alt="" />}
       <span className="material-selection-text" id={selectionId}>{selected?.name || 'Escolher material'}</span>
       <svg className="material-picker-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 6 5 5 5-5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>

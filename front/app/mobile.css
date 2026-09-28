@@ -59,14 +59,12 @@
   html .inova-theme .project-topbar { padding: 18px 0; }
   html .inova-theme .project-topbar-main { flex-direction: column; align-items: stretch; gap: 14px; }
   html .inova-theme .project-title-client h1 { font-size: 27px; }
-  html .inova-theme .compact-customer { gap: 8px; font-size: 13px; }
-  html .inova-theme .compact-customer:has(> span > strong) { display: grid; grid-template-columns: minmax(0, 1fr) 44px; }
+  html .inova-theme .compact-customer { gap: 8px; }
+  html .inova-theme .compact-customer > .botao-contorno { flex: 1 1 0; }
+  html .inova-theme .compact-customer:has(> span > strong) { display: grid; grid-template-columns: minmax(0, 1fr) 48px; }
   html .inova-theme .compact-customer > span:has(> strong) { grid-column: 1 / -1; max-width: none; white-space: normal; overflow-wrap: anywhere; }
-  html .inova-theme .compact-customer button { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
-  html .inova-theme .compact-customer > span[aria-hidden] { display: none; }
   html .inova-theme .project-builder .quote-mode-switch { gap: 6px; padding: 6px; }
   html .inova-theme .project-builder .quote-mode-switch button { flex: 1 1 120px; font-size: 12px; line-height: 1.4; padding: 8px; }
-  html .inova-theme .quote-mode-switch small { flex-basis: 100%; padding: 2px 6px; font-size: 11px; }
   html .inova-theme .project-builder .quote-form-column .section { padding: 14px; }
   html .inova-theme .quick-heading { flex-direction: column; gap: 12px; }
   html .inova-theme .quick-heading h2 { font-size: 23px; }
@@ -76,8 +74,6 @@
   html .inova-theme .quick-project-fields { grid-template-columns: minmax(0, 1fr); gap: 14px; margin-bottom: 18px; }
   html .inova-theme .quick-project-fields label { font-size: 13px; }
   html .inova-theme .project-builder.has-client-tabs .project-topbar { padding: 6px 0 12px; }
-  html .inova-theme .project-builder .quote-mode-switch > button:nth-child(-n+2) { flex: 1 1 0; min-width: 0; }
-  html .inova-theme .project-builder .quote-mode-switch.is-quick-mode small { display: none; }
   html .inova-theme .project-builder .quick-project-setup { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: 36px minmax(48px, auto); gap: 6px 12px; margin-bottom: 16px; }
   html .inova-theme .project-builder .quick-project-setup .quick-heading,
   html .inova-theme .project-builder .quick-project-setup .quick-project-fields { display: contents; }
@@ -123,6 +119,10 @@
   html .inova-theme .project-builder .quick-mobile-card-title svg { width: 17px; height: 17px; flex: 0 0 17px; fill: none; stroke: var(--muted); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
   html .inova-theme .project-builder .quick-mobile-card-total { justify-self: center; color: var(--ink); white-space: nowrap; font-size: clamp(14px, 4.1vw, 19px); font-weight: 750; font-variant-numeric: tabular-nums; }
   html .inova-theme .project-builder .quick-mobile-card-actions { display: flex; align-items: center; gap: 6px; }
+  /* Com a alça de arrastar, o cartão ganha uma coluna à esquerda; a alça da linha (a do computador) some. */
+  html .inova-theme .project-builder .quick-mobile-card:has(> .quick-drag-handle) { grid-template-columns: auto minmax(0, 1fr) max-content auto; padding-left: 6px; }
+  html .inova-theme .project-builder .quick-mobile-card > .quick-drag-handle { width: 30px; height: 44px; min-height: 44px; }
+  html .inova-theme .quick-table td.quick-description > .quick-drag-handle { display: none; }
   html .inova-theme .project-builder .quick-mobile-card-actions > button { display: grid; place-items: center; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); color: var(--green); }
   html .inova-theme .project-builder .quick-mobile-card-actions > .quick-options-button { width: 40px; min-width: 40px; }
   html .inova-theme .project-builder .quick-mobile-card-actions .quick-options-button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 1.8; }
@@ -139,15 +139,20 @@
   html .inova-theme .quick-details-row, html .inova-theme .quick-info-row { display: block; margin-top: 14px; }
   html .inova-theme .quick-details-row[hidden] { display: none !important; }
   html .inova-theme .quick-details-row .quick-services { padding: 12px 0 0; border-top: 1px solid var(--line); background: transparent; }
-  html .inova-theme .quick-material-override { grid-template-columns: minmax(0,1fr); gap: 7px; }
+  html .inova-theme .quick-opcoes-barra { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; }
+  html .inova-theme .quick-opcoes-grupo { flex-wrap: wrap; gap: 8px 12px; }
+  html .inova-theme .quick-opcoes-divisor { width: auto; height: 1px; margin: 0; }
+  html .inova-theme .quick-quote .quick-opcoes-barra button.quick-add-acabamento { flex: 1 1 auto; justify-content: center; }
+  /* Símbolos da peça (pedra própria, 45°…) numa segunda linha, embaixo do nome. */
+  html .inova-theme .project-builder .quick-mobile-card-title:has(> .quick-marcas) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px 4px; }
+  html .inova-theme .project-builder .quick-mobile-card-title:has(> .quick-marcas) > span:first-child { grid-column: 1; grid-row: 1; }
+  html .inova-theme .project-builder .quick-mobile-card-title > .quick-marcas { grid-column: 1; grid-row: 2; }
+  html .inova-theme .project-builder .quick-mobile-card-title:has(> .quick-marcas) > svg { grid-column: 2; grid-row: 1 / span 2; }
   html .inova-theme .quick-material-controls { gap: 6px; }
   html .inova-theme .quick-material-controls .component-material-field { flex: 1 1 auto; }
   html .inova-theme .quick-use-project-material { min-height: 40px; padding: 6px 8px; font-size: 10px; }
-  html .inova-theme .quick-piece-finishes-heading { align-items: center; flex-direction: row; }
-  html .inova-theme .quick-piece-finishes-heading .text-button { width: auto; min-height: 36px; padding: 6px 9px; white-space: nowrap; text-align: center; font-size: 11px; }
-  html .inova-theme .quick-sides { grid-template-columns: minmax(0, 1fr); }
-  html .inova-theme .quick-sides > div { border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
-  html .inova-theme .quick-sides small { font-size: 12px; line-height: 1.5; }
+  html .inova-theme .quick-quote .quick-acabamento .quick-acabamento-campo input:not([type='checkbox']):not([type='radio']) { min-height: 36px; height: 36px; font-size: 16px; }
+  html .inova-theme .quick-quote .quick-acabamento button.quick-acabamento-remover { width: 36px; min-width: 36px; height: 36px; min-height: 36px; }
   html .inova-theme .quick-add-item { width: 100%; border-style: dashed; min-height: 48px; }
   html .inova-theme .quick-project-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
   html .inova-theme .quick-project-actions button { min-height: 46px; font-size: 13px; text-align: left; }

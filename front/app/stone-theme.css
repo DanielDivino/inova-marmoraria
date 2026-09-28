@@ -177,7 +177,7 @@
   .inova-theme .project-tab { background: #eaece3; border-radius: 9px 9px 0 0; }
   .inova-theme .project-tab.active { border-color: #dcded2; border-bottom-color: #fff; box-shadow: inset 0 3px #839174; }
   .inova-theme .project-tab.active [role=tab] { color: #3e5549; }
-  .inova-theme .compact-customer { color: #717668; font-size: 12px; }
+  .inova-theme .compact-customer { color: #717668; }
   .inova-theme .quote-mode-switch { padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: #eeeee7; gap: 8px; }
   .inova-theme .quote-mode-switch button { border-radius: 8px; border-color: transparent; background: transparent; color: #717365; padding: 9px 14px; }
   .inova-theme .quote-mode-switch button[aria-pressed=true] { background: #fff; color: #3e5549; border-color: #dce0d3; box-shadow: 0 2px 5px #303a3108; }

@@ -3,7 +3,7 @@ import { DEADLINE_LABELS, DEADLINE_TONES, obterStatusPrazo, obterStatusTrabalho,
 /** Selo da situação do trabalho (ex.: "Em produção"). */
 export function SeloTrabalho({ quote }: { quote: QuoteProgress }) {
   const work = obterStatusTrabalho(quote);
-  return <span className={`status status-${WORK_STATUS_TONES[work]}`}>{quote.status === 'CANCELLED' ? 'Cancelado' : quote.status === 'EXPIRED' ? 'Expirado' : WORK_STATUS_LABELS[work]}</span>;
+  return <span className={`status status-${WORK_STATUS_TONES[work]}`}>{quote.status === 'CANCELLED' ? (quote.approvedAt ? 'Cliente desistiu' : 'Cancelado') : quote.status === 'EXPIRED' ? 'Expirado' : WORK_STATUS_LABELS[work]}</span>;
 }
 
 /** Selo da situação do prazo (ex.: "Próximo do prazo"). */

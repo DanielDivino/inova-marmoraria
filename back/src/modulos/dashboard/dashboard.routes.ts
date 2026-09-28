@@ -10,11 +10,11 @@ const querySchema = z.object({ from: calendarDateSchema.optional(), to: calendar
   .refine(value => !value.from || !value.to || value.from <= value.to, { path: ['to'], message: 'A data final deve ser igual ou posterior à inicial.' });
 
 function emptyCounts(): DashboardCounts {
-  return { issued: 0, pending: 0, sold: 0, cancelled: 0, rejected: 0, expired: 0, approved: 0, production: 0, waitingMaterial: 0, pendingWork: 0, rework: 0, ready: 0, deliveryPending: 0, installationPending: 0, delivered: 0, overdue: 0, quotedValue: 0, soldValue: 0, conversion: 0 };
+  return { issued: 0, pending: 0, sold: 0, cancelled: 0, rejected: 0, expired: 0, approved: 0, production: 0, waitingMaterial: 0, pendingWork: 0, rework: 0, paused: 0, ready: 0, deliveryPending: 0, installationPending: 0, delivered: 0, overdue: 0, quotedValue: 0, soldValue: 0, conversion: 0 };
 }
 const stage: Record<string, keyof DashboardCounts> = {
   NOT_STARTED: 'approved', IN_PROGRESS: 'production', WAITING_MATERIAL: 'waitingMaterial', PENDING_WORK: 'pendingWork',
-  REWORK: 'rework', READY: 'ready', DELIVERY_PENDING: 'deliveryPending', INSTALLATION_PENDING: 'installationPending', COMPLETED: 'delivered',
+  REWORK: 'rework', PAUSED: 'paused', READY: 'ready', DELIVERY_PENDING: 'deliveryPending', INSTALLATION_PENDING: 'installationPending', COMPLETED: 'delivered',
 };
 
 export async function registrarRotasDashboard(app: FastifyInstance) {

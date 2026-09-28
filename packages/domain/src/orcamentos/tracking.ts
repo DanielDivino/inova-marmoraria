@@ -1,18 +1,18 @@
 /** Production stages reuse Quote.status + Quote.executionStatus; no parallel persisted status. */
-export const WORK_STATUSES = ['PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'WAITING_MATERIAL', 'PENDING_WORK', 'REWORK', 'READY', 'DELIVERY_PENDING', 'INSTALLATION_PENDING', 'DELIVERED', 'REJECTED'] as const;
+export const WORK_STATUSES = ['PENDING_APPROVAL', 'APPROVED', 'IN_PRODUCTION', 'WAITING_MATERIAL', 'PENDING_WORK', 'REWORK', 'PAUSED', 'READY', 'DELIVERY_PENDING', 'INSTALLATION_PENDING', 'DELIVERED', 'REJECTED'] as const;
 export type WorkStatus = typeof WORK_STATUSES[number];
 export const WORK_STATUS_LABELS: Record<WorkStatus, string> = {
   PENDING_APPROVAL: 'Aguardando aprovação', APPROVED: 'Aprovado', IN_PRODUCTION: 'Em produção',
-  WAITING_MATERIAL: 'Aguardando material', PENDING_WORK: 'Falta fazer', REWORK: 'Retrabalho',
+  WAITING_MATERIAL: 'Aguardando material', PENDING_WORK: 'Falta fazer', REWORK: 'Retrabalho', PAUSED: 'Produção parada',
   READY: 'Finalizado', DELIVERY_PENDING: 'Entrega pendente', INSTALLATION_PENDING: 'Montagem pendente',
   DELIVERED: 'Entregue', REJECTED: 'Não aprovado',
 };
 export const WORK_STATUS_TONES: Record<WorkStatus, 'neutral' | 'green' | 'yellow' | 'red'> = {
   PENDING_APPROVAL: 'neutral', APPROVED: 'green', IN_PRODUCTION: 'yellow', WAITING_MATERIAL: 'yellow',
-  PENDING_WORK: 'yellow', REWORK: 'red', READY: 'green', DELIVERY_PENDING: 'yellow',
+  PENDING_WORK: 'yellow', REWORK: 'red', PAUSED: 'neutral', READY: 'green', DELIVERY_PENDING: 'yellow',
   INSTALLATION_PENDING: 'yellow', DELIVERED: 'green', REJECTED: 'red',
 };
-export const EXECUTION_STATUSES = ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'REWORK', 'WAITING_MATERIAL', 'PENDING_WORK', 'READY', 'DELIVERY_PENDING', 'INSTALLATION_PENDING'] as const;
+export const EXECUTION_STATUSES = ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'REWORK', 'WAITING_MATERIAL', 'PENDING_WORK', 'PAUSED', 'READY', 'DELIVERY_PENDING', 'INSTALLATION_PENDING'] as const;
 export type ExecutionStage = typeof EXECUTION_STATUSES[number];
 export const WORK_STATUS_STORAGE: Record<WorkStatus, { status: 'SENT' | 'APPROVED' | 'REJECTED'; executionStatus: ExecutionStage }> = {
   PENDING_APPROVAL: { status: 'SENT', executionStatus: 'NOT_STARTED' },
@@ -21,6 +21,8 @@ export const WORK_STATUS_STORAGE: Record<WorkStatus, { status: 'SENT' | 'APPROVE
   WAITING_MATERIAL: { status: 'APPROVED', executionStatus: 'WAITING_MATERIAL' },
   PENDING_WORK: { status: 'APPROVED', executionStatus: 'PENDING_WORK' },
   REWORK: { status: 'APPROVED', executionStatus: 'REWORK' },
+  // Produção parada (pausa): continua aprovado e em Orçamentos; "Retomar produção" volta para Em produção.
+  PAUSED: { status: 'APPROVED', executionStatus: 'PAUSED' },
   READY: { status: 'APPROVED', executionStatus: 'READY' },
   DELIVERY_PENDING: { status: 'APPROVED', executionStatus: 'DELIVERY_PENDING' },
   INSTALLATION_PENDING: { status: 'APPROVED', executionStatus: 'INSTALLATION_PENDING' },

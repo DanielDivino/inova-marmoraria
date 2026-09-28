@@ -148,7 +148,7 @@ describe('Dashboard comercial e operacional', () => {
     const client = await customer(report.auth);
     const states = [
       ['DRAFT', 'NOT_STARTED'], ['SENT', 'NOT_STARTED'], ['CANCELLED', 'NOT_STARTED'], ['REJECTED', 'NOT_STARTED'], ['EXPIRED', 'NOT_STARTED'],
-      ...['NOT_STARTED', 'IN_PROGRESS', 'WAITING_MATERIAL', 'PENDING_WORK', 'REWORK', 'READY', 'DELIVERY_PENDING', 'INSTALLATION_PENDING', 'COMPLETED'].map(value => ['APPROVED', value]),
+      ...['NOT_STARTED', 'IN_PROGRESS', 'WAITING_MATERIAL', 'PENDING_WORK', 'REWORK', 'PAUSED', 'READY', 'DELIVERY_PENDING', 'INSTALLATION_PENDING', 'COMPLETED'].map(value => ['APPROVED', value]),
     ];
     for (const [status, executionStatus] of states) {
       const record = await quote(report.auth, client.id);
@@ -156,16 +156,16 @@ describe('Dashboard comercial e operacional', () => {
     }
     const response = await request('GET', `/dashboard?sellerId=${report.user.id}&from=2026-01-01&to=2026-01-31`, admin);
     expect(response.statusCode, response.body).toBe(200);
-    expect(response.json().totals).toEqual({ issued: 14, pending: 2, sold: 9, cancelled: 1, rejected: 1, expired: 1, approved: 1, production: 1, waitingMaterial: 1, pendingWork: 1, rework: 1, ready: 1, deliveryPending: 1, installationPending: 1, delivered: 1, overdue: 8, quotedValue: 1400, soldValue: 900, conversion: 64.3 });
+    expect(response.json().totals).toEqual({ issued: 15, pending: 2, sold: 10, cancelled: 1, rejected: 1, expired: 1, approved: 1, production: 1, waitingMaterial: 1, pendingWork: 1, rework: 1, paused: 1, ready: 1, deliveryPending: 1, installationPending: 1, delivered: 1, overdue: 9, quotedValue: 1500, soldValue: 1000, conversion: 66.7 });
     expect(response.json().sellers).toHaveLength(1);
     expect(response.json().sellers[0]).toMatchObject({ id: report.user.id, ...response.json().totals });
-    expect(response.json().overdueQuotes).toHaveLength(8);
+    expect(response.json().overdueQuotes).toHaveLength(9);
     expect(response.json().overdueQuotes.every((row: any) => row.sellerName === report.user.name)).toBe(true);
     const outside = await request('GET', `/dashboard?sellerId=${report.user.id}&from=2026-02-01`, admin);
     expect(outside.json().totals.issued).toBe(0);
     expect((await request('GET', '/dashboard?from=2026-02-31', admin)).statusCode).toBe(422);
     expect((await request('GET', '/dashboard?from=2026-02-01&to=2026-01-01', admin)).statusCode).toBe(422);
     await request('PATCH', `/users/${report.user.id}`, admin, { isActive: false });
-    expect((await request('GET', `/dashboard?sellerId=${report.user.id}`, admin)).json().sellers[0]).toMatchObject({ isActive: false, sold: 9 });
+    expect((await request('GET', `/dashboard?sellerId=${report.user.id}`, admin)).json().sellers[0]).toMatchObject({ isActive: false, sold: 10 });
   });
 });

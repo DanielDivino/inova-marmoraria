@@ -16,6 +16,8 @@ type Quote = QuoteProgress & {
   customer: { name: string; phone: string }; items?: { projectName?: string | null }[]; createdBy?: { id: string; name: string };
   workerAssignments?: { id: string; releasedAt?: string | null; colorSnapshot: string; worker: { id: string; name: string; workColor: string } }[];
 };
+type Marcado = { number: string; status: string; executionStatus?: string | null };
+type AcaoLote = 'APROVAR' | 'NAO_APROVADO' | 'PARAR' | 'RETOMAR' | 'DESISTIU';
 type QuotePage = { data: Quote[]; meta: { pages: number; total: number }; counts?: Record<string, number> };
 type Worker = { id: string; name: string; workColor: string };
 import { formatarMoeda } from '../../utilitarios/formatadores';
@@ -24,13 +26,14 @@ const date = (value: string | Date) => new Date(value).toLocaleDateString('pt-BR
  * Abas de situação: só as que fazem sentido em cada tela. "Aguardando entrega /
  * montagem" junta as duas pendências; o Histórico mostra só os encerrados.
  */
-type AbaStatus = 'TODOS' | 'PENDING_APPROVAL' | 'APPROVED' | 'IN_PRODUCTION' | 'PENDING_WORK' | 'REWORK' | 'READY' | 'AGUARDANDO_ENTREGA' | 'DELIVERED' | 'REJECTED';
+type AbaStatus = 'TODOS' | 'PENDING_APPROVAL' | 'APPROVED' | 'IN_PRODUCTION' | 'PENDING_WORK' | 'REWORK' | 'PAUSED' | 'READY' | 'AGUARDANDO_ENTREGA' | 'DELIVERED' | 'REJECTED';
 const ABAS_STATUS: Record<Exclude<AbaStatus, 'TODOS'>, { rotulo: string; icone: NomeIcone; situacoes: WorkStatus[] }> = {
   PENDING_APPROVAL: { rotulo: WORK_STATUS_LABELS.PENDING_APPROVAL, icone: 'aguardando', situacoes: ['PENDING_APPROVAL'] },
   APPROVED: { rotulo: WORK_STATUS_LABELS.APPROVED, icone: 'aprovado', situacoes: ['APPROVED'] },
   IN_PRODUCTION: { rotulo: WORK_STATUS_LABELS.IN_PRODUCTION, icone: 'andamento', situacoes: ['IN_PRODUCTION'] },
   PENDING_WORK: { rotulo: WORK_STATUS_LABELS.PENDING_WORK, icone: 'pendente', situacoes: ['PENDING_WORK'] },
   REWORK: { rotulo: WORK_STATUS_LABELS.REWORK, icone: 'retrabalho', situacoes: ['REWORK'] },
+  PAUSED: { rotulo: WORK_STATUS_LABELS.PAUSED, icone: 'inativo', situacoes: ['PAUSED'] },
   READY: { rotulo: WORK_STATUS_LABELS.READY, icone: 'pronto', situacoes: ['READY'] },
   AGUARDANDO_ENTREGA: { rotulo: 'Aguardando entrega / montagem', icone: 'entregue', situacoes: ['DELIVERY_PENDING', 'INSTALLATION_PENDING'] },
   DELIVERED: { rotulo: WORK_STATUS_LABELS.DELIVERED, icone: 'entregue', situacoes: ['DELIVERED'] },
@@ -38,7 +41,7 @@ const ABAS_STATUS: Record<Exclude<AbaStatus, 'TODOS'>, { rotulo: string; icone: 
 };
 const GRUPOS_ORCAMENTOS: { titulo: string; abas: AbaStatus[] }[] = [
   { titulo: 'Comercial', abas: ['TODOS', 'PENDING_APPROVAL', 'APPROVED'] },
-  { titulo: 'Produção', abas: ['IN_PRODUCTION', 'PENDING_WORK', 'REWORK'] },
+  { titulo: 'Produção', abas: ['IN_PRODUCTION', 'PENDING_WORK', 'REWORK', 'PAUSED'] },
   { titulo: 'Finalização', abas: ['READY', 'AGUARDANDO_ENTREGA'] },
 ];
 const GRUPOS_HISTORICO: { titulo: string; abas: AbaStatus[] }[] = [{ titulo: 'Situação', abas: ['TODOS', 'DELIVERED', 'REJECTED'] }];
@@ -82,20 +85,23 @@ function QuotesList() {
   const celular = useCelular();
   const activeFilterCount = [search, abaStatus !== 'TODOS', situacaoPrazoInterno, responsibleId, sellerId, from, to].filter(Boolean).length;
 
+  const montarConsulta = (pagina: number, limite?: number) => {
+    const query = new URLSearchParams({ search, page: String(pagina), ...(limite ? { limit: String(limite) } : {}), ...(allQuotes ? {} : { scope: isHistory ? 'history' : 'active' }) });
+    if (sellerId && canManage) query.set('sellerId', sellerId);
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    if (abaStatus !== 'TODOS') query.set('workStatus', ABAS_STATUS[abaStatus].situacoes.join(','));
+    if (situacaoPrazoInterno) query.set('situacaoPrazoInterno', situacaoPrazoInterno);
+    if (responsibleId) query.set('responsibleId', responsibleId);
+    if (ordem !== 'recentes') query.set('ordem', ordem);
+    return query;
+  };
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError('');
-      const query = new URLSearchParams({ search, page: String(page), ...(allQuotes ? {} : { scope: isHistory ? 'history' : 'active' }) });
-      if (sellerId && canManage) query.set('sellerId', sellerId);
-      if (from) query.set('from', from);
-      if (to) query.set('to', to);
-      if (abaStatus !== 'TODOS') query.set('workStatus', ABAS_STATUS[abaStatus].situacoes.join(','));
-      if (situacaoPrazoInterno) query.set('situacaoPrazoInterno', situacaoPrazoInterno);
-      if (responsibleId) query.set('responsibleId', responsibleId);
-      if (ordem !== 'recentes') query.set('ordem', ordem);
-      api<QuotePage>(`/quotes?${query}`, { signal: controller.signal }).then((result) => {
+      api<QuotePage>(`/quotes?${montarConsulta(page)}`, { signal: controller.signal }).then((result) => {
         if (!controller.signal.aborted) { setQuotes(result.data); setPages(result.meta.pages); setTotal(result.meta.total); setCounts(result.counts ?? {}); }
       }).catch((cause) => {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar os orçamentos.');
@@ -104,6 +110,79 @@ function QuotesList() {
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [search, page, isHistory, attempt, abaStatus, situacaoPrazoInterno, responsibleId, sellerId, from, to, allQuotes, canManage, ordem]);
   useEffect(() => { if (canTeam) api<Worker[]>('/workers?active=true').then(setWorkers).catch(() => setWorkers([])); }, [canTeam]);
+
+  // Marcar orçamentos (um, vários ou todos) para aprovar ou marcar como não aprovado de uma vez.
+  // "Não aprovado" não apaga: o orçamento só sai da lista e vai para o Histórico.
+  const podeSelecionar = !isHistory;
+  const [marcados, setMarcados] = useState<Record<string, Marcado>>({});
+  const [processando, setProcessando] = useState(false);
+  const [avisoLote, setAvisoLote] = useState('');
+  const chaveFiltros = [search, isHistory, abaStatus, situacaoPrazoInterno, responsibleId, sellerId, from, to].join('|');
+  // Mudou o filtro: a seleção antiga poderia incluir orçamentos que nem aparecem mais.
+  useEffect(() => { setMarcados({}); }, [chaveFiltros]);
+  const quantidadeMarcados = Object.keys(marcados).length;
+  const listaMarcados = Object.entries(marcados);
+  // Cada ação vale para um grupo: quem não é do grupo fica como está.
+  const grupos = {
+    aguardando: listaMarcados.filter(([, quote]) => ['DRAFT', 'SENT'].includes(quote.status)),
+    emProducao: listaMarcados.filter(([, quote]) => quote.status === 'APPROVED' && !['NOT_STARTED', 'PAUSED', 'COMPLETED'].includes(quote.executionStatus ?? 'NOT_STARTED')),
+    parados: listaMarcados.filter(([, quote]) => quote.status === 'APPROVED' && quote.executionStatus === 'PAUSED'),
+    aprovados: listaMarcados.filter(([, quote]) => quote.status === 'APPROVED' && quote.executionStatus !== 'COMPLETED'),
+  };
+  const semAcao = quantidadeMarcados - grupos.aguardando.length - grupos.aprovados.length;
+  const guardar = (quote: Quote): Marcado => ({ number: quote.number, status: quote.status, executionStatus: quote.executionStatus });
+  const paginaToda = quotes.length > 0 && quotes.every((quote) => marcados[quote.id]);
+  const algunsDaPagina = quotes.some((quote) => marcados[quote.id]);
+  const alternarMarcado = (quote: Quote) => setMarcados((atual) => {
+    const proximo = { ...atual };
+    if (proximo[quote.id]) delete proximo[quote.id]; else proximo[quote.id] = guardar(quote);
+    return proximo;
+  });
+  const alternarPagina = () => setMarcados((atual) => {
+    const proximo = { ...atual };
+    for (const quote of quotes) { if (paginaToda) delete proximo[quote.id]; else proximo[quote.id] = guardar(quote); }
+    return proximo;
+  });
+  const marcarTodosDoFiltro = async () => {
+    setProcessando(true); setAvisoLote('');
+    try {
+      const todos: Record<string, Marcado> = {};
+      for (let pagina = 1, paginas = 1; pagina <= paginas; pagina++) {
+        const resultado = await api<QuotePage>(`/quotes?${montarConsulta(pagina, 100)}`);
+        paginas = resultado.meta.pages;
+        for (const quote of resultado.data) todos[quote.id] = guardar(quote);
+      }
+      setMarcados(todos);
+    } catch (cause) { setAvisoLote(cause instanceof Error ? cause.message : 'Não foi possível marcar todos.'); }
+    finally { setProcessando(false); }
+  };
+  const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+  const ACOES_LOTE: Record<AcaoLote, { alvos: [string, Marcado][]; corpo: Record<string, string>; pergunta: (n: number) => string; feito: (n: number) => string }> = {
+    APROVAR: { alvos: grupos.aguardando, corpo: { status: 'APPROVED' }, pergunta: (n) => `Aprovar ${plural(n, 'orçamento', 'orçamentos')}?`, feito: (n) => `${plural(n, 'orçamento aprovado', 'orçamentos aprovados')}.` },
+    NAO_APROVADO: { alvos: grupos.aguardando, corpo: { status: 'REJECTED', reason: 'Cliente não aprovou' },
+      pergunta: (n) => `Marcar ${plural(n, 'orçamento', 'orçamentos')} como não aprovado? Saem da lista e vão para o Histórico. Nada é apagado.`, feito: (n) => `${plural(n, 'orçamento marcado', 'orçamentos marcados')} como não aprovado (${n === 1 ? 'foi' : 'foram'} para o Histórico).` },
+    PARAR: { alvos: grupos.emProducao, corpo: { status: 'APPROVED', executionStatus: 'PAUSED', reason: 'Produção parada' },
+      pergunta: (n) => `Parar a produção de ${plural(n, 'orçamento', 'orçamentos')}? Continuam em Orçamentos como "Produção parada" e os projetos saem das colunas do Fluxo até você retomar.`, feito: (n) => `Produção parada em ${plural(n, 'orçamento', 'orçamentos')}.` },
+    RETOMAR: { alvos: grupos.parados, corpo: { status: 'APPROVED', executionStatus: 'IN_PROGRESS', reason: 'Produção retomada' },
+      pergunta: (n) => `Retomar a produção de ${plural(n, 'orçamento', 'orçamentos')}? Os projetos voltam para a etapa em que estavam no Fluxo.`, feito: (n) => `Produção retomada em ${plural(n, 'orçamento', 'orçamentos')}.` },
+    DESISTIU: { alvos: grupos.aprovados, corpo: { status: 'CANCELLED', reason: 'Cliente desistiu' },
+      pergunta: (n) => `Marcar que o cliente desistiu de ${plural(n, 'orçamento', 'orçamentos')}? Saem de Orçamentos e vão para o Histórico. Nada é apagado.`, feito: (n) => `${plural(n, 'orçamento marcado', 'orçamentos marcados')} como "Cliente desistiu" (${n === 1 ? 'foi' : 'foram'} para o Histórico).` },
+  };
+  async function executarEmLote(acao: AcaoLote) {
+    const { alvos, corpo, pergunta, feito } = ACOES_LOTE[acao];
+    if (!alvos.length) return;
+    const fora = quantidadeMarcados - alvos.length;
+    if (!window.confirm(pergunta(alvos.length) + (fora ? `\n\n${plural(fora, 'marcado não entra', 'marcados não entram')} nesta ação e ${fora === 1 ? 'fica' : 'ficam'} como ${fora === 1 ? 'está' : 'estão'}.` : ''))) return;
+    setProcessando(true); setAvisoLote('');
+    const falhas: string[] = [];
+    for (const [id, quote] of alvos) {
+      try { await api(`/quotes/${id}/status`, { method: 'PATCH', body: JSON.stringify(corpo) }); }
+      catch (cause) { falhas.push(`${quote.number}: ${cause instanceof Error ? cause.message : 'erro'}`); }
+    }
+    const feitos = alvos.length - falhas.length;
+    setAvisoLote((feitos ? feito(feitos) : 'Nenhum orçamento foi alterado.') + (falhas.length ? ` Não foi possível: ${falhas.join('; ')}.` : ''));
+    setMarcados({}); setProcessando(false); setAttempt((valor) => valor + 1);
+  }
   const chooseDeadline = (value: CustomerDeadlineStatus | '') => { setDeadlineStatus(value); setPage(1); };
   // Abas exclusivas; clicar de novo na marcada volta para "Todos".
   const escolherAba = (aba: AbaStatus) => { setAbaStatus(aba === abaStatus ? 'TODOS' : aba); setPage(1); };
@@ -179,12 +258,28 @@ function QuotesList() {
       <CampoFiltro rotulo="Data final" icone="calendario"><input type="date" value={rascunhoPeriodo.to} min={rascunhoPeriodo.from || undefined} onChange={(event) => setRascunhoPeriodo((atual) => ({ ...atual, to: event.target.value }))} /></CampoFiltro>
       {periodoInvalido && <p role="alert" className="form-error">A data final deve ser igual ou posterior à inicial.</p>}
     </ModalFiltros>
-    <div className="lista-resumo"><div className="lista-resumo-filtros"><strong>{total} {isHistory ? (total === 1 ? 'registro' : 'registros') : (total === 1 ? 'orçamento' : 'orçamentos')}</strong>{abaStatus !== 'TODOS' && !(maisFiltros && !celular) && <button type="button" className="etiqueta-filtro" aria-label={`Remover filtro ${rotuloAba}`} onClick={() => escolherAba(abaStatus)}>{rotuloAba}<Icone nome="fechar" tamanho={14} /></button>}</div><div className="lista-resumo-ordem"><span>Ordenar:</span><MenuSelecao variante="linha" rotulo="Ordenar" icone="ordenar" valor={ordem} opcoes={ORDENS} aoEscolher={(valor) => { setOrdem(valor); setPage(1); }} /></div></div>
+    <div className="lista-resumo"><div className="lista-resumo-filtros"><strong>{total} {isHistory ? (total === 1 ? 'registro' : 'registros') : (total === 1 ? 'orçamento' : 'orçamentos')}</strong>{podeSelecionar && quotes.length > 0 && <button type="button" className="text-button marcar-pagina" onClick={alternarPagina}>{paginaToda ? 'Desmarcar todos' : 'Marcar todos'}</button>}{abaStatus !== 'TODOS' && !(maisFiltros && !celular) && <button type="button" className="etiqueta-filtro" aria-label={`Remover filtro ${rotuloAba}`} onClick={() => escolherAba(abaStatus)}>{rotuloAba}<Icone nome="fechar" tamanho={14} /></button>}</div><div className="lista-resumo-ordem"><span>Ordenar:</span><MenuSelecao variante="linha" rotulo="Ordenar" icone="ordenar" valor={ordem} opcoes={ORDENS} aoEscolher={(valor) => { setOrdem(valor); setPage(1); }} /></div></div>
     {error && <p className="form-error" role="alert">{error} <button className="text-button" onClick={() => setAttempt((value) => value + 1)}>Tentar novamente</button></p>}
     {loading && <p role="status" className="customer-help">Carregando registros…</p>}
+    {avisoLote && <p role="status" className="catalog-notice aviso-lote">{avisoLote} <button type="button" className="text-button" aria-label="Fechar aviso" onClick={() => setAvisoLote('')}>✕</button></p>}
+    {podeSelecionar && quantidadeMarcados > 0 && <div className="barra-selecao" role="region" aria-label="Ações nos orçamentos marcados">
+      <strong>{quantidadeMarcados} {quantidadeMarcados === 1 ? 'marcado' : 'marcados'}</strong>
+      {paginaToda && total > quotes.length && quantidadeMarcados < total && <button type="button" className="text-button" disabled={processando} onClick={() => void marcarTodosDoFiltro()}>Marcar todos os {total}</button>}
+      <span className="barra-selecao-acoes">
+        {grupos.aguardando.length > 0 && <>
+          <button type="button" className="botao-contorno botao-aprovar" disabled={processando} onClick={() => void executarEmLote('APROVAR')}><Icone nome="aprovado" />Aprovar ({grupos.aguardando.length})</button>
+          <button type="button" className="botao-contorno botao-nao-aprovado" disabled={processando} onClick={() => void executarEmLote('NAO_APROVADO')}><Icone nome="recusado" />Não aprovado ({grupos.aguardando.length})</button>
+        </>}
+        {grupos.emProducao.length > 0 && <button type="button" className="botao-contorno botao-parar" disabled={processando} onClick={() => void executarEmLote('PARAR')}><Icone nome="inativo" />Parar produção ({grupos.emProducao.length})</button>}
+        {grupos.parados.length > 0 && <button type="button" className="botao-contorno botao-aprovar" disabled={processando} onClick={() => void executarEmLote('RETOMAR')}><Icone nome="andamento" />Retomar produção ({grupos.parados.length})</button>}
+        {grupos.aprovados.length > 0 && <button type="button" className="botao-contorno botao-nao-aprovado" disabled={processando} onClick={() => void executarEmLote('DESISTIU')}><Icone nome="fechar" />Cliente desistiu ({grupos.aprovados.length})</button>}
+        <button type="button" className="text-button" disabled={processando} onClick={() => setMarcados({})}>Desmarcar</button>
+      </span>
+      {semAcao > 0 && <small>{plural(semAcao, 'marcado já entregue ou encerrado não entra', 'marcados já entregues ou encerrados não entram')} nas ações.</small>}
+    </div>}
     <div className="tabela-orcamentos" aria-busy={loading}>
       <table>
-        <thead><tr><th>Nº orçamento</th><th>Cliente</th><th>Emissão</th><th>Funcionário</th><th>Vendedor</th><th>Prazo</th><th>Status</th><th className="valor">Valor</th><th><span className="sr-only">Projetos</span></th></tr></thead>
+        <thead><tr>{podeSelecionar && <th className="col-selecao"><input type="checkbox" aria-label={paginaToda ? 'Desmarcar todos desta página' : 'Marcar todos desta página'} checked={paginaToda} ref={(caixa) => { if (caixa) caixa.indeterminate = algunsDaPagina && !paginaToda; }} onChange={alternarPagina} disabled={!quotes.length} /></th>}<th>Nº orçamento</th><th>Cliente</th><th>Emissão</th><th>Funcionário</th><th>Vendedor</th><th>Prazo</th><th>Status</th><th className="valor">Valor</th><th><span className="sr-only">Projetos</span></th></tr></thead>
         <tbody>{quotes.map((quote) => {
           const worker = quote.workerAssignments?.find((assignment) => !assignment.releasedAt);
           const prazo = prazoEfetivo(quote);
@@ -192,7 +287,8 @@ function QuotesList() {
           const aberto = abertos.includes(quote.id);
           return <Fragment key={quote.id}>
             {/* Clicar na linha (fora de links e botões) abre os projetos do orçamento. */}
-            <tr className={`linha-orcamento${aberto ? ' aberta' : ''}`} onClick={(event) => { if (!(event.target as HTMLElement).closest('a, button')) alternar(quote.id); }}>
+            <tr className={`linha-orcamento${aberto ? ' aberta' : ''}${marcados[quote.id] ? ' marcada' : ''}`} onClick={(event) => { if (!(event.target as HTMLElement).closest('a, button, input, label, .col-selecao')) alternar(quote.id); }}>
+              {podeSelecionar && <td className="col-selecao"><input type="checkbox" aria-label={`Marcar ${quote.number}`} checked={!!marcados[quote.id]} onChange={() => alternarMarcado(quote)} /></td>}
               <td className="col-numero" data-rotulo="Nº orçamento"><Link href={`/orcamentos/${quote.id}`}>{quote.number}</Link></td>
               <td className="col-cliente" data-rotulo="Cliente"><span className="celula-cliente"><strong>{quote.customer.name}</strong>{projetos.length > 0 && <small title={projetos.join(' · ')}>{projetos.join(' · ')}</small>}</span></td>
               <td className="col-emissao" data-rotulo="Emissão">{date(quote.createdAt)}</td>
@@ -203,7 +299,7 @@ function QuotesList() {
               <td data-rotulo="Valor" className="valor">{formatarMoeda(quote.netTotal)}</td>
               <td className="acao"><button type="button" className="botao-expandir" aria-expanded={aberto} aria-controls={`projetos-${quote.id}`} aria-label={`${aberto ? 'Esconder' : 'Ver'} projetos de ${quote.number}`} onClick={() => alternar(quote.id)}><Icone nome="seta" /></button></td>
             </tr>
-            {aberto && <tr className="linha-projetos" id={`projetos-${quote.id}`}><td colSpan={9}>
+            {aberto && <tr className="linha-projetos" id={`projetos-${quote.id}`}><td colSpan={podeSelecionar ? 10 : 9}>
               <DesenhosSalvos quoteId={quote.id} />
               <div className="detail-actions"><Link className="secondary-button" href={`/orcamentos/${quote.id}`}>Ver detalhes</Link>{podeEditarOrcamento(quote) && <Link className="secondary-button" href={`/orcamentos/${quote.id}/editar`}>Editar orçamento</Link>}<Link className="text-button" href={`/?parent=${quote.id}`}>+ Vincular complemento</Link></div>
             </td></tr>}

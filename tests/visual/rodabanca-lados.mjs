@@ -27,13 +27,15 @@ await page.route('**/api/**', async route => {
   if (path === '/api/quotes') return route.fulfill({ json: { data: [], total: 0 } });
   return route.fulfill({ status: 404, json: {} });
 });
+// Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
+const selecionarCliente = async () => { await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click(); };
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
   await page.locator('#project-name').waitFor();
-  // A "compact-customer" bar opens a modal dialog for picking the customer; a fresh
+  // O menu "Cliente ▾" abre a janela de escolha do cliente; a fresh
   // project also starts in "Orçamento Rápido" mode, which is where all commercial
   // data (material, measurements, finishes, rodabanca) is entered now.
-  await page.getByRole('button', { name: 'Selecionar cliente' }).click();
+  await selecionarCliente();
   await page.locator('.customer-dialog .search').fill('Cliente');
   await page.locator('.customer-result').click();
   await page.locator('#project-name').fill('Rodabancas por lado');

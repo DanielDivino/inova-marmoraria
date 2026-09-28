@@ -45,6 +45,12 @@ await page.route('**/api/**', async route => {
 // desconto) é criado no Orçamento Rápido; "Detalhado" só divide as peças já
 // orçadas em produção — nunca recalcula nem edita valores.
 const step = number => page.locator('.project-step').nth(number - 1).getByRole('button').click();
+// Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
+const selecionarCliente = async () => { await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click(); };
+const menuProjeto = async () => { await page.getByRole('button', { name: /^Projeto:/ }).click(); await expect(page.getByRole('menu')).toBeVisible(); };
+const escolherProjeto = async name => { await menuProjeto(); await page.getByRole('menu').getByRole('menuitemradio', { name, exact: true }).click(); };
+const contarProjetos = async () => { await menuProjeto(); const total = await page.getByRole('menu').getByRole('menuitemradio').count(); await page.keyboard.press('Escape'); return total; };
+const excluirProjeto = async name => { await escolherProjeto(name); await menuProjeto(); await page.getByRole('menu').getByRole('menuitem', { name: `Excluir ${name}`, exact: true }).click(); };
 const screenshot = name => page.screenshot({ path: resolve(output, name + '.png'), fullPage: true });
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
@@ -52,7 +58,7 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Orçamento Rápido' }).getAttribute('aria-pressed'), 'true', 'Novo projeto começa no orçamento rápido');
   assert.equal(await page.getByLabel('Orientação', { exact: true }).count(), 0);
   await screenshot('01-inicial');
-  await page.getByRole('button', { name: 'Selecionar cliente' }).click();
+  await selecionarCliente();
   await page.locator('.customer-dialog .search').fill('Cliente');
   await page.locator('.customer-result').click();
   await page.locator('#project-name').fill('Bancada da cozinha');
@@ -113,15 +119,15 @@ try {
   assert.equal(await page.getByLabel('Desconto geral rápido', { exact: true }).inputValue(), '25');
   await screenshot('04-valores');
   await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
-  await step(3);
-  assert.equal(await page.locator('#project-step-3').isVisible(), true);
+  await step(2);
+  assert.equal(await page.locator('#project-step-2').isVisible(), true);
   assert.equal(await page.locator('ellipse.drawing-cutout').count(), 1);
   assert.match(await page.locator('.manufacturing-description').innerText(), /Saia no lado Inferior/);
   assert.match(await page.locator('.manufacturing-description').innerText(), /56 × 34 cm/);
   await screenshot('05-desenho');
   await step(1);
   const root = page.locator('.component-editor > .component-card').first();
-  assert.equal(await root.getByLabel('Comprimento (cm)', { exact: true }).inputValue(), '250');
+  assert.equal(await root.getByLabel('Comprimento (m)', { exact: true }).inputValue(), '2,50');
   await page.getByRole('button', { name: 'Ver tudo', exact: true }).click();
   for (const number of [1, 2, 3]) assert.equal(await page.locator('#project-step-' + number).isVisible(), true);
   await page.getByRole('button', { name: 'Ver por etapas', exact: true }).click();
@@ -146,7 +152,7 @@ try {
   await page.reload();
   await page.locator('#project-name').waitFor();
   await page.getByRole('button', { name: 'Detalhar', exact: true }).first().click();
-  assert.equal(await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).inputValue(), '2,5');
+  assert.equal(await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).inputValue(), '2,50');
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
   await page.locator('#project-name').fill('Segundo projeto');
   await page.locator('.quote-summary-actions').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
@@ -154,10 +160,10 @@ try {
   await page.locator('#project-name').waitFor();
   assert.equal(await page.locator('#project-name').inputValue(), 'Segundo projeto');
   await page.getByLabel('Projeto em edição', { exact: true }).selectOption('0');
-  assert.equal(await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).inputValue(), '2,5');
+  assert.equal(await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).inputValue(), '2,50');
   await page.getByLabel('Projeto em edição', { exact: true }).selectOption('1');
   page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: 'Excluir Segundo projeto', exact: true }).click();
+  await excluirProjeto('Segundo projeto');
   await page.locator('.quote-summary-actions').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
   await page.waitForURL('**/orcamentos');
   assert.equal(saved.items[0].components[0].edges.length, 2);

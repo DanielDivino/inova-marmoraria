@@ -95,7 +95,7 @@ export const DesenhoTecnico = memo(function DesenhoTecnico({ components, cutouts
     </svg>}
     {valid.filter((component) => component.componentType === 'SILL' && !ehPeitorilDuplo(component)).map((component) => <div className="sill-drawing-detail" key={component.id}><strong>{nomeExibicaoComponente(component)}</strong><DetalhePeitoril measure={component.sillDetailCm} height={component.sillDetailHeightCm} showEmpty={false} /></div>)}
     {components.filter((component) => component.componentType === 'SILL' && ehPeitorilDuplo(component)).map((component) => <div className="sill-drawing-detail" key={component.id}><strong>{nomeExibicaoComponente(component)}</strong><DetalhePeitorilDuplo topWidth={component.sillTopWidthCm} bottomWidth={component.sillBottomWidthCm} finalWidth={component.sillFinalWidthCm} overlap={component.sillOverlapCm} showEmpty={false} /></div>)}
-    <small>Um desenho representa um componente. Para outra peça, use “Adicionar componente”; até 5 desenhos ficam por linha.</small>
+    <small>Um desenho para cada peça; até 5 desenhos ficam por linha.</small>
     <small className="drawing-legend">X = Acabamento simples · Área tracejada = recorte.</small>
     <div className="manufacturing-description">
       {descriptions.map((section, index) => <section key={index}><h4>{section.title}</h4>{section.lines.map((line, lineIndex) => <p key={lineIndex}>{line.label !== 'Acabamentos' && <><strong>{line.label}:</strong> </>}{line.text}</p>)}</section>)}

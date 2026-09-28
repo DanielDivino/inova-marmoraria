@@ -1,14 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { closestCenter, DndContext, KeyboardSensor, MouseSensor, pointerWithin, TouchSensor, useSensor, useSensors, type CollisionDetection, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { componentTypeLabels, rotuloLadoBorda, acabamentoBordaPedra } from '@inova/domain';
 import type { DraftComponent, DraftCutout, DraftItem, EdgeSide } from './types';
-import { SeletorMaterialComponente, type ComponentMaterial } from './ComponentMaterialPicker';
+import { SeletorMaterialComponente, componentMaterialImage, materialImageSrc, type ComponentMaterial } from './ComponentMaterialPicker';
+import { Icone } from '../filtros/Filtros';
 import { ValoresRecortes } from './CutoutValues';
-import { removerGrupoComponentes } from '../../utilitarios/component-groups';
+import { moverComponente, removerGrupoComponentes } from '../../utilitarios/component-groups';
 import { servicoDeRecorte } from '../../utilitarios/service-groups';
 import { SeletorTipoDescricao } from './TypeDescriptionSelector';
-import { aplicarMaterialProjeto, centimetrosRascunhoParaMetros, metrosParaCentimetrosRascunho, criarComponenteRapido } from '../../utilitarios/quick-quote';
+import { aplicarMaterialProjeto, criarComponenteRapido, escolherPedraDaPeca } from '../../utilitarios/quick-quote';
+import { CampoMetros } from './CampoMetros';
 
 type Service = { id: string; name: string; category: string; billingUnit: 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED'; currentPrice: number };
 type Props = { item: DraftItem; materials: ComponentMaterial[]; material?: ComponentMaterial; services: Service[];
@@ -26,11 +31,17 @@ function DialogoServicos({ label, onClose, children }: { label: string; onClose:
   return <dialog ref={dialog} className="quick-services-modal" aria-label={label} onClose={onClose} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>{children}</dialog>;
 }
 
-function MeterInput({ value, onChange, label, onKeyDown, id }: { value: string; onChange: (value: string) => void; label: string; onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void; id: string }) {
-  const [text, setText] = useState(() => centimetrosRascunhoParaMetros(value));
-  const focused = useRef(false);
-  useEffect(() => { if (!focused.current) setText(centimetrosRascunhoParaMetros(value)); }, [value]);
-  return <input id={id} aria-label={label} inputMode="decimal" enterKeyHint="next" value={text} placeholder="0,00" onFocus={() => { focused.current = true; }} onBlur={() => { focused.current = false; setText(centimetrosRascunhoParaMetros(value)); }} onChange={event => { setText(event.target.value); onChange(metrosParaCentimetrosRascunho(event.target.value)); }} onKeyDown={onKeyDown} />;
+/** Alça para arrastar a peça (a partir de 2 peças). Só a alça inicia o arraste: rolar a lista no celular continua normal. */
+type Alca = (desktop?: boolean) => ReactNode;
+/** A peça vai para onde o dedo/mouse está (uma peça aberta é alta); sem ponteiro (teclado), a mais próxima. */
+const destinoDaPeca: CollisionDetection = (args) => { const sob = pointerWithin(args); return sob.length ? sob : closestCenter(args); };
+function GrupoPeca({ id, numero, ordenavel, recolhido, children }: { id: string; numero: number; ordenavel: boolean; recolhido: boolean; children: (alca: Alca) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !ordenavel });
+  const alca: Alca = (desktop = false) => ordenavel ? <button type="button" className="quick-drag-handle" ref={desktop ? setActivatorNodeRef : undefined} {...attributes} {...listeners} aria-label={`Arrastar peça ${numero} para mudar a ordem`} title="Arrastar para mudar a ordem">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" /></svg>
+  </button> : null;
+  return <tbody ref={setNodeRef} className="quick-item-group" role="rowgroup" data-collapsed={recolhido} data-dragging={isDragging || undefined}
+    style={{ transform: CSS.Translate.toString(transform && { ...transform, x: 0 }), transition }}>{children(alca)}</tbody>;
 }
 
 export function EditorOrcamentoRapido({ item, materials, material, services, onChange, area, value, calculateCutout, onCreateService, title = 'Orçamento Rápido', showAssembly = true, showRounding = true, renderComponentInfo }: Props) {
@@ -68,6 +79,33 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
     if (field !== 'quantity') document.getElementById(`quick-${row.id}-${field === 'length' ? 'width' : 'quantity'}`)?.focus();
     else if (item.components[index + 1]) document.getElementById(`quick-${item.components[index + 1].id}-length`)?.focus();
     else add();
+  };
+  // Arrastar pela alça: mouse, toque (segurando) e teclado (Espaço, setas, Espaço).
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const ordenavel = item.components.length > 1;
+  const soltar = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const de = item.components.findIndex((component) => component.id === active.id);
+    const para = item.components.findIndex((component) => component.id === over.id);
+    if (de >= 0 && para >= 0) onChange(moverComponente(item, de, para));
+  };
+  // Símbolos da peça: pedra própria (miniatura), acabamento 45° e outros acabamentos.
+  const marcasDaPeca = (component: DraftComponent) => {
+    const pedra = component.materialProprio && component.materialId ? materials.find((entry) => entry.id === component.materialId) : undefined;
+    const nomeServico = (id: string) => services.find((service) => service.id === id)?.name ?? 'Acabamento';
+    const com45 = component.edges.filter((edge) => miterServices.some((service) => service.id === edge.serviceId));
+    const outros = component.edges.filter((edge) => !com45.includes(edge));
+    if (!pedra && !com45.length && !outros.length) return null;
+    const imagem = pedra && materialImageSrc(componentMaterialImage(pedra));
+    return <span className="quick-marcas">
+      {pedra && <span className="quick-marca quick-marca-pedra" role="img" title={`Pedra própria: ${pedra.name}`} aria-label={`Pedra própria: ${pedra.name}`}>{imagem ? <img src={imagem} alt="" /> : <Icone nome="camadas" tamanho={12} />}</span>}
+      {com45.length > 0 && <span className="quick-marca quick-marca-45" role="img" title={`Acabamento 45° (${com45.map((edge) => rotuloLadoBorda(edge.side)).join(', ')})`} aria-label="Acabamento 45°">45°</span>}
+      {outros.length > 0 && <span className="quick-marca quick-marca-acabamento" role="img" title={[...new Set(outros.map((edge) => nomeServico(edge.serviceId)))].join(', ')} aria-label={`${outros.length} ${outros.length === 1 ? 'acabamento' : 'acabamentos'}`}><Icone nome="brilho" tamanho={11} />{outros.length}</span>}
+    </span>;
   };
   const remove = (index: number) => {
     const row = item.components[index];
@@ -111,10 +149,12 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
       <SeletorMaterialComponente materials={materials.filter(entry => entry.billingUnit === 'SQUARE_METER')} selected={material} onSelect={materialId => onChange(aplicarMaterialProjeto(item, materialId))} />
     </div>
     </div>
-    <div className="quick-table-scroll"><table className="quick-table" role="table" aria-label="Peças do orçamento"><thead role="rowgroup"><tr role="row"><th scope="col">Tipo / descrição</th><th scope="col">Comp. (m)</th><th scope="col">Larg. (m)</th><th scope="col">Qtd.</th><th scope="col">m²</th><th scope="col">Valor da peça</th><th scope="col">Ações</th></tr></thead>
-      {item.components.map((component, index) => <tbody className="quick-item-group" key={component.id} role="rowgroup" data-collapsed={!mobileExpanded.has(component.id)}>
+    <DndContext sensors={sensors} collisionDetection={destinoDaPeca} onDragEnd={soltar}><div className="quick-table-scroll"><table className="quick-table" role="table" aria-label="Peças do orçamento"><thead role="rowgroup"><tr role="row"><th scope="col">Tipo / descrição</th><th scope="col">Comp. (m)</th><th scope="col">Larg. (m)</th><th scope="col">Qtd.</th><th scope="col" className="quick-th-numero">m²</th><th scope="col" className="quick-th-numero">Valor</th><th scope="col">Ações</th></tr></thead>
+      <SortableContext items={item.components.map((component) => component.id)} strategy={verticalListSortingStrategy}>
+      {item.components.map((component, index) => <GrupoPeca key={component.id} id={component.id} numero={index + 1} ordenavel={ordenavel} recolhido={!mobileExpanded.has(component.id)}>{(alca) => <>
         <tr className="quick-mobile-summary-row" role="row"><td role="cell" colSpan={7}><div className="quick-mobile-card">
-          <button type="button" className="quick-mobile-card-title" aria-expanded={mobileExpanded.has(component.id)} aria-label={`${mobileExpanded.has(component.id) ? 'Recolher' : 'Expandir'} peça ${index + 1}: ${component.label.trim() || componentTypeLabels[component.componentType]}`} onClick={() => toggleMobileRow(component.id)}><span>{component.label.trim() || componentTypeLabels[component.componentType]}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d={mobileExpanded.has(component.id) ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg></button>
+          {alca()}
+          <button type="button" className="quick-mobile-card-title" aria-expanded={mobileExpanded.has(component.id)} aria-label={`${mobileExpanded.has(component.id) ? 'Recolher' : 'Expandir'} peça ${index + 1}: ${component.label.trim() || componentTypeLabels[component.componentType]}`} onClick={() => toggleMobileRow(component.id)}><span>{component.label.trim() || componentTypeLabels[component.componentType]}</span>{marcasDaPeca(component)}<svg viewBox="0 0 24 24" aria-hidden="true"><path d={mobileExpanded.has(component.id) ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg></button>
           <strong className="quick-mobile-card-total">{formatarMoeda(value(component))}</strong>
           <div className="quick-mobile-card-actions">
             <button type="button" className="quick-options-button" aria-label={`Opções da peça ${index + 1}`} aria-expanded={expandedOptions.has(component.id)} aria-controls={`quick-options-${component.id}`} onClick={() => toggleOptions(component.id)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="8" cy="6" r="2" /><circle cx="15" cy="12" r="2" /><circle cx="10" cy="18" r="2" /></svg><span>Opções</span></button>
@@ -122,32 +162,50 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
           </div>
         </div></td></tr>
         <tr data-quick-row={component.id} role="row">
-          <td role="cell" className="quick-description"><span className="quick-mobile-label">Peça {index + 1} · Tipo / descrição</span><button type="button" className="quick-collapse-toggle" aria-expanded={mobileExpanded.has(component.id)} aria-controls={`quick-fields-${component.id}`} onClick={() => toggleMobileRow(component.id)}><span>Peça {index + 1} · {component.label.trim() || componentTypeLabels[component.componentType]}</span><span aria-hidden="true">{mobileExpanded.has(component.id) ? '⌃' : '⌄'}</span></button><SeletorTipoDescricao component={component} descriptions={item.components.map((entry) => entry.label)} ariaLabel={`Tipo da peça ${index + 1}`} onChange={(patch) => update(component.id, patch)} />{component.parentComponentId && <small>↳ {item.components.find(parent => parent.id === component.parentComponentId)?.label || 'Peça principal'}{component.parentSide ? ` · ${rotuloLadoBorda(component.parentSide)}` : ''}</small>}</td>
-          <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-length`}>Comprimento (m)</label><MeterInput id={`quick-${component.id}-length`} label={`Comprimento da peça ${index + 1} (m)`} value={component.lengthCm} onChange={lengthCm => update(component.id, { lengthCm })} onKeyDown={event => enter(event, index, 'length')} /></td>
-          <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-width`}>Largura (m)</label><MeterInput id={`quick-${component.id}-width`} label={`Largura da peça ${index + 1} (m)`} value={component.widthCm} onChange={widthCm => update(component.id, { widthCm })} onKeyDown={event => enter(event, index, 'width')} /></td>
+          <td role="cell" className="quick-description">{alca(true)}<span className="quick-mobile-label">Peça {index + 1} · Tipo / descrição</span><button type="button" className="quick-collapse-toggle" aria-expanded={mobileExpanded.has(component.id)} aria-controls={`quick-fields-${component.id}`} onClick={() => toggleMobileRow(component.id)}><span>Peça {index + 1} · {component.label.trim() || componentTypeLabels[component.componentType]}</span><span aria-hidden="true">{mobileExpanded.has(component.id) ? '⌃' : '⌄'}</span></button><SeletorTipoDescricao component={component} descriptions={item.components.map((entry) => entry.label)} ariaLabel={`Tipo da peça ${index + 1}`} onChange={(patch) => update(component.id, patch)} />{component.parentComponentId && <small>↳ {item.components.find(parent => parent.id === component.parentComponentId)?.label || 'Peça principal'}{component.parentSide ? ` · ${rotuloLadoBorda(component.parentSide)}` : ''}</small>}</td>
+          <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-length`}>Comprimento (m)</label><CampoMetros id={`quick-${component.id}-length`} label={`Comprimento da peça ${index + 1} (m)`} value={component.lengthCm} onChange={lengthCm => update(component.id, { lengthCm })} onKeyDown={event => enter(event, index, 'length')} /></td>
+          <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-width`}>Largura (m)</label><CampoMetros id={`quick-${component.id}-width`} label={`Largura da peça ${index + 1} (m)`} value={component.widthCm} onChange={widthCm => update(component.id, { widthCm })} onKeyDown={event => enter(event, index, 'width')} /></td>
           <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-quantity`}>Quantidade</label><input id={`quick-${component.id}-quantity`} aria-label={`Quantidade da peça ${index + 1}`} inputMode="numeric" enterKeyHint="next" type="number" min="1" step="1" value={component.quantity || ''} onChange={event => update(component.id, { quantity: Number(event.target.value) })} onKeyDown={event => enter(event, index, 'quantity')} /></td>
           <td role="cell" className="quick-number quick-area"><span className="quick-mobile-label">Área (m²)</span><span>{area(component).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</span></td>
-          <td role="cell" className="quick-number quick-item-total"><span className="quick-mobile-label">Valor da peça</span><strong>{formatarMoeda(value(component))}</strong>{component.appliedTotal !== undefined && <small>Valor ajustado</small>}</td>
-          <td role="cell" className="quick-actions"><div className="quick-row-actions"><button type="button" className="quick-options-button" aria-expanded={expandedOptions.has(component.id)} aria-controls={`quick-options-${component.id}`} onClick={() => toggleOptions(component.id)}>Opções</button><button type="button" aria-label={`Remover peça ${index + 1}`} onClick={() => remove(index)}>×</button></div></td>
+          <td role="cell" className="quick-number quick-item-total"><span className="quick-mobile-label">Valor</span><strong>{formatarMoeda(value(component))}</strong>{component.appliedTotal !== undefined && <small>Valor ajustado</small>}</td>
+          <td role="cell" className="quick-actions"><div className="quick-row-actions"><button type="button" className="quick-options-button" aria-expanded={expandedOptions.has(component.id)} aria-controls={`quick-options-${component.id}`} onClick={() => toggleOptions(component.id)}>Opções</button><button type="button" aria-label={`Remover peça ${index + 1}`} onClick={() => remove(index)}>×</button>{marcasDaPeca(component)}</div></td>
         </tr>
         {renderComponentInfo && <tr className="quick-info-row" role="row"><td role="cell" colSpan={7}>{renderComponentInfo(component)}</td></tr>}
         <tr className="quick-details-row" role="row" id={`quick-options-${component.id}`} hidden={!expandedOptions.has(component.id)}><td role="cell" colSpan={7}><div className="quick-services quick-piece-options">
-          <div className="quick-material-override">
-            <span>Material desta peça</span>
-            <div className="quick-material-controls"><SeletorMaterialComponente materials={materials.filter(entry => entry.billingUnit === 'SQUARE_METER')} selected={materials.find(entry => entry.id === (component.materialId || item.materialId))} onSelect={materialId => update(component.id, { materialId })} />
-            {component.materialId && component.materialId !== item.materialId && <button type="button" className="text-button quick-use-project-material" title="Usar o material definido no projeto" onClick={() => update(component.id, { materialId: undefined })}>Material do projeto</button>}</div>
+          {/* Uma barra: pedra desta peça | acabamentos desta peça. A pedra do projeto (em cima) não muda aqui. */}
+          <div className="quick-opcoes-barra">
+            <div className="quick-opcoes-grupo quick-material-override">
+              <span className="quick-opcoes-rotulo"><Icone nome="camadas" />Material desta peça</span>
+              <div className="quick-material-controls"><SeletorMaterialComponente emJanela materials={materials.filter(entry => entry.billingUnit === 'SQUARE_METER')} selected={materials.find(entry => entry.id === (component.materialId || item.materialId))} onSelect={materialId => update(component.id, escolherPedraDaPeca(item, materialId))} />
+              {component.materialProprio && <button type="button" className="text-button quick-use-project-material" title="Voltar a usar a pedra escolhida para o projeto" onClick={() => update(component.id, escolherPedraDaPeca(item, undefined))}>Usar pedra do projeto</button>}</div>
+            </div>
+            <i className="quick-opcoes-divisor" aria-hidden="true" />
+            <div className="quick-opcoes-grupo">
+              <span className="quick-opcoes-rotulo"><Icone nome="brilho" />Acabamentos desta peça</span>
+              <button type="button" className="quick-add-acabamento" onClick={() => setServiceModalComponentId(component.id)}><Icone nome="mais" />Adicionar acabamento</button>
+            </div>
           </div>
           <div className="quick-piece-finishes">
-            <div className="quick-piece-finishes-heading"><strong>Acabamentos desta peça</strong><button type="button" className="text-button" onClick={() => setServiceModalComponentId(component.id)}>+ Adicionar acabamento</button></div>
-            {component.edges.length > 0 ? <div className="quick-sides">
-              {sides.filter(side => component.edges.some(edge => edge.side === side)).map(side => <div key={side}><b>{rotuloLadoBorda(side)}</b>
-                {component.edges.map((edge, edgeIndex) => edge.side === side && <div className="quick-edge" key={edgeIndex}><span>{services.find(service => service.id === edge.serviceId)?.name || 'Acabamento'}</span>{acabamentoBordaPedra(services.find(service => service.id === edge.serviceId)?.name ?? '') && <label>Altura/largura (cm)<input aria-label={`Altura do acabamento ${edgeIndex + 1}`} inputMode="decimal" value={edge.heightCm ?? ''} onChange={event => update(component.id, { edges: component.edges.map((entry, i) => i === edgeIndex ? { ...entry, heightCm: event.target.value } : entry) })} /></label>}<label>Repetições<input type="number" min="1" value={edge.quantity} onChange={event => update(component.id, { edges: component.edges.map((entry, i) => i === edgeIndex ? { ...entry, quantity: Number(event.target.value) } : entry) })} /></label><label>Valor do acabamento (R$)<input inputMode="decimal" placeholder="Automático" value={edge.appliedTotal ?? ''} onChange={event => update(component.id, { edges: component.edges.map((entry, i) => i === edgeIndex ? { ...entry, appliedTotal: event.target.value || undefined } : entry) })} /></label><button type="button" aria-label={`Remover acabamento ${edgeIndex + 1}`} onClick={() => update(component.id, { edges: component.edges.filter((_, i) => i !== edgeIndex) })}>×</button></div>)}
-              </div>)}
-            </div> : <small>Use “Adicionar acabamento” para escolher o acabamento e o lado desta peça.</small>}
+            {/* Um acabamento por linha: nome · lado · (altura, se saia/vista) · Qtd · ×. */}
+            {component.edges.length > 0 ? <ul className="quick-acabamentos">
+              {sides.flatMap(side => component.edges.map((edge, edgeIndex) => ({ edge, edgeIndex })).filter(({ edge }) => edge.side === side)).map(({ edge, edgeIndex }) => {
+                const nome = services.find(service => service.id === edge.serviceId)?.name || 'Acabamento';
+                const alterar = (patch: Partial<typeof edge>) => update(component.id, { edges: component.edges.map((entry, i) => i === edgeIndex ? { ...entry, ...patch } : entry) });
+                return <li className="quick-acabamento" key={edgeIndex}>
+                  <span className="quick-acabamento-nome" title={nome}>{nome}</span>
+                  <span className="quick-acabamento-lado">{rotuloLadoBorda(edge.side)}</span>
+                  {acabamentoBordaPedra(nome) && <label className="quick-acabamento-campo">Alt.<input aria-label={`Altura do acabamento ${edgeIndex + 1}`} inputMode="decimal" value={edge.heightCm ?? ''} onChange={event => alterar({ heightCm: event.target.value })} />cm</label>}
+                  <label className="quick-acabamento-campo">Qtd<input type="number" min="1" aria-label={`Quantidade do acabamento ${edgeIndex + 1}`} value={edge.quantity} onChange={event => alterar({ quantity: Number(event.target.value) })} /></label>
+                  {edge.appliedTotal !== undefined && <span className="quick-acabamento-ajuste" title="Valor deste acabamento ajustado à mão">R$ {edge.appliedTotal}<button type="button" aria-label={`Voltar ao valor automático do acabamento ${edgeIndex + 1}`} title="Voltar ao valor automático" onClick={() => alterar({ appliedTotal: undefined })}>↺</button></span>}
+                  <button type="button" className="quick-acabamento-remover" aria-label={`Remover acabamento ${edgeIndex + 1}`} onClick={() => update(component.id, { edges: component.edges.filter((_, i) => i !== edgeIndex) })}>×</button>
+                </li>;
+              })}
+            </ul> : null}
           </div>
         </div></td></tr>
-      </tbody>)}
-    </table></div>
+      </>}</GrupoPeca>)}
+      </SortableContext>
+    </table></div></DndContext>
     {modalComponent && <DialogoServicos label={`Acabamentos de ${modalComponent.label || 'peça'}`} onClose={() => setServiceModalComponentId(null)}><header><div><strong>Acabamentos da peça</strong><small>{componentTypeLabels[modalComponent.componentType]} · escolha o acabamento e o lado</small></div><button type="button" aria-label="Fechar acabamentos" onClick={() => setServiceModalComponentId(null)}>×</button></header>{linearGroups.map(group => group.services.length > 0 && <div className="quick-modal-category" key={group.title}><h3>{group.title}</h3><div className="quick-modal-service-list">{group.services.map(service => <fieldset key={service.id}><legend>{service.name}</legend><div className="quick-inline-sides"><label className="quick-all-sides"><input type="checkbox" checked={sides.every(side => modalComponent.edges.some(edge => edge.serviceId === service.id && edge.side === side))} onChange={event => setAllServiceSides(modalComponent, service.id, event.target.checked)} />Todos os lados</label>{sides.map(side => <label key={side}><input type="checkbox" checked={modalComponent.edges.some(edge => edge.serviceId === service.id && edge.side === side)} onChange={event => setServiceSide(modalComponent, service.id, side, event.target.checked)} />{rotuloLadoBorda(side)}</label>)}</div></fieldset>)}</div></div>)}{!linearGroups.some(group => group.services.length > 0) && <p className="empty">Nenhum acabamento cadastrado para seleção por lado.</p>}<footer><button type="button" className="secondary-button" onClick={() => setServiceModalComponentId(null)}>Concluir</button></footer></DialogoServicos>}
     <button type="button" className="secondary-button quick-add-item" onClick={add}>+ Adicionar item</button>
     <div className="quick-project-actions"><button type="button" onClick={() => item.components[0] && setServiceModalComponentId(item.components[0].id)}>+ Acabamentos</button><button type="button" onClick={() => setProjectModalCategory('CUTOUTS')}>+ Cortes e furos</button><button type="button" onClick={() => setProjectModalCategory('OTHER')}>+ Outros serviços</button></div>

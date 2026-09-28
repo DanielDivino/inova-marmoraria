@@ -46,16 +46,90 @@ export function medidasEfetivasPeitorilDuplo(component: DraftComponent, roundUp:
     return { lengthMm, widthMm: topWidthMm + bottomWidthMm };
   } catch { return null; }
 }
-export function centimetrosRascunhoParaMetros(value: string): string {
+/** Medida do rascunho (cm) no campo em metros: duas casas (120 → 1,20), três quando há milímetros (120,5 → 1,205). */
+export function formatarCampoMetros(value: string): string {
   if (!value.trim()) return '';
-  const parsed = Number(value.replace(',', '.'));
-  return Number.isFinite(parsed) ? String(parsed / 100).replace('.', ',') : value;
+  const metros = Number(value.replace(',', '.')) / 100;
+  if (!Number.isFinite(metros)) return value;
+  const texto = (Math.round(metros * 1000) / 1000).toFixed(3);
+  return (texto.endsWith('0') ? texto.slice(0, -1) : texto).replace('.', ',');
+}
+
+/**
+ * Campo de medida em metros do Orçamento Rápido. Só números: a vírgula entra
+ * sozinha e os dois últimos dígitos são os centímetros (1 → 0,01 → 0,12 → 1,20).
+ * Digitou vírgula (ou ponto): vale o que foi digitado, com uma vírgula só e até
+ * três casas (1,2 → 1,20 ao sair do campo). `livre` guarda se a vírgula foi digitada.
+ */
+export type CampoMetros = { texto: string; livre: boolean };
+export const campoMetrosInicial = (valueCm: string): CampoMetros => {
+  const texto = formatarCampoMetros(valueCm);
+  return { texto, livre: /,\d{3}$/.test(texto) };
+};
+const digitos = (texto: string) => texto.replace(/\D/g, '');
+const semZerosEsquerda = (texto: string) => texto.replace(/^0+(?=\d)/, '');
+function mascararMetros(texto: string): string {
+  const numeros = semZerosEsquerda(digitos(texto)).slice(0, 6);
+  if (!numeros || /^0+$/.test(numeros)) return '';
+  const completo = numeros.padStart(3, '0');
+  return `${semZerosEsquerda(completo.slice(0, -2))},${completo.slice(-2)}`;
+}
+function textoLivre(texto: string): string {
+  const [inteiro, ...resto] = texto.replace(/\./g, ',').split(',');
+  return `${semZerosEsquerda(digitos(inteiro)) || '0'},${digitos(resto.join('')).slice(0, 3)}`;
+}
+/** `tipo` e `dado` vêm do evento de digitação (inputType/data); sem eles, deduz pela diferença de texto. */
+export function editarCampoMetros(atual: CampoMetros, novo: string, entrada: { tipo?: string; dado?: string | null } = {}): CampoMetros {
+  if (!novo.trim()) return { texto: '', livre: false };
+  const temVirgula = /[.,]/.test(novo);
+  // Apagou a vírgula digitada: volta a contar os dígitos como centímetros.
+  if (atual.livre) return temVirgula ? { texto: textoLivre(novo), livre: true } : { texto: mascararMetros(novo), livre: false };
+  const tipo = entrada.tipo || (novo.length < atual.texto.length ? 'deleteContent' : 'insertText');
+  const dado = entrada.tipo ? entrada.dado : novo.startsWith(atual.texto) ? novo.slice(atual.texto.length) : novo;
+  if (tipo.startsWith('delete')) return { texto: mascararMetros(novo), livre: false };
+  // Vírgula digitada agora: os números já digitados viram a parte inteira (12 → 12,).
+  if (dado === ',' || dado === '.') return { texto: `${Number(digitos(atual.texto)) || 0},`, livre: true };
+  // Colou ou preencheu de uma vez uma medida com vírgula: vale como está.
+  if (temVirgula && (dado?.length ?? 2) > 1) return { texto: textoLivre(novo), livre: true };
+  return { texto: mascararMetros(novo), livre: false };
 }
 export function criarComponenteRapido(materialId = '', id = criarId()): DraftComponent {
   return { id, materialId, label: '', componentType: 'TOP', orientation: 'HORIZONTAL', lengthCm: '', widthCm: '', quantity: 1, edges: [] };
 }
+/**
+ * Troca a pedra do projeto (a de cima): as peças que seguem o projeto (sem pedra
+ * ou com a pedra anterior do projeto) passam para a nova; as que receberam uma
+ * pedra própria continuam com ela.
+ */
 export function aplicarMaterialProjeto(item: DraftItem, materialId: string): Partial<DraftItem> {
-  return { materialId, components: item.components.map(component => ({ ...component, materialId })) };
+  return { materialId, components: item.components.map(component => component.materialProprio ? component : { ...component, materialId }) };
+}
+
+/** Escolher a pedra de uma peça: a do projeto volta a acompanhar o projeto; outra vira pedra própria. */
+export function escolherPedraDaPeca(item: DraftItem, materialId: string | undefined): Partial<DraftComponent> {
+  return !materialId || materialId === item.materialId ? { materialId: item.materialId, materialProprio: undefined } : { materialId, materialProprio: true };
+}
+
+/**
+ * Rascunho vindo do servidor ou salvo no navegador: toda peça fica com a pedra
+ * explícita e, se ainda não tiver a marca, é "própria" quando difere da do projeto.
+ */
+export function normalizarPedrasDasPecas<T extends DraftComponent>(item: { materialId: string }, components: T[]): T[] {
+  return components.map((component) => ({ ...component, materialId: component.materialId || item.materialId,
+    materialProprio: component.materialProprio ?? ((!!component.materialId && !!item.materialId && component.materialId !== item.materialId) || undefined) }));
+}
+/**
+ * O Orçamento Rápido mudou de fato? Não contam a linha vazia que o Enter cria
+ * (e que não é salva) nem só mudar a ordem das peças.
+ */
+export function alterouOrcamentoRapido(antes: DraftItem, depois: DraftItem): boolean {
+  const essencial = (item: DraftItem) => {
+    const preparado = prepararItemRapido(item);
+    return JSON.stringify({ ...preparado, drawingData: undefined,
+      components: [...preparado.components].sort((a, b) => a.id.localeCompare(b.id)),
+      cutouts: preparado.cutouts.map((cutout) => ({ ...cutout, componentIndex: cutout.componentIndex === undefined ? undefined : preparado.components[cutout.componentIndex]?.id })) });
+  };
+  return essencial(antes) !== essencial(depois);
 }
 /** Enter may leave an unused insertion row. Only completely untouched rows are omitted. */
 export function prepararItemRapido(item: DraftItem): DraftItem {

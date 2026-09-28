@@ -8,7 +8,7 @@ const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux6
 const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? (existsSync(installed) ? installed : undefined) });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true });
 page.setDefaultTimeout(15000);
-const output = resolve('.test-artifacts/mobile-client-tabs');
+const output = resolve('.test-artifacts/cliente-projeto-celular');
 mkdirSync(output, { recursive: true });
 const errors = [];
 const requests = [];
@@ -36,7 +36,20 @@ await page.route('**/api/**', async route => {
   errors.push(`API inesperada: ${request.method()} ${url.pathname}`);
   return route.fulfill({ status: 404, json: {} });
 });
-const add = () => page.getByRole('button', { name: 'Adicionar cliente', exact: true }).click();
+// Menu "Cliente ▾" da barra do atendimento (substituiu as abas de clientes).
+const menuCliente = async () => { await page.getByRole('button', { name: /^Cliente:/ }).click(); await expect(page.getByRole('menu')).toBeVisible(); };
+const acao = name => page.getByRole('menu').getByRole('menuitem', { name, exact: true }).click();
+const outroCliente = async () => { await menuCliente(); await acao('+ Outro cliente neste orçamento'); };
+const clientesAbertos = async () => {
+  await menuCliente();
+  const nomes = await page.getByRole('menu').getByRole('menuitemradio').allTextContents();
+  await page.keyboard.press('Escape');
+  return nomes.length || 1;
+};
+const clienteAtivo = name => expect(page.getByRole('button', { name: /^Cliente:/ })).toHaveAccessibleName(`Cliente: ${name}`);
+const escolherCliente = async name => { await menuCliente(); await page.getByRole('menu').getByRole('menuitemradio', { name: new RegExp(name) }).click(); };
+let confirmar = true;
+page.on('dialog', dialog => confirmar ? dialog.accept() : dialog.dismiss());
 const choose = async name => {
   await page.getByPlaceholder('Digite nome, telefone ou CPF').fill(name);
   await page.locator('.customer-result').filter({ hasText: name }).click();
@@ -44,56 +57,60 @@ const choose = async name => {
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
   await expect(page.locator('.quick-quote')).toBeVisible();
-  await expect(page.locator('.project-title-client')).not.toBeVisible();
-  await expect(page.locator('.desktop-client-close')).not.toBeVisible();
-  await add();
-  await page.getByRole('button', { name: 'Escolher cliente existente', exact: true }).click();
+  await expect(page.locator('.atendimento-barra')).toBeVisible();
+  await expect(page.locator('.client-tabs-bar, .project-tabs-bar')).toHaveCount(0);
+  await menuCliente();
+  await acao('Selecionar cliente existente');
   await choose('Ana Silva');
-  await expect(page.locator('.client-tab')).toHaveCount(1);
-  await expect(page.getByRole('tab', { name: 'Ana Silva', exact: true })).toHaveAttribute('aria-selected', 'true');
+  assert.equal(await clientesAbertos(), 1);
+  await clienteAtivo('Ana Silva');
   await page.locator('#project-name').fill('Cozinha');
 
-  // Cancelar o cadastro não cria abas vazias nem altera o projeto atual.
-  await add();
-  await page.getByRole('button', { name: 'Cadastrar novo cliente', exact: true }).click();
+  // Cancelar o cadastro não cria cliente vazio nem altera o projeto atual.
+  await outroCliente();
+  await page.getByRole('dialog').getByRole('button', { name: 'Novo cliente', exact: true }).click();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.client-tab')).toHaveCount(1);
+  assert.equal(await clientesAbertos(), 1);
   await expect(page.locator('#project-name')).toHaveValue('Cozinha');
 
-  await add();
-  await page.getByRole('button', { name: 'Cadastrar novo cliente', exact: true }).click();
+  await outroCliente();
+  await page.getByRole('dialog').getByRole('button', { name: 'Novo cliente', exact: true }).click();
   await page.getByPlaceholder('Nome', { exact: true }).fill('Bruno Lima');
   await page.getByPlaceholder('Telefone', { exact: true }).fill('92999999992');
   await page.getByRole('button', { name: 'Salvar e selecionar cliente', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Novo cliente', exact: true }).getByRole('alert')).toContainText('Confira o telefone');
-  await expect(page.locator('.client-tab')).toHaveCount(1);
+  // Com erro, a janela continua aberta para corrigir e nenhum cliente novo é aberto.
+  await expect(page.getByRole('dialog', { name: 'Novo cliente', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Salvar e selecionar cliente', exact: true }).click();
-  await expect(page.locator('.client-tab')).toHaveCount(2);
-  await expect(page.getByRole('tab', { name: 'Bruno Lima', exact: true })).toHaveAttribute('aria-selected', 'true');
+  assert.equal(await clientesAbertos(), 2);
+  await clienteAtivo('Bruno Lima');
   await page.locator('#project-name').fill('Banheiro');
 
-  // O lápis de uma aba inativa troca somente o cliente daquela aba.
-  await page.getByRole('button', { name: 'Opções de Ana Silva', exact: true }).click();
-  await page.getByRole('button', { name: 'Trocar cliente', exact: true }).click();
+  // "Trocar cliente" troca só o cliente do atendimento aberto; os projetos continuam.
+  await escolherCliente('Ana Silva');
+  await menuCliente();
+  await acao('Trocar cliente');
   await choose('Clara Souza');
-  await expect(page.locator('.client-tab')).toHaveCount(2);
-  await expect(page.getByRole('tab', { name: 'Clara Souza', exact: true })).toHaveAttribute('aria-selected', 'true');
+  assert.equal(await clientesAbertos(), 2);
+  await clienteAtivo('Clara Souza');
   await expect(page.locator('#project-name')).toHaveValue('Cozinha');
-  await page.getByRole('tab', { name: 'Bruno Lima', exact: true }).click();
+  await escolherCliente('Bruno Lima');
   await expect(page.locator('#project-name')).toHaveValue('Banheiro');
-  await page.getByRole('tab', { name: 'Clara Souza', exact: true }).click();
-  await page.getByRole('button', { name: 'Opções de Bruno Lima', exact: true }).click();
-  await page.getByRole('button', { name: 'Excluir cliente', exact: true }).click();
-  await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
-  await expect(page.locator('.client-tab')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Opções de Bruno Lima', exact: true }).click();
-  await page.getByRole('button', { name: 'Excluir cliente', exact: true }).click();
-  await page.getByRole('button', { name: 'Excluir cliente e projetos', exact: true }).click();
-  await expect(page.locator('.client-tab')).toHaveCount(1);
+
+  // Remover pede confirmação; cancelar mantém o cliente.
+  confirmar = false;
+  await menuCliente();
+  await acao('Remover este cliente');
+  assert.equal(await clientesAbertos(), 2);
+  confirmar = true;
+  await menuCliente();
+  await acao('Remover este cliente');
+  assert.equal(await clientesAbertos(), 1);
+  await clienteAtivo('Clara Souza');
   await expect(page.locator('#project-name')).toHaveValue('Cozinha');
 
   await page.reload();
-  await expect(page.getByRole('tab', { name: 'Clara Souza', exact: true })).toBeVisible();
+  await clienteAtivo('Clara Souza');
   await expect(page.locator('#project-name')).toHaveValue('Cozinha');
   await page.locator('.quick-project-fields .picker-summary').click();
   const materialDialog = page.getByRole('dialog', { name: 'Escolher material', exact: true });
@@ -124,16 +141,14 @@ try {
     }
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await expect(page.locator('.project-title-client')).toBeVisible();
-  await expect(page.locator('.mobile-client-pencil')).not.toBeVisible();
-  await expect(page.locator('.desktop-client-close')).toBeVisible();
+  await expect(page.locator('.atendimento-barra')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Adicionar projeto', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Opções de Clara Souza', exact: true }).click();
-  await page.getByRole('button', { name: 'Excluir cliente', exact: true }).click();
-  await page.getByRole('button', { name: 'Excluir cliente e projetos', exact: true }).click();
-  await expect(page.locator('.client-tab')).toHaveCount(1);
+  await menuCliente();
+  await acao('Remover este cliente');
+  await expect(page.getByRole('button', { name: /^Cliente:/ })).toHaveAccessibleName('Cliente: selecionar');
   await expect(page.locator('#project-name')).toHaveValue('');
   assert(!requests.some(request => request.startsWith('DELETE ')), 'Excluir aba preserva o cadastro de clientes');
   assert.deepEqual(errors, []);
-  console.log('OK: clientes novos/existentes, erro e repetição do cadastro, cancelamento, troca na aba correta, exclusão, rascunho, desktop e quatro larguras em dois temas. APIs simuladas.');
+  console.log('OK: menu do cliente (existente, novo, outro cliente), erro e repetição do cadastro, cancelamento, troca só do atendimento aberto, remoção com confirmação, rascunho, desktop e quatro larguras em dois temas. APIs simuladas.');
 } finally { await browser.close(); }

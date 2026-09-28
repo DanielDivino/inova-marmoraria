@@ -5,18 +5,20 @@ import { PROJECT_WORKFLOW_LABELS, type ProjectWorkflowStatus } from '@inova/doma
 import { QuadroProjetos } from '../../componentes/fluxo/QuadroProjetos';
 import { ResumoOrcamentos } from '../../componentes/fluxo/ResumoOrcamentos';
 import { api } from '../../utilitarios/api';
-import { entregaFinalDoOrcamento, filtrarCartoes, moverCartaoLocal, nomeResponsavel, SEM_RESPONSAVEL, type CartaoFluxo, type CartaoMovido, type FiltroFluxo } from '../../utilitarios/fluxo';
+import { entregaFinalDoOrcamento, filtrarCartoes, moverCartaoLocal, nomeResponsavel, OPCOES_ENTREGA, OPCOES_MATERIAL, SEM_RESPONSAVEL, type CartaoFluxo, type CartaoMovido, type FiltroEntrega, type FiltroFluxo, type FiltroMaterial } from '../../utilitarios/fluxo';
 import { AbasFiltro, CampoFiltro, Icone, MenuSelecao, ModalFiltros, useCelular } from '../../componentes/filtros/Filtros';
 import '../../componentes/fluxo/fluxo.css';
 
 type Aba = 'QUADRO' | 'RESUMO';
+const FILTRO_VAZIO: FiltroFluxo = { customerId: '', quoteId: '', workerId: '', entrega: 'TODAS', entregaDe: '', entregaAte: '', material: '' };
+const diaMes = (data?: string) => data ? `${data.slice(8, 10)}/${data.slice(5, 7)}` : '…';
 
 export default function FluxoTrabalhoPage() {
   const [cartoes, setCartoes] = useState<CartaoFluxo[] | null>(null);
   const [erro, setErro] = useState('');
   const [tentativa, setTentativa] = useState(0);
   const [aba, setAba] = useState<Aba>('QUADRO');
-  const [filtro, setFiltro] = useState<FiltroFluxo>({ customerId: '', quoteId: '', workerId: '' });
+  const [filtro, setFiltro] = useState<FiltroFluxo>(FILTRO_VAZIO);
   // Só a resposta do último movimento de cada cartão atualiza a tela.
   const versoes = useRef<Record<string, number>>({});
   // O desfazer roda depois de outros movimentos: lê sempre a lista mais recente.
@@ -24,8 +26,19 @@ export default function FluxoTrabalhoPage() {
   cartoesAtuais.current = cartoes;
   const [aviso, setAviso] = useState('');
   const temporizadorAviso = useRef<number | undefined>(undefined);
-  const filtrosAtivos = [filtro.workerId, filtro.customerId, filtro.quoteId].filter(Boolean).length;
-  const limparFiltros = () => setFiltro({ customerId: '', quoteId: '', workerId: '' });
+  const filtrosAtivos = [filtro.workerId, filtro.customerId, filtro.quoteId, filtro.entrega !== 'TODAS', filtro.material].filter(Boolean).length;
+  const limparFiltros = () => setFiltro(FILTRO_VAZIO);
+  // Data de entrega: atalhos na hora; "Personalizado" abre a janela com as datas.
+  const [periodoAberto, setPeriodoAberto] = useState(false);
+  const [rascunho, setRascunho] = useState({ de: '', ate: '' });
+  const periodoInvalido = Boolean(rascunho.de && rascunho.ate && rascunho.ate < rascunho.de);
+  const escolherEntrega = (valor: FiltroEntrega) => {
+    if (valor === 'PERSONALIZADO') { setRascunho({ de: filtro.entregaDe ?? '', ate: filtro.entregaAte ?? '' }); setPeriodoAberto(true); return; }
+    setFiltro((atual) => ({ ...atual, entrega: valor, entregaDe: '', entregaAte: '' }));
+  };
+  const aplicarPeriodo = () => { setFiltro((atual) => ({ ...atual, entrega: 'PERSONALIZADO', entregaDe: rascunho.de, entregaAte: rascunho.ate })); setPeriodoAberto(false); };
+  const rotuloEntrega = filtro.entrega === 'PERSONALIZADO' ? `${diaMes(filtro.entregaDe)} – ${diaMes(filtro.entregaAte)}` : undefined;
+  const escolherMaterial = (valor: FiltroMaterial) => setFiltro((atual) => ({ ...atual, material: valor }));
   // Mesmo padrão de Orçamentos: menus na barra; no celular, janela de filtros.
   const celular = useCelular();
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
@@ -49,6 +62,21 @@ export default function FluxoTrabalhoPage() {
   const temSemResponsavel = useMemo(() => (cartoes ?? []).some((cartao) => !cartao.quote.worker), [cartoes]);
   const orcamentos = useMemo(() => [...new Map(filtrarCartoes(cartoes ?? [], { ...filtro, quoteId: '' }).map((cartao) => [cartao.quote.id, cartao.quote])).values()].sort((a, b) => a.number.localeCompare(b.number)), [cartoes, filtro]);
   const visiveis = useMemo(() => filtrarCartoes(cartoes ?? [], filtro), [cartoes, filtro]);
+
+  /** Liga/desliga a falta de material do projeto (fica marcada no cartão). */
+  async function alternarFaltaMaterial(cartao: CartaoFluxo) {
+    const valor = !cartao.materialMissing;
+    const aplicar = (materialMissing: boolean) => setCartoes((atual) => atual?.map((entrada) => entrada.id === cartao.id ? { ...entrada, materialMissing } : entrada) ?? atual);
+    aplicar(valor); setErro('');
+    try {
+      const salvo = await api<CartaoFluxo>(`/workflow/projects/${cartao.id}/material`, { method: 'PATCH', body: JSON.stringify({ faltaMaterial: valor }) });
+      aplicar(!!salvo.materialMissing);
+      avisar(valor ? `${cartao.name}: marcado com falta de material.` : `${cartao.name}: falta de material resolvida.`, true);
+    } catch (cause) {
+      aplicar(!valor);
+      setErro(cause instanceof Error ? cause.message : 'Não foi possível marcar a falta de material.');
+    }
+  }
 
   async function mover(id: string, status: ProjectWorkflowStatus, idsDestino: string[], origem?: 'menu') {
     const atuais = cartoesAtuais.current;
@@ -94,6 +122,8 @@ export default function FluxoTrabalhoPage() {
             opcoes={[{ valor: '', rotulo: 'Todos os clientes' }, ...clientes.map(([id, nome]) => ({ valor: id, rotulo: nome }))]} />
           <MenuSelecao rotulo="Orçamento" icone="documento" valor={filtro.quoteId} aoEscolher={(valor) => setFiltro((atual) => ({ ...atual, quoteId: valor }))}
             opcoes={[{ valor: '', rotulo: 'Todos os orçamentos' }, ...orcamentos.map((quote) => ({ valor: quote.id, rotulo: `${quote.number} · ${quote.customerName}` }))]} />
+          <MenuSelecao rotulo="Entrega" icone="calendario" valor={filtro.entrega ?? 'TODAS'} rotuloValor={rotuloEntrega} opcoes={OPCOES_ENTREGA} aoEscolher={escolherEntrega} />
+          <MenuSelecao rotulo="Material" icone="material" valor={filtro.material ?? ''} opcoes={OPCOES_MATERIAL} aoEscolher={escolherMaterial} />
         </>}
       <button type="button" className="botao-contorno barra-filtros-fim" disabled={!filtrosAtivos} onClick={limparFiltros}><Icone nome="limpar" />Limpar</button>
     </form>
@@ -102,11 +132,20 @@ export default function FluxoTrabalhoPage() {
       <CampoFiltro rotulo="Funcionário" icone="equipe"><select value={filtro.workerId} onChange={(event) => setFiltro((atual) => ({ ...atual, workerId: event.target.value, quoteId: '' }))}><option value="">Todos os funcionários</option>{funcionarios.map((funcionario) => <option key={funcionario.id} value={funcionario.id}>{nomeResponsavel(funcionario)}</option>)}{temSemResponsavel && <option value={SEM_RESPONSAVEL}>Sem responsável</option>}</select></CampoFiltro>
       <CampoFiltro rotulo="Cliente" icone="pessoa"><select value={filtro.customerId} onChange={(event) => setFiltro((atual) => ({ ...atual, customerId: event.target.value, quoteId: '' }))}><option value="">Todos os clientes</option>{clientes.map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}</select></CampoFiltro>
       <CampoFiltro rotulo="Orçamento" icone="documento"><select value={filtro.quoteId} onChange={(event) => setFiltro((atual) => ({ ...atual, quoteId: event.target.value }))}><option value="">Todos os orçamentos</option>{orcamentos.map((quote) => <option key={quote.id} value={quote.id}>{quote.number} · {quote.customerName}</option>)}</select></CampoFiltro>
+      <CampoFiltro rotulo="Data de entrega" icone="calendario"><select aria-label="Data de entrega" value={filtro.entrega ?? 'TODAS'} onChange={(event) => escolherEntrega(event.target.value as FiltroEntrega)}>{OPCOES_ENTREGA.map((opcao) => <option key={opcao.valor} value={opcao.valor}>{opcao.rotulo}</option>)}</select></CampoFiltro>
+      {filtro.entrega === 'PERSONALIZADO' && <button type="button" className="text-button" onClick={() => escolherEntrega('PERSONALIZADO')}>Alterar datas ({rotuloEntrega})</button>}
+      <CampoFiltro rotulo="Material" icone="material"><select aria-label="Falta de material" value={filtro.material ?? ''} onChange={(event) => escolherMaterial(event.target.value as FiltroMaterial)}>{OPCOES_MATERIAL.map((opcao) => <option key={opcao.valor} value={opcao.valor}>{opcao.rotulo}</option>)}</select></CampoFiltro>
     </ModalFiltros>}
+    <ModalFiltros aberto={periodoAberto} aoFechar={() => setPeriodoAberto(false)} titulo="Entrega entre"
+      rodape={<><button type="button" className="botao-contorno" onClick={() => setPeriodoAberto(false)}>Cancelar</button><button type="button" className="botao-destaque" disabled={(!rascunho.de && !rascunho.ate) || periodoInvalido} onClick={aplicarPeriodo}>Aplicar</button></>}>
+      <CampoFiltro rotulo="De" icone="calendario"><input type="date" value={rascunho.de} max={rascunho.ate || undefined} onChange={(event) => setRascunho((atual) => ({ ...atual, de: event.target.value }))} /></CampoFiltro>
+      <CampoFiltro rotulo="Até" icone="calendario"><input type="date" value={rascunho.ate} min={rascunho.de || undefined} onChange={(event) => setRascunho((atual) => ({ ...atual, ate: event.target.value }))} /></CampoFiltro>
+      {periodoInvalido && <p role="alert" className="form-error">A data final deve ser igual ou posterior à inicial.</p>}
+    </ModalFiltros>
     <p className="fluxo-legenda"><span className="legenda-vencido">Prazo vencido</span><span className="legenda-proximo">Vence em até 7 dias</span></p>
     {aviso && <p role="status" className="fluxo-aviso">{aviso} <button type="button" className="text-button" aria-label="Fechar aviso" onClick={() => avisar('')}>✕</button></p>}
     {erro && <p role="alert" className="form-error">{erro} {!cartoes && <button type="button" className="text-button" onClick={() => { setErro(''); setTentativa((valor) => valor + 1); }}>Tentar novamente</button>}</p>}
     {!cartoes ? !erro && <p className="empty">Carregando projetos…</p>
-      : aba === 'QUADRO' ? <QuadroProjetos cartoes={visiveis} onMover={mover} /> : <ResumoOrcamentos cartoes={visiveis} />}
+      : aba === 'QUADRO' ? <QuadroProjetos cartoes={visiveis} onMover={mover} onFaltaMaterial={alternarFaltaMaterial} /> : <ResumoOrcamentos cartoes={visiveis} />}
   </main>;
 }

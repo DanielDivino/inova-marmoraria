@@ -109,12 +109,12 @@
   html.inova-dark .inova-theme :is(.primary-button, .primary-compact-button, .save-quote-button) { background: #485f48; border-color: #71866f; color: #fff; }
   html.inova-dark .inova-theme :is(.primary-button, .primary-compact-button, .save-quote-button):hover:not(:disabled) { background: #536c51; border-color: #81947f; }
 
-  html.inova-dark .inova-theme :is(.search, .material-picker, .environment-picker, .material-picker-panel, .measurements-card, .selected-customer, .customer-section .customer-result) {
+  html.inova-dark .inova-theme :is(.search, .material-picker, .environment-picker, .material-picker-panel, .measurements-card, .selected-customer, .customer-result) {
     background: #242925;
     border-color: #414842;
     color: var(--ink);
   }
-  html.inova-dark .inova-theme :is(.material-picker summary:hover, .customer-section .customer-result:hover) { background: #2d332f; }
+  html.inova-dark .inova-theme :is(.material-picker summary:hover, .customer-result:hover) { background: #2d332f; }
   html.inova-dark .inova-theme :is(.material-filter-bar, .showcase-filters) button { background: #292e2b; border-color: #454c46; color: #b8beb7; }
   html.inova-dark .inova-theme :is(.material-filter-bar, .showcase-filters) button.selected { background: #394438; border-color: #667761; color: #d9e5d5; }
   html.inova-dark .inova-theme .material-admin-copy strong,
@@ -178,7 +178,7 @@
   html.inova-dark .inova-theme :is(
     .session-screen, .worker-row, .quote-filter-panel, .quote-workbench,
     .quote-workbench-general label > strong, .quote-linker, .active-worker,
-    .attached-component, .split-assistant-card, .production-cutouts, .follow-split-backsplash,
+    .attached-component, .split-assistant-card,
     .environment-picker-panel, .catalog-panel, .project-name-section,
     .material, .service, .piece
   ) { background: var(--surface); color: var(--ink); border-color: var(--line); }
@@ -219,7 +219,7 @@
   }
   html.inova-dark .inova-theme :is(
     .list-header a, .text-button, .text-button:hover, .catalog-eyebrow, .ambientes-eyebrow,
-    .add-client-tab, .add-project-tab, .compact-customer button, .customer-section-heading > div > span,
+    .add-client-tab, .add-project-tab, .customer-section-heading > div > span,
     .project-manager-header > div > span, .material-picker summary em, .material-picker summary i,
     .quick-service-launcher, .quick-project-services > summary, .quick-modal-category h3,
     .quick-inline-sides .quick-all-sides, .quote-detail-heading > a,
@@ -227,7 +227,7 @@
     .technical-editor-header a
   ) { color: var(--gold); }
   html.inova-dark .inova-theme :is(
-    .client-tabs-label, .compact-customer, .quote-mode-switch small,
+    .client-tabs-label, .compact-customer,
     .quick-heading small, .quick-quote td small, .quick-material-override, .quick-sill-hint,
     .customer-search-label, .project-name-field, .quote-worker, .worker-history summary,
     .worker-colors summary, .material-filter-bar > span, .quote-filter-panel > header span,
@@ -235,7 +235,7 @@
     .quick-services-modal header small, .quick-new-service-form label,
     .quick-modal-service-list legend, .quick-modal-simple-list label,
     .split-assistant-available, .split-assistant-question, .split-assistant-manual-row label,
-    .production-cutouts > small, .follow-split-backsplash label, .finish-count,
+    .finish-count,
     .component-measure-preview small, .component-stone-preview span, .project-intro-signature,
     .technical-editor-header p, .technical-editor-header small, .technical-editor-loading,
     .technical-revisions header p, .technical-revisions header small, .technical-revisions article small,

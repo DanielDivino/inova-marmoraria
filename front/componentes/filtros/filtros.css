@@ -207,8 +207,8 @@ body:has(.modal-filtros[open]) { overflow: hidden; }
 .linha-orcamento { cursor: pointer; }
 .linha-orcamento:hover td { background: color-mix(in srgb, var(--soft) 65%, transparent); }
 .linha-orcamento.aberta td { border-bottom-color: transparent; background: var(--soft); }
-.linha-orcamento td:first-child a { color: var(--ink); font-weight: 700; text-decoration: none; white-space: nowrap; }
-.linha-orcamento td:first-child a:hover { text-decoration: underline; }
+.linha-orcamento td.col-numero a { color: var(--ink); font-weight: 700; text-decoration: none; white-space: nowrap; }
+.linha-orcamento td.col-numero a:hover { text-decoration: underline; }
 .linha-orcamento td strong { display: block; }
 .linha-orcamento td small { display: block; max-width: 220px; margin-top: 2px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .linha-orcamento .quote-worker { margin-top: 0; }
@@ -223,6 +223,23 @@ body:has(.modal-filtros[open]) { overflow: hidden; }
 .botao-expandir[aria-expanded='true'] svg { transform: rotate(180deg); }
 .linha-projetos > td { padding: 4px 16px 18px; background: var(--soft); }
 .linha-projetos .detail-actions { margin-top: 12px; }
+
+/* Seleção de orçamentos: aprovar ou marcar como não aprovado vários de uma vez. */
+.tabela-orcamentos :is(th, td).col-selecao { width: 1%; padding-right: 0; }
+.tabela-orcamentos .col-selecao input { width: 18px; height: 18px; min-height: 18px; margin: 0; accent-color: var(--green); cursor: pointer; }
+.linha-orcamento.marcada td { background: color-mix(in srgb, var(--green) 9%, transparent); }
+.barra-selecao { position: sticky; top: 10px; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 12px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--green) 45%, var(--line)); border-radius: 14px; background: var(--surface, #fff); box-shadow: 0 8px 24px #0000001f; }
+.barra-selecao > strong { color: var(--ink); font-size: 14px; }
+.barra-selecao-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.barra-selecao :is(.botao-aprovar, .botao-nao-aprovado, .botao-parar) { min-height: 40px; padding: 0 14px; }
+.barra-selecao .botao-parar { border-color: color-mix(in srgb, var(--green) 60%, var(--line)); color: var(--green); }
+.barra-selecao .botao-aprovar { border-color: #6fae80; color: #2f6040; }
+.barra-selecao .botao-nao-aprovado { border-color: #d98b80; color: #b4493d; }
+html.inova-dark .inova-theme .barra-selecao .botao-aprovar { border-color: #4f7a5d; color: #8fd3a3; }
+html.inova-dark .inova-theme .barra-selecao .botao-nao-aprovado { border-color: #8a4a41; color: #eb9a8f; }
+.barra-selecao > small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.aviso-lote { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.marcar-pagina { display: none; }
 
 /* Telas médias: letra e espaçamento menores para as 9 colunas caberem. */
 @media (min-width: 761px) and (max-width: 1400px) {
@@ -264,6 +281,16 @@ body:has(.modal-filtros[open]) { overflow: hidden; }
   .tabela-orcamentos .linha-orcamento td.col-emissao { grid-area: emissao; }
   .tabela-orcamentos .linha-orcamento td.col-funcionario { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
   .tabela-orcamentos .linha-orcamento td.acao { grid-area: acao; width: auto; padding-left: 10px; }
+  /* Com seleção: a caixa entra à esquerda do número. */
+  .tabela-orcamentos .linha-orcamento:has(> td.col-selecao) {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: 'selecao numero valor acao' 'cliente cliente cliente cliente' 'situacao situacao prazo prazo' 'funcionario funcionario funcionario funcionario' 'vendedor vendedor vendedor vendedor' 'emissao emissao emissao emissao';
+  }
+  .tabela-orcamentos .linha-orcamento td.col-selecao { grid-area: selecao; width: auto; padding: 0 10px 0 0; }
+  .tabela-orcamentos .col-selecao input { width: 22px; height: 22px; min-height: 22px; }
+  .marcar-pagina { display: inline-flex; align-items: center; min-height: 36px; padding: 0 4px; }
+  .barra-selecao-acoes { margin-left: 0; width: 100%; }
+  .barra-selecao :is(.botao-aprovar, .botao-nao-aprovado, .botao-parar) { flex: 1 1 calc(50% - 8px); }
   .linha-projetos > td { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 14px 14px; }
   .lista-resumo-ordem > span { display: none; }
 }

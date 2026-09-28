@@ -21,7 +21,7 @@ async function client(page: Page, name: string) {
 }
 async function configure(page: Page, name: string) {
   const customer = await client(page, name);
-  await page.getByRole('button', { name: 'Selecionar cliente', exact: true }).click();
+  await selecionarCliente(page);
   await page.getByPlaceholder('Digite nome, telefone ou CPF').fill(name);
   await page.locator('.customer-result').filter({ hasText: name }).click();
   await page.locator('#project-name').fill(name);
@@ -77,6 +77,8 @@ test.beforeEach(async ({ page }) => {
 });
 test.afterEach(async ({ page }) => expect((page as Page & { applicationErrors?: string[] }).applicationErrors).toEqual([]));
 
+// Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
+async function selecionarCliente(page: Page) { await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click(); }
 test('login inválido, login real, menus e saída', async ({ page }) => {
   await page.goto('/orcamentos'); await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel('E-mail', { exact: true }).fill('admin@inovamarmoraria.local');
@@ -104,13 +106,13 @@ test('cadastro rápido, validação do orçamento e edição do cliente', async 
   await form.getByPlaceholder('Nome', { exact: true }).fill(name);
   await form.getByPlaceholder('Telefone', { exact: true }).fill('(92) 98800-2200');
   await form.getByRole('button', { name: 'Salvar e selecionar cliente' }).click();
-  await expect(page.locator('.compact-customer')).toContainText(name);
+  await expect(page.locator('.atendimento-barra')).toContainText(name);
   const result = await api(page, 'GET', `/customers?search=${encodeURIComponent(name)}`); expect((await result.json()).data).toHaveLength(1);
   await page.getByRole('button', { name: 'Editar cliente', exact: true }).click();
   await expect(form).toBeVisible();
   await form.getByPlaceholder('Nome', { exact: true }).fill(`${name} atualizado`);
   await form.getByRole('button', { name: 'Salvar alterações' }).click();
-  await expect(page.locator('.compact-customer')).toContainText(`${name} atualizado`);
+  await expect(page.locator('.atendimento-barra')).toContainText(`${name} atualizado`);
 });
 
 test('valor da tela corresponde ao salvo com desconto de acabamento; desenhos e PDF', async ({ page }) => {
@@ -215,7 +217,7 @@ test('complemento abaixo da validade, cliente vinculado e total original intacto
   await login(page); const name = `Complemento ${Date.now()}`; await configure(page, name); const parent = await save(page);
   await openQuote(page, parent.id); await page.getByRole('link', { name: '+ Vincular complemento', exact: true }).click();
   await expect(page.locator('.quote-summary-card .quote-linker')).toBeVisible();
-  await expect(page.locator('.quote-linker')).toContainText(parent.number); await expect(page.locator('.compact-customer')).toContainText(name);
+  await expect(page.locator('.quote-linker')).toContainText(parent.number); await expect(page.locator('.atendimento-barra')).toContainText(name);
   await page.locator('#project-name').fill('Saia adicional');
   await page.locator('.material-picker summary').click(); await page.locator('.material-search-inline').fill('Verde Ubatuba'); await page.locator('.material-picker-panel button.material').filter({ hasText: 'Verde Ubatuba' }).click();
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('1,00'); await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,10');
@@ -303,10 +305,9 @@ test('assistente de divisão, seguir divisão e valor comercial somente leitura 
   await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Concluir detalhamento', exact: true })).toBeVisible();
   const assistant = page.locator('.split-assistant-card').first();
-  await expect(assistant).toContainText('Disponível:');
   await expect(assistant).toContainText('2,00 × 0,60 m');
   for (const n of [1, 2, 3, 4]) await expect(assistant.getByRole('button', { name: String(n), exact: true })).toBeVisible();
-  await assistant.getByRole('button', { name: '+ Manual', exact: true }).click();
+  await assistant.getByRole('button', { name: 'Manual', exact: true }).click();
   await assistant.getByLabel('Peça 1 (m)', { exact: true }).fill('1,20');
   await expect(assistant.locator('.split-assistant-status')).toContainText('Utilizado: 1,20 / 2,00 m');
   await expect(assistant.locator('.split-assistant-status')).toContainText('Restante: 0,80 m');
@@ -327,22 +328,12 @@ test('assistente de divisão, seguir divisão e valor comercial somente leitura 
   // divisão em si nunca altera o valor, verificado abaixo.
   await expect(page.locator('#project-step-1').getByText('R$', { exact: false })).toHaveCount(0);
   await expect(grandTotal).toHaveText(baseline);
-  await page.locator('.project-stage-actions').getByRole('button', { name: 'Acabamentos e detalhes', exact: true }).click();
-  await expect(page.locator('#project-step-2 .pricing-notice')).toContainText('Valor definido no Orçamento Rápido:');
-  await expect(page.locator('#project-step-2 .pricing-notice')).toContainText('As alterações deste desenho não alteram o valor do orçamento.');
+  await page.locator('.project-stage-actions').getByRole('button', { name: 'Conferir produção', exact: true }).click();
+  // A etapa 2 não mostra valores: o valor cobrado é só o do Orçamento Rápido.
   await expect(page.locator('#project-step-2').getByLabel(/Valor final/i)).toHaveCount(0);
   await expect(page.locator('#project-step-2').getByLabel(/Desconto/i)).toHaveCount(0);
-  // Seguir divisão: uma rodabanca por peça já dividida, comprimento copiado.
-  await expect(page.locator('.follow-split-backsplash')).toContainText('Seguir divisão');
-  await page.getByLabel('Altura (cm)', { exact: true }).fill('10');
-  await page.getByRole('button', { name: 'Criar rodabanca seguindo a divisão', exact: true }).click();
-  await expect(grandTotal).toHaveText(baseline);
-  // As rodabancas por lado nascem anexadas (parentSide) — ComponentEdgeMap as
-  // mostra dentro do painel "Editar acabamentos" do lado, não como cards
-  // próprios; confirmamos a peça pelo desenho (passo 3) abaixo.
-  await page.getByRole('button', { name: 'Conferir produção', exact: true }).click();
-  await expect(page.locator('#project-step-3 .pricing-notice')).toContainText('Valor definido no Orçamento Rápido:');
-  await expect(page.locator('.technical-drawing .drawing-description')).toHaveCount(4);
+  // A etapa 2 é só o desenho: as 2 peças da divisão aparecem nele.
+  await expect(page.locator('.technical-drawing .drawing-description')).toHaveCount(2);
   await expect(grandTotal).toHaveText(baseline);
   const saved = await save(page);
   const record = await (await api(page, 'GET', `/quotes/${saved.id}`)).json();
@@ -371,7 +362,7 @@ test('peitoril: largura é um campo normal no Orçamento Rápido; a sobreposiç�
   await expect(page.locator('.technical-drawing .sill-drawing-detail')).toContainText('60 cm total');
 });
 
-test('fluxo completo: salvar rápido, dividir em 3, adicionar 45° e rodabanca, salvar de novo — comercial intacto e OS com as 3 peças', async ({ page }) => {
+test('fluxo completo: salvar rápido, dividir em 3, adicionar 45°, salvar de novo — comercial intacto e OS com as 3 peças', async ({ page }) => {
   await login(page); await configure(page, `Fluxo completo ${Date.now()}`);
   const initial = await save(page);
   await openQuote(page, initial.id);
@@ -385,9 +376,7 @@ test('fluxo completo: salvar rápido, dividir em 3, adicionar 45° e rodabanca, 
   await root.getByRole('button', { name: 'Editar acabamentos — Inferior', exact: true }).click();
   await root.getByRole('combobox', { name: 'Adicionar acabamento — Inferior', exact: true }).selectOption({ label: 'Acabamento 45° — Granito/Mármore' });
   await root.getByRole('button', { name: 'Fechar edição do lado', exact: true }).click();
-  await page.locator('.project-stage-actions').getByRole('button', { name: 'Acabamentos e detalhes', exact: true }).click();
-  await page.getByLabel('Altura (cm)', { exact: true }).fill('10');
-  await page.getByRole('button', { name: 'Criar rodabanca seguindo a divisão', exact: true }).click();
+  await page.locator('.project-stage-actions').getByRole('button', { name: 'Conferir produção', exact: true }).click();
   const grandTotal = page.locator('.quote-summary-card .summary-grand-total');
   await expect(grandTotal).toContainText('Total do projeto');
   await page.getByRole('button', { name: 'Concluir detalhamento', exact: true }).click();

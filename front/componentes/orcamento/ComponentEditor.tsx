@@ -7,8 +7,9 @@ import { componentMaterialImage, materialImageSrc } from './ComponentMaterialPic
 import { criarRodabancaLateral } from '../../utilitarios/component-groups';
 import { SeletorTipoDescricao } from './TypeDescriptionSelector';
 import { criarId } from '../../utilitarios/id';
+import { CampoMetros } from './CampoMetros';
 
-type Props = { materialFor?: (component: DraftComponent) => { id: string; name: string; images?: { url: string; isPrimary: boolean }[] } | undefined; renderCutouts?: (componentIndex: number) => ReactNode; components: DraftComponent[]; cutouts?: DraftCutout[]; materialImage?: string; materialName?: string; linearServices: { id: string; name: string }[]; onChange: (components: DraftComponent[]) => void; onAdd: (type: DraftComponent['componentType'], parentIndex?: number, attached?: boolean) => void; onRemove: (index: number) => void; onAddCutout?: (index: number) => void; onActiveMaterialChange?: (componentId: string) => void };
+type Props = { materialFor?: (component: DraftComponent) => { id: string; name: string; images?: { url: string; isPrimary: boolean }[] } | undefined; renderCutouts?: (componentIndex: number) => ReactNode; components: DraftComponent[]; cutouts?: DraftCutout[]; materialImage?: string; materialName?: string; linearServices: { id: string; name: string }[]; onChange: (components: DraftComponent[]) => void; onRemove: (index: number) => void; onActiveMaterialChange?: (componentId: string) => void };
 const area = (component: DraftComponent) => {
   try { return calcularComponente({ ...component, lengthMm: centimetrosParaMilimetros(component.lengthCm), widthMm: centimetrosParaMilimetros(component.widthCm) }).billableArea; } catch { return 0; }
 };
@@ -43,7 +44,7 @@ const limitePeitorilBalanco = (finalWidthCm: string, overlapCm: string) => {
   return Math.max(0, Math.floor((final + overlap) / 2 - 1));
 };
 
-export function EditorComponentes({ materialFor, renderCutouts, components, cutouts = [], materialImage, materialName, linearServices, onChange, onAdd, onRemove, onAddCutout, onActiveMaterialChange }: Props) {
+export function EditorComponentes({ materialFor, renderCutouts, components, cutouts = [], materialImage, materialName, linearServices, onChange, onRemove, onActiveMaterialChange }: Props) {
   const [editingBacksplash, setEditingBacksplash] = useState<string | null>(null);
   const update = (index: number, patch: Partial<DraftComponent>) => onChange(components.map((component, current) => current === index ? { ...component, ...patch } : component));
   const roots = components.filter((component) => !component.parentComponentId || !components.some((entry) => entry.id === component.parentComponentId));
@@ -58,15 +59,15 @@ export function EditorComponentes({ materialFor, renderCutouts, components, cuto
       <div className="component-card-body">
       <div className="component-fields">
         <SeletorTipoDescricao component={component} descriptions={components.map((entry) => entry.label)} ariaLabel={`Tipo / descrição de ${component.label || componentTypeLabels[component.componentType]}`} showLabel onChange={(patch) => update(index, patch)} />
-        <label>Comprimento (cm)<input inputMode="decimal" value={component.lengthCm} onChange={(event) => update(index, { lengthCm: event.target.value })} placeholder="Comprimento (cm)" /></label>
-        <label>Largura / altura (cm)<input inputMode="decimal" value={component.widthCm} onChange={(event) => {
-          const widthCm = event.target.value;
+        {/* Em metros, como no Orçamento Rápido (só números: 120 → 1,20); o rascunho continua em cm. */}
+        <label>Comprimento (m)<CampoMetros label="Comprimento (m)" value={component.lengthCm} onChange={(lengthCm) => update(index, { lengthCm })} /></label>
+        <label>Largura / altura (m)<CampoMetros label="Largura / altura (m)" value={component.widthCm} onChange={(widthCm) => {
           if (component.componentType === 'SILL' && component.sillOverlapCm) {
             const delta = deltaPeitorilAtual(component.sillTopWidthCm, component.sillBottomWidthCm);
             const par = larguraPeitorilPar(widthCm, component.sillOverlapCm, delta);
             update(index, { widthCm, sillFinalWidthCm: widthCm, sillTopWidthCm: par?.top, sillBottomWidthCm: par?.bottom });
           } else update(index, { widthCm });
-        }} placeholder="Largura/altura (cm)" /></label>
+        }} /></label>
         <label className="component-quantity"><span>Qtd.</span><input aria-label="Quantidade de materiais" type="number" min="1" value={component.quantity} onChange={(event) => update(index, { quantity: Math.max(1, Number(event.target.value)) })} /></label>
       </div>
       {component.componentType === 'SILL' && (() => {
@@ -102,20 +103,19 @@ export function EditorComponentes({ materialFor, renderCutouts, components, cuto
           </div>}
         </div>;
       })()}
-      <MapaBordasComponente component={component} cutouts={cutouts.filter(cutout => cutout.componentIndex === index)} materialImage={selectedMaterial ? materialImageSrc(componentMaterialImage(selectedMaterial)) : materialImage} materialName={selectedMaterial?.name ?? materialName} services={linearServices} onChange={edges => update(index, { edges })} onAddComponent={!attached ? (type, isAttached) => onAdd(type, isAttached ? index : undefined, isAttached) : undefined}
+      <MapaBordasComponente component={component} cutouts={cutouts.filter(cutout => cutout.componentIndex === index)} materialImage={selectedMaterial ? materialImageSrc(componentMaterialImage(selectedMaterial)) : materialImage} materialName={selectedMaterial?.name ?? materialName} services={linearServices} onChange={edges => update(index, { edges })}
         backsplashes={sideBacksplashes}
         onAddBacksplash={!attached ? side => onChange([...components, criarRodabancaLateral(component, side, criarId())]) : undefined}
         onUpdateBacksplash={(id, patch) => update(components.findIndex(entry => entry.id === id), patch)}
         onRemoveBacksplash={id => onRemove(components.findIndex(entry => entry.id === id))}
         onEditBacksplash={id => setEditingBacksplash(current => current === id ? null : id)} />
+      {renderCutouts?.(index)}
       <div className="component-actions">
-        <button type="button" onClick={() => onAddCutout?.(index)}>+ Adicionar recorte/cuba</button>
         <button type="button" disabled={!attached && roots.length === 1} onClick={() => onRemove(index)}>Remover</button>
       </div>
-      {renderCutouts?.(index)}
       {visibleChildren.length > 0 && <div className="attached-components"><p>Peças adicionadas a este componente</p>{visibleChildren.map((child) => renderComponent(child, rootNumber, true))}</div>}
       </div>
     </details>;
   };
-  return <section className="component-editor"><div className="quick-components"><button type="button" onClick={() => onAdd('TOP')}>+ Tampo</button><button type="button" onClick={() => onAdd('OTHER')}>+ Adicionar componente</button></div>{roots.map((component, index) => renderComponent(component, index + 1))}</section>;
+  return <section className="component-editor">{roots.map((component, index) => renderComponent(component, index + 1))}</section>;
 }

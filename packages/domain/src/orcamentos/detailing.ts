@@ -16,6 +16,12 @@ export function projetoTemDesenho(data: unknown): boolean {
   return value.detailingStatus === 'COMPLETED' || (value.detailingStatus !== 'PENDING' && value.entryMode !== 'QUICK');
 }
 
+/** Dados do projeto depois de uma alteração: mexer no Orçamento Rápido deixa o desenho pendente. */
 export function dadosEntradaProjeto(data: unknown, entryMode: QuoteEntryMode): Record<string, unknown> {
   return { ...metadata(data), entryMode, detailingStatus: projetoTemDesenho(data) && entryMode === 'DETAILED' ? 'COMPLETED' : 'PENDING' };
+}
+
+/** Só trocar entre Rápido e Detalhado não mexe no desenho: "adicionado" continua até o Orçamento Rápido ser alterado. */
+export function trocarModoEntrada(data: unknown, entryMode: QuoteEntryMode): Record<string, unknown> {
+  return { ...metadata(data), entryMode, detailingStatus: projetoTemDesenho(data) ? 'COMPLETED' : 'PENDING' };
 }
