@@ -68,6 +68,29 @@ describe('Clientes, validações e histórico', () => {
     const history = (await request('GET', `/customers/${q.customerId}/quotes`)).json();
     expect(history[0]).toMatchObject({ id: q.id, netTotal: q.netTotal });
   });
+  it('cria cliente rápido sem nenhum dado, faz orçamento e completa o cadastro depois', async () => {
+    const vazio = await request('POST', '/customers', { quick: true, name: '', phone: '' });
+    expect(vazio.statusCode, vazio.body).toBe(201);
+    const rapido = vazio.json();
+    expect(rapido).toMatchObject({ isQuick: true, phone: null });
+    expect(rapido.name).toMatch(/^Cliente rápido \d+$/);
+    const segundo = (await request('POST', '/customers', { quick: true })).json();
+    expect(Number(segundo.name.split(' ').pop())).toBe(Number(rapido.name.split(' ').pop()) + 1);
+    const orcamento = await request('POST', '/quotes', { customerId: rapido.id, items: [item()] });
+    expect(orcamento.statusCode, orcamento.body).toBe(201);
+    const snapshot = () => prisma.quote.findUnique({ where: { id: orcamento.json().id }, select: { customerNameSnapshot: true, customerPhoneSnapshot: true, workAddressSnapshot: true } });
+    expect(await snapshot()).toMatchObject({ customerNameSnapshot: rapido.name, customerPhoneSnapshot: null });
+    // Renomear sem telefone continua rápido; com telefone vira cadastro completo e o orçamento passa a mostrar os dados.
+    expect((await request('PATCH', `/customers/${rapido.id}`, { name: 'Dona Maria', phone: null })).json()).toMatchObject({ name: 'Dona Maria', isQuick: true, phone: null });
+    const completo = await request('PATCH', `/customers/${rapido.id}`, { phone: '(92) 91234-0001', address: 'Rua das Flores, 10' });
+    expect(completo.statusCode, completo.body).toBe(200);
+    expect(completo.json()).toMatchObject({ isQuick: false, phone: '92912340001' });
+    expect(await snapshot()).toEqual({ customerNameSnapshot: 'Dona Maria', customerPhoneSnapshot: '92912340001', workAddressSnapshot: 'Rua das Flores, 10' });
+  });
+  it('cliente comum continua exigindo nome e telefone', async () => {
+    expect((await request('POST', '/customers', { name: 'Sem telefone' })).statusCode).toBe(422);
+    expect((await request('POST', '/customers', { quick: false, phone: '92912340002' })).statusCode).toBe(422);
+  });
 });
 
 describe('Orçamento, snapshots, edição e relacionamentos', () => {

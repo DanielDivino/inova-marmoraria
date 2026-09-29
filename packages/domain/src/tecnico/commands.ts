@@ -1,8 +1,8 @@
 import { type TechnicalDocument, type Piece } from './schema.js';
-import { parametricContour, rotate } from './geometry.js';
+import { contornoDosParametros, rotate } from './geometry.js';
 export function updatePiece(doc:TechnicalDocument,id:string,patch:Partial<Piece>):TechnicalDocument {
   const original=doc.pieces.find(p=>p.id===id);if(!original||original.locked||doc.layers.find(l=>l.id===original.layerId)?.locked)return doc;
-  const piece={...original,...patch};if(piece.geometryMode==='PARAMETRIC'&&piece.parameters){const p=piece.parameters;piece.contour=parametricContour(id,p.shape,p.width,p.length,p.radius,p.arm);}
+  const piece={...original,...patch};if(piece.geometryMode==='PARAMETRIC'&&piece.parameters)piece.contour=contornoDosParametros(id,piece.parameters);
   let pieces=doc.pieces.map(p=>p.id===id?piece:p);
   const group=doc.assemblies.find(a=>a.pieceIds.includes(id));if(group?.locked)return doc;
   if(group&&(patch.x!==undefined||patch.y!==undefined||patch.rotationDeg!==undefined)) pieces=pieces.map(p=>{if(p.id===id||!group.pieceIds.includes(p.id))return p;const v=rotate({x:p.x-original.x,y:p.y-original.y},piece.rotationDeg-original.rotationDeg);return {...p,x:piece.x+v.x,y:piece.y+v.y,rotationDeg:p.rotationDeg+piece.rotationDeg-original.rotationDeg};});
@@ -13,7 +13,7 @@ export function deletePiece(doc:TechnicalDocument,id:string):TechnicalDocument {
 export function duplicatePiece(doc:TechnicalDocument,id:string,newId:string):TechnicalDocument {
   const piece=doc.pieces.find(p=>p.id===id);if(!piece)return doc;
   const fm=new Map(doc.features.filter(f=>f.pieceId===id).map(f=>[f.id,`${newId}-${f.id}`]));const vm=new Map(piece.contour.map((v,i)=>[v.id,`${newId}-v${i}`]));
-  const copy={...piece,id:newId,name:`${piece.name} (cópia)`,x:piece.x+150,y:piece.y+150,locked:false,contour:piece.contour.map(v=>({...v,id:vm.get(v.id)!}))};
+  const copy={...piece,id:newId,name:`${piece.name} (cópia)`,x:piece.x+150,y:piece.y+150,locked:false,contour:piece.contour.map(v=>({...v,id:vm.get(v.id)!})),dimensionLabels:Object.fromEntries(Object.entries(piece.dimensionLabels).flatMap(([edge,text])=>vm.has(edge)?[[vm.get(edge)!,text]]:[])),lockedEdges:piece.lockedEdges.flatMap(edge=>vm.has(edge)?[vm.get(edge)!]:[])};
   return {...doc,pieces:[...doc.pieces,copy],features:[...doc.features,...doc.features.filter(f=>f.pieceId===id).map(f=>({...f,id:fm.get(f.id)!,pieceId:newId,edgeId:f.edgeId?vm.get(f.edgeId):undefined,cutoutId:f.cutoutId?fm.get(f.cutoutId):undefined}))],dimensions:[...doc.dimensions,...doc.dimensions.filter(d=>d.from.pieceId===id&&d.to.pieceId===id).map(d=>({...d,id:`${newId}-${d.id}`,from:{pieceId:newId,vertexId:vm.get(d.from.vertexId)!},to:{pieceId:newId,vertexId:vm.get(d.to.vertexId)!}}))]};
 }
 export function snapPoint(doc:TechnicalDocument,p:{x:number;y:number},exclude:string,grid:number,tolerance:number) {

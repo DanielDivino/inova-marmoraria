@@ -13,7 +13,7 @@ import { intervaloDoPeriodo, OPCOES_PERIODO, periodoSelecionado, type OpcaoPerio
 
 type Quote = QuoteProgress & {
   id: string; number: string; netTotal: number; createdAt: string;
-  customer: { name: string; phone: string }; items?: { projectName?: string | null }[]; createdBy?: { id: string; name: string };
+  customer: { name: string; phone: string | null }; items?: { projectName?: string | null }[]; createdBy?: { id: string; name: string };
   workerAssignments?: { id: string; releasedAt?: string | null; colorSnapshot: string; worker: { id: string; name: string; workColor: string } }[];
 };
 type Marcado = { number: string; status: string; executionStatus?: string | null };
