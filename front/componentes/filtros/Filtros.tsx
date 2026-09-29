@@ -166,7 +166,7 @@ export function MenuSelecao<T extends string>({ rotulo, icone, valor, opcoes, ao
 }
 
 /** Janela de filtros do celular (dialog nativo): fecha no Esc, no X ou tocando fora. */
-export function ModalFiltros({ aberto, aoFechar, titulo, children, rodape }: { aberto: boolean; aoFechar: () => void; titulo: string; children: ReactNode; rodape: ReactNode }) {
+export function ModalFiltros({ aberto, aoFechar, titulo, children, rodape, rotuloFechar = 'Fechar filtros', className }: { aberto: boolean; aoFechar: () => void; titulo: string; children: ReactNode; rodape: ReactNode; rotuloFechar?: string; className?: string }) {
   const dialogo = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const elemento = dialogo.current;
@@ -174,8 +174,8 @@ export function ModalFiltros({ aberto, aoFechar, titulo, children, rodape }: { a
     if (aberto && !elemento.open) elemento.showModal();
     if (!aberto && elemento.open) elemento.close();
   }, [aberto]);
-  return <dialog ref={dialogo} className="modal-filtros" aria-label={titulo} onClose={aoFechar} onMouseDown={(event) => { if (event.target === event.currentTarget) aoFechar(); }}>
-    <header><strong>{titulo}</strong><button type="button" className="modal-filtros-fechar" aria-label="Fechar filtros" onClick={aoFechar}><Icone nome="fechar" /></button></header>
+  return <dialog ref={dialogo} className={`modal-filtros${className ? ` ${className}` : ''}`} aria-label={titulo} onClose={aoFechar} onMouseDown={(event) => { if (event.target === event.currentTarget) aoFechar(); }}>
+    <header><strong>{titulo}</strong><button type="button" className="modal-filtros-fechar" aria-label={rotuloFechar} onClick={aoFechar}><Icone nome="fechar" /></button></header>
     <div className="modal-filtros-campos">{children}</div>
     <footer>{rodape}</footer>
   </dialog>;

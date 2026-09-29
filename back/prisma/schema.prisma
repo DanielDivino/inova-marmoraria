@@ -127,6 +127,7 @@ model User {
   createdDesignRevisions DesignRevision[]  @relation("DesignRevisionCreator")
   revisionDecisions    RevisionDecision[]  @relation("RevisionDecisionMaker")
   productionReleases   ProductionRelease[] @relation("ProductionReleaseMaker")
+  projectDeliveries    ProjectDelivery[]   @relation("ProjectDeliveryCreator")
 }
 
 /** Funcionário da oficina — pessoa atribuída a uma OS para acompanhar o
@@ -263,6 +264,7 @@ model Quote {
   items           QuoteItem[]
   workerAssignments QuoteWorkerAssignment[]
   remount         Remount?
+  projectDeliveries ProjectDelivery[]
   @@index([customerId, status, createdAt])
   @@index([status, dueDate])
   @@index([status, executionStatus, deliveryDeadline])
@@ -492,20 +494,53 @@ model QuoteItem {
   materialSubtotal      Decimal     @db.Decimal(12, 2)
   servicesSubtotal      Decimal     @default(0) @db.Decimal(12, 2)
   total                 Decimal     @db.Decimal(12, 2)
-  /// Fluxo de trabalho: coluna, ordem dentro da coluna e quando foi concluído.
-  workflowStatus        ProjectWorkflowStatus @default(TODO)
-  workflowPosition      Float       @default(0)
-  workflowCompletedAt   DateTime?
-  /// Projeto parado por falta de material (marcado no fluxo de trabalho).
-  workflowMaterialMissing Boolean   @default(false)
   quote                 Quote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   productType           ProductType @relation(fields: [productTypeId], references: [id])
   material              Material    @relation(fields: [materialId], references: [id])
   services              QuoteItemService[]
   components            QuoteItemComponent[]
   cutouts               QuoteItemCutout[]
+  workflowCards         WorkflowCard[]
+}
 
-  @@index([workflowStatus, workflowPosition])
+/// Cartão do fluxo de trabalho. O projeto começa com um só cartão, o principal
+/// (`pieces` nulo: todas as peças que não estão em outro cartão). Quando só parte
+/// das peças é produzida ou entregue, elas viram um cartão próprio com as
+/// quantidades em `pieces` (chave da peça → quantidade); cartões do mesmo projeto
+/// que chegam à mesma coluna voltam a ser um só.
+model WorkflowCard {
+  id              String    @id @default(cuid())
+  quoteItemId     String
+  /// Coluna, ordem dentro da coluna e quando foi concluído.
+  status          ProjectWorkflowStatus @default(TODO)
+  position        Float     @default(0)
+  completedAt     DateTime?
+  /// Parado por falta de material (marcado no fluxo de trabalho).
+  materialMissing Boolean   @default(false)
+  pieces          Json?
+  createdAt       DateTime  @default(now())
+  quoteItem       QuoteItem @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+
+  @@index([status, position])
+  @@index([quoteItemId])
+}
+
+/// Nota de entrega de um projeto. Guarda as linhas impressas (peças entregues e
+/// as que faltavam) para reimprimir igual, mesmo que o orçamento mude depois.
+/// Sem chave estrangeira para o projeto: ele é recriado quando o orçamento é editado.
+model ProjectDelivery {
+  id          String   @id @default(cuid())
+  quoteId     String
+  quoteItemId String
+  sequence    Int
+  document    Json
+  createdById String
+  createdAt   DateTime @default(now())
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation("ProjectDeliveryCreator", fields: [createdById], references: [id])
+
+  @@unique([quoteId, sequence])
+  @@index([quoteItemId])
 }
 
 model QuoteItemComponent {

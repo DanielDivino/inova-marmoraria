@@ -59,8 +59,22 @@ export function detalheDesenhoComponente(data: unknown, index: number): Componen
   return result;
 }
 
-export function nomeExibicaoComponente(component: { label?: string; componentType?: string }): string {
+export function nomeExibicaoComponente(component: { label?: string | null; componentType?: string }): string {
   return component.label?.trim() || componentTypeLabels[component.componentType as ComponentType] || 'Componente';
+}
+
+/**
+ * Nome do projeto para exibir: o que o vendedor digitou ou, sem nome, as peças
+ * que ele tem (ex.: "Soleira", "Bancada + Rodabanca"). O tipo de produto salvo
+ * no item não é escolhido na tela (fica sempre o primeiro do catálogo), então
+ * nunca serve para descrever o projeto.
+ */
+export function nomeProjeto(item: { projectName?: string | null; components?: { label?: string | null; componentType?: string }[] }): string {
+  const nome = item.projectName?.trim();
+  if (nome) return nome;
+  const pecas = [...new Set((item.components ?? []).map(nomeExibicaoComponente))];
+  if (!pecas.length) return 'Projeto';
+  return pecas.length > 3 ? `${pecas.slice(0, 3).join(' + ')} e outras` : pecas.join(' + ');
 }
 
 /** Visual only: widen very thin pieces while keeping the drawing inside its cell. */

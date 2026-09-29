@@ -7,12 +7,12 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { FASE_ORCAMENTO_FLUXO_LABELS, PROJECT_WORKFLOW_LABELS, PROJECT_WORKFLOW_STATUSES, SITUACAO_PRAZO_FLUXO_LABELS, situacaoPrazoFluxo, type ProjectWorkflowStatus } from '@inova/domain';
 import { Icone, useCelular } from '../filtros/Filtros';
-import { aguardandoInicio, colunasFluxo, corOrcamento, formatarDataFluxo, nomeResponsavel, rotuloPecas, type CartaoFluxo, type ResponsavelFluxo } from '../../utilitarios/fluxo';
+import { aguardandoInicio, colunasFluxo, corOrcamento, formatarDataFluxo, nomeResponsavel, rotuloPecasCartao, type CartaoFluxo, type ResponsavelFluxo } from '../../utilitarios/fluxo';
 
 type Ordem = Record<ProjectWorkflowStatus, string[]>;
 const PREFIXO_COLUNA = 'coluna:';
 
-export const enderecoProjeto = (cartao: CartaoFluxo) => `/orcamentos/${cartao.quote.id}#projeto-${cartao.id}`;
+export const enderecoProjeto = (cartao: CartaoFluxo) => `/orcamentos/${cartao.quote.id}#projeto-${cartao.projectId}`;
 
 function colunaEm(ordem: Ordem, id: UniqueIdentifier): ProjectWorkflowStatus | undefined {
   const valor = String(id);
@@ -30,7 +30,7 @@ export function Responsavel({ responsavel }: { responsavel: ResponsavelFluxo | n
 export function CartaoProjeto({ cartao, ...props }: { cartao: CartaoFluxo } & HTMLAttributes<HTMLElement>) {
   const situacao = situacaoPrazoFluxo(cartao.quote.deadline, cartao.status === 'DELIVERED');
   return <article {...props} className={`fluxo-cartao prazo-${situacao.toLowerCase()} ${props.className ?? ''}`} style={{ ...props.style, '--cor-orcamento': corOrcamento(cartao.quote.id) } as CSSProperties}>
-    <div className="fluxo-cartao-topo"><span className="fluxo-etiqueta">{cartao.quote.number}</span><span className="fluxo-pecas">{rotuloPecas(cartao.pieces)}</span></div>
+    <div className="fluxo-cartao-topo"><span className="fluxo-etiqueta">{cartao.quote.number}</span><span className={`fluxo-pecas${cartao.totalPieces > cartao.pieces ? ' fluxo-pecas-parte' : ''}`} title={cartao.totalPieces > cartao.pieces ? 'O projeto foi dividido: as outras peças estão em outra etapa.' : undefined}>{rotuloPecasCartao(cartao)}</span></div>
     {cartao.quote.phase !== 'IN_EXECUTION' && <span className={`fluxo-fase fase-${cartao.quote.phase.toLowerCase()}`}>{FASE_ORCAMENTO_FLUXO_LABELS[cartao.quote.phase]}</span>}
     <strong>{cartao.name}</strong>
     <small>{cartao.quote.customerName}</small>
@@ -40,7 +40,7 @@ export function CartaoProjeto({ cartao, ...props }: { cartao: CartaoFluxo } & HT
   </article>;
 }
 
-const descricaoCartao = (cartao: CartaoFluxo) => `${cartao.name}, ${rotuloPecas(cartao.pieces)}, ${cartao.quote.customerName}, orçamento ${cartao.quote.number}, ${cartao.quote.worker ? `responsável ${nomeResponsavel(cartao.quote.worker)}` : 'sem responsável'}${cartao.materialMissing ? ', falta de material' : ''}`;
+const descricaoCartao = (cartao: CartaoFluxo) => `${cartao.name}, ${rotuloPecasCartao(cartao)}, ${cartao.quote.customerName}, orçamento ${cartao.quote.number}, ${cartao.quote.worker ? `responsável ${nomeResponsavel(cartao.quote.worker)}` : 'sem responsável'}${cartao.materialMissing ? ', falta de material' : ''}`;
 
 /** Liga/desliga a falta de material, no canto do cartão (fora dele: não arrasta nem abre o orçamento). Produzido/entregue não tem. */
 function BotaoFaltaMaterial({ cartao, aoAlternar }: { cartao: CartaoFluxo; aoAlternar?: (cartao: CartaoFluxo) => void }) {

@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
-import { AppError, type AuthUser } from '../../compartilhado/http.js';
+import { acessoHttps, AppError, type AuthUser } from '../../compartilhado/http.js';
 
 const loginSchema = z.object({ email: z.string().email().transform((value) => value.toLowerCase()), password: z.string().min(8) });
 function usuarioPublico(user: { id: string; name: string; role: AuthUser['role']; maxDiscountPercent: unknown }) { return { id: user.id, name: user.name, role: user.role, maxDiscountPercent: Number(user.maxDiscountPercent) }; }
@@ -14,7 +14,7 @@ export async function registrarRotasAutenticacao(app: FastifyInstance) {
     if (!user || !user.isActive || !(await bcrypt.compare(input.password, user.passwordHash))) throw new AppError(401, 'E-mail ou senha inválidos.', 'INVALID_CREDENTIALS');
     const sessionUser = usuarioPublico(user);
     const refreshToken = await reply.jwtSign({ ...sessionUser, tokenUse: 'refresh' }, { expiresIn: '7d' });
-    reply.setCookie('inova_refresh', refreshToken, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 7 * 24 * 60 * 60 });
+    reply.setCookie('inova_refresh', refreshToken, { httpOnly: true, sameSite: 'lax', secure: acessoHttps(request), path: '/', maxAge: 7 * 24 * 60 * 60 });
     return { user: sessionUser, accessToken: await reply.jwtSign({ ...sessionUser, tokenUse: 'access' }) };
   });
   app.post('/refresh', async (request, reply) => {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { aguardandoInicio, colunasFluxo, corOrcamento, entregaFinalDoOrcamento, filtrarCartoes, formatarDataFluxo, moverCartaoLocal, resumirPorOrcamento, rotuloPecas, SEM_RESPONSAVEL, type CartaoFluxo, type FiltroFluxo } from './fluxo';
+import { aguardandoInicio, colunasFluxo, corOrcamento, entregaFinalDoOrcamento, filtrarCartoes, formatarDataFluxo, moverCartaoLocal, perguntarPecas, resumirPorOrcamento, rotuloPecas, rotuloPecasCartao, SEM_RESPONSAVEL, trocarCartoesDoProjeto, type CartaoFluxo, type FiltroFluxo } from './fluxo';
 
 const quote = (id: string, deadline: string | null = null, worker: CartaoFluxo['quote']['worker'] = null, phase: CartaoFluxo['quote']['phase'] = 'IN_EXECUTION') => ({ id, number: `SET-2026-${id}`, customerId: `cliente-${id}`, customerName: `Cliente ${id}`, deadline, worker, phase });
-const cartao = (id: string, status: CartaoFluxo['status'], position: number, orcamento = quote('1')): CartaoFluxo => ({ id, name: `Projeto ${id}`, status, position, completedAt: null, pieces: 1, quote: orcamento });
+const cartao = (id: string, status: CartaoFluxo['status'], position: number, orcamento = quote('1'), pieces = 1, projectId = id): CartaoFluxo => ({ id, projectId, name: `Projeto ${projectId}`, status, position, completedAt: null, pieces, totalPieces: pieces, pieceList: [], quote: orcamento });
 
 describe('Fluxo de trabalho no quadro', () => {
   const joao = { id: 'joao', name: 'João', color: '#607453' };
@@ -61,6 +61,30 @@ describe('Fluxo de trabalho no quadro', () => {
     expect(colunasFluxo(todos).TODO.map((entrada) => entrada.id)).toEqual(['a', 'b']);
     expect(resumirPorOrcamento(todos).map((resumo) => resumo.quote.id)).toEqual(['1', '2', '5', '4']);
     expect(resumirPorOrcamento(todos).find((resumo) => resumo.quote.id === '4')?.finalizado).toBe(false);
+  });
+});
+
+describe('Projeto dividido por peças', () => {
+  // Cozinha com 5 peças: 3 produzidas, 2 ainda em andamento.
+  const produzidas = { ...cartao('parte', 'DONE', 0, quote('8'), 3, 'cozinha'), totalPieces: 5 };
+  const restantes = { ...cartao('cozinha', 'IN_PROGRESS', 0, quote('8'), 2), totalPieces: 5 };
+
+  it('mostra "x de y peças" no cartão dividido', () => {
+    expect([rotuloPecasCartao(produzidas), rotuloPecasCartao(cartao('a', 'TODO', 0, quote('1'), 4))]).toEqual(['3 de 5 peças', '4 peças']);
+  });
+  it('só pergunta quais peças ao avançar um cartão com mais de uma peça para Produzido ou Entregue', () => {
+    expect(perguntarPecas(restantes, 'DONE')).toBe(true);
+    expect(perguntarPecas(restantes, 'DELIVERED')).toBe(true);
+    expect(perguntarPecas(produzidas, 'DELIVERED')).toBe(true);
+    expect(perguntarPecas(produzidas, 'IN_PROGRESS')).toBe(false);
+    expect(perguntarPecas(restantes, 'TODO')).toBe(false);
+    expect(perguntarPecas(cartao('um', 'TODO', 0), 'DONE')).toBe(false);
+  });
+  it('resume o progresso em peças e troca os cartões do projeto pelos do servidor', () => {
+    expect(resumirPorOrcamento([produzidas, restantes])[0]).toMatchObject({ concluidos: 3, entregues: 0, total: 5, finalizado: false });
+    expect(resumirPorOrcamento([produzidas, restantes])[0].projetos.map((projeto) => projeto.status)).toEqual(['IN_PROGRESS', 'DONE']);
+    const juntos = { ...restantes, status: 'DONE' as const, pieces: 5 };
+    expect(trocarCartoesDoProjeto([produzidas, restantes, cartao('outro', 'TODO', 0)], 'cozinha', [juntos]).map((entrada) => entrada.id)).toEqual(['outro', 'cozinha']);
   });
 });
 

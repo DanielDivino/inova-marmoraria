@@ -44,6 +44,20 @@ npm run dev:web
 
 Troque a senha inicial e `JWT_SECRET` antes de qualquer ambiente que não seja local.
 
+### Produção na rede local
+
+A versão de produção roda separada do desenvolvimento, na porta 3000 (API interna na 3334), e é acessada pelos outros computadores do mesmo Wi‑Fi em `http://<IP deste computador>:3000`. Ela usa o mesmo banco, o mesmo `.env` e as mesmas imagens (`back/uploads`) da pasta de desenvolvimento.
+
+```bash
+npm run producao:instalar   # primeira vez: cria o serviço do sistema e publica a primeira versão
+npm run producao:atualizar  # publica o que está nesta pasta (compila numa cópia parada; se falhar, nada muda)
+npm run producao:voltar     # volta para a versão publicada antes (o banco não é desfeito)
+npm run producao:status     # endereço, versão no ar e se está respondendo
+npm run producao:logs       # registro do serviço (Ctrl+C para sair)
+```
+
+As cópias ficam em `~/INOVA-producao` (`a` e `b`; `atual` aponta para a que está no ar) e o serviço `inova-producao` (systemd do usuário) liga com o computador e religa sozinho se cair. Para ligar mesmo sem ninguém entrar na sessão, rode uma vez `sudo loginctl enable-linger $USER`; com firewall ativo, libere a porta com `sudo ufw allow 3000/tcp`. Quando uma migration mudar o banco de forma incompatível com a versão no ar, atualize a produção logo em seguida.
+
 ## Estrutura
 
 | Diretório | Responsabilidade |

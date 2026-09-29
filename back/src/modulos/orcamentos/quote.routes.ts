@@ -1,6 +1,6 @@
 import { escopoOrcamentos, exigirOrcamentoProprio, exigirPermissao } from '../../compartilhado/acesso.js';
 import { serializarOrcamento } from './serializacao.js';
-import { nomeArquivoPdf, disposicaoArquivoPdf, itemSalvoParaCopia, projetoTemDesenho } from '@inova/domain';
+import { nomeArquivoPdf, disposicaoArquivoPdf, itemSalvoParaCopia, projetoTemDesenho, nomeProjeto } from '@inova/domain';
 import PDFDocument from 'pdfkit';
 import { Prisma } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
@@ -151,7 +151,7 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     const quote = await prisma.quote.findUnique({ where: { id: params.id }, include: incluirOrcamento(request.user) }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
     const item = quote.items.find((entry) => entry.id === params.itemId);
     if (!item || !projetoTemDesenho(item.drawingData)) throw new AppError(404, 'Projeto sem desenho.', 'NOT_FOUND');
-    const filename = nomeArquivoPdf(quote.customerNameSnapshot, `${quote.number} - ${item.projectName || item.productType.name}`);
+    const filename = nomeArquivoPdf(quote.customerNameSnapshot, `${quote.number} - ${nomeProjeto(item)}`);
     const pdf = new PDFDocument({ margin: 36 }); renderizarPdfDesenhoProjeto(pdf, quote, params.itemId); pdf.end(); return reply.type('application/pdf').header('Content-Disposition', disposicaoArquivoPdf(filename)).send(pdf);
   });
 }

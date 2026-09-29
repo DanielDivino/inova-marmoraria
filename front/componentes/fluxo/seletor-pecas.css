@@ -1,0 +1,25 @@
+/* Escolha de peças (produzidas / entregues): usado no Fluxo e na nota de entrega. */
+.seletor-pecas { display: grid; gap: 8px; }
+.seletor-pecas-atalhos { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+.seletor-pecas-atalhos span { margin-right: auto; font-weight: 700; }
+.seletor-pecas-atalhos .text-button { padding: 4px 0; font-size: 12px; }
+.seletor-pecas-atalhos .text-button:disabled { opacity: .45; }
+.seletor-pecas ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.seletor-pecas li { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); }
+.seletor-pecas li.marcada { border-color: var(--green); background: color-mix(in srgb, var(--green) 7%, var(--surface, #fff)); }
+.seletor-pecas-nome { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; cursor: default; }
+label.seletor-pecas-nome { cursor: pointer; }
+.seletor-pecas-nome input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--green); }
+.seletor-pecas-nome > span { display: grid; gap: 2px; min-width: 0; }
+.seletor-pecas-nome strong { font-size: 13px; }
+.seletor-pecas-nome small { color: var(--muted); font-size: 11px; }
+.seletor-pecas-quantidade { display: flex; flex: none; align-items: center; gap: 6px; }
+.seletor-pecas-quantidade button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--surface, #fff); color: var(--ink); font-size: 18px; line-height: 1; }
+.seletor-pecas-quantidade button:disabled { opacity: .4; }
+.seletor-pecas-quantidade output { min-width: 22px; font-size: 15px; font-weight: 700; text-align: center; }
+.seletor-pecas-quantidade small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.modal-pecas .modal-filtros-campos p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.modal-pecas .modal-filtros-campos p strong { color: var(--ink); }
+.modal-pecas-lista { display: grid; gap: 4px; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--soft); font-size: 12px; list-style: none; }
+.modal-pecas-lista li { display: flex; justify-content: space-between; gap: 12px; }
+.modal-pecas-lista small { color: var(--muted); }

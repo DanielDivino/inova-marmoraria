@@ -146,6 +146,37 @@ html .inova-theme .list-header .atalhos-cabecalho a.botao-contorno-destaque { co
 .abas-grade .abas-filtro-botoes > button span { white-space: normal; line-height: 1.2; text-align: left; }
 .abas-grade .abas-filtro-botoes > button b { margin-left: auto; }
 
+/*
+ * "Mais filtros" no computador: cada grupo numa linha só (título ao lado das abas),
+ * abas em etiqueta, divisória entre Comercial e Produção, e Prazo/Vendedor
+ * compactos ("Prazo: Todos os prazos ▾") à direita.
+ */
+.barra-filtros-mais { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.barra-filtros-mais .abas-grade { display: contents; }
+.barra-filtros-mais .abas-grade .abas-filtro-grupo { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; }
+.barra-filtros-mais .abas-grade .abas-filtro-titulo { flex: none; margin: 0 6px 0 0; font-size: 11px; letter-spacing: .08em; }
+.barra-filtros-mais .abas-grade .abas-filtro-titulo::after { content: none; }
+.barra-filtros-mais .abas-grade .abas-filtro-botoes { display: flex; flex: 1 1 auto; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.barra-filtros-mais .abas-grade .abas-filtro-botoes > button { width: auto; min-height: 36px; gap: 6px; padding: 0 10px; border-radius: 10px; font-size: 13px; }
+.barra-filtros-mais .abas-grade .abas-filtro-botoes > button > svg { width: 16px; height: 16px; }
+.barra-filtros-mais .abas-grade .abas-filtro-botoes > button b { min-width: 22px; padding: 1px 6px; font-size: 11px; }
+.barra-filtros-mais .abas-grade .abas-filtro-botoes > button span { white-space: nowrap; }
+.barra-filtros-mais .abas-grade .abas-filtro-botoes > button b { margin-left: 2px; }
+.barra-filtros-mais .barra-filtros-mais-campos { flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 10px; margin-left: auto; }
+.barra-filtros-mais-campos .menu-selecao { flex: none; max-width: 320px; }
+.barra-filtros-mais-campos .seletor-compacto { gap: 8px; min-height: 36px; padding: 0 30px 0 12px; border-radius: 10px; }
+.barra-filtros-mais-campos .seletor-compacto::after { right: 13px; }
+.barra-filtros-mais-campos .seletor-compacto > span { display: flex; align-items: baseline; gap: 4px; }
+.barra-filtros-mais-campos .seletor-compacto small::after { content: ':'; }
+.barra-filtros-mais-campos .seletor-compacto strong { font-size: 13px; }
+/* Orçamentos (3 grupos): Comercial | Produção na 1ª linha; Finalização e Prazo/Vendedor na 2ª.
+   Faltando espaço, as abas quebram dentro do próprio grupo e a divisória continua ao lado de Produção. */
+.barra-filtros-mais:has(> .abas-grade > .abas-filtro-grupo:nth-child(3)) { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+.barra-filtros-mais:has(> .abas-grade > .abas-filtro-grupo:nth-child(3)) > .abas-grade > .abas-filtro-grupo:nth-child(1) { grid-area: 1 / 1; }
+.barra-filtros-mais:has(> .abas-grade > .abas-filtro-grupo:nth-child(3)) > .abas-grade > .abas-filtro-grupo:nth-child(2) { grid-area: 1 / 2; padding-left: 18px; border-left: 1px solid var(--line); }
+.barra-filtros-mais:has(> .abas-grade > .abas-filtro-grupo:nth-child(3)) > .abas-grade > .abas-filtro-grupo:nth-child(3) { grid-area: 2 / 1; }
+.barra-filtros-mais:has(> .abas-grade > .abas-filtro-grupo:nth-child(3)) > .barra-filtros-mais-campos { grid-area: 2 / 2; }
+
 .lista-resumo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0 0 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .lista-resumo strong { font-size: 17px; }
 .lista-resumo-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-right: auto; }

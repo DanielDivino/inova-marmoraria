@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { temPermissao, projetoTemDesenho, rotuloLadoBorda, descontosIndividuais, podeEditarOrcamento, DEADLINE_LABELS, obterStatusPrazo, obterStatusTrabalho, WORK_STATUS_LABELS, WORK_STATUS_STORAGE, WORK_STATUSES, type SavedQuoteItem, type WorkStatus } from '@inova/domain';
+import { temPermissao, projetoTemDesenho, nomeProjeto, rotuloLadoBorda, descontosIndividuais, podeEditarOrcamento, DEADLINE_LABELS, obterStatusPrazo, obterStatusTrabalho, WORK_STATUS_LABELS, WORK_STATUS_STORAGE, WORK_STATUSES, type SavedQuoteItem, type WorkStatus } from '@inova/domain';
 import { SavedItemDrawing } from '../../../componentes/orcamento/SavedDrawings';
 import { StatusOrcamento } from '../../../componentes/QuoteStatus';
 import { useSession } from '../../../componentes/ApplicationShell';
 import { api } from '../../../utilitarios/api';
 import { ExportarPdfOrcamento, ImprimirDesenhoProjeto } from '../../../componentes/orcamento/QuotePdfExport';
+import { NotaEntregaProjeto, type EntregasOrcamento } from '../../../componentes/orcamento/NotaEntregaProjeto';
 import { Icone } from '../../../componentes/filtros/Filtros';
 
 import { formatarMoeda } from '../../../utilitarios/formatadores';
@@ -42,10 +43,18 @@ export default function QuoteDetailPage() {
   const [savingWorker, setSavingWorker] = useState(false);
   const [trackingTab, setTrackingTab] = useState<TrackingTab>('GENERAL');
   const [openingDesign, setOpeningDesign] = useState(false);
+  // Entregas por projeto (notas de entrega) só existem depois da aprovação.
+  const [entregas, setEntregas] = useState<EntregasOrcamento | null>(null);
+  const [notaPedida, setNotaPedida] = useState<string | null>(null);
+  const carregarEntregas = useCallback(() => api<EntregasOrcamento>(`/quotes/${id}/entregas`).then(setEntregas).catch(() => setEntregas(null)), [id]);
+  useEffect(() => { if (quote?.status === 'APPROVED') void carregarEntregas(); else setEntregas(null); }, [quote?.status, quote?.executionStatus, carregarEntregas]);
+  // "Gerar nota de entrega" no Fluxo abre esta página com ?entrega=<projeto>.
+  useEffect(() => { setNotaPedida(new URLSearchParams(window.location.search).get('entrega')); }, []);
   useEffect(() => { api<Quote>(`/quotes/${id}`).then(setQuote).catch((cause) => setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o orçamento.')); if (canTeam) api<Worker[]>('/workers?active=true').then(setWorkers).catch(() => setWorkers([])); }, [id, canTeam]);
   if (error && !quote) return <main className="list-page"><p className="form-error">{error}</p></main>;
   if (!quote) return <main className="list-page"><p className="empty">Carregando orçamento…</p></main>;
   const individualDiscount = descontosIndividuais(quote.items);
+  const entregasPorProjeto = new Map(entregas?.projects.map((projeto) => [projeto.id, projeto]) ?? []);
   const totalDiscountGiven = individualDiscount + quote.discountAmount;
  async function changeStatus(payload: { status: string; executionStatus?: string; reason?: string }) {
     if (updating) return;
@@ -142,7 +151,8 @@ export default function QuoteDetailPage() {
       {trackingTab === 'HISTORY' && <div className="quote-workbench-history"><div className="deadline-summary"><small>Emissão: {dateLabel(quote.createdAt)}</small><small>Orçamento válido até: {dateLabel(quote.validUntil)}</small><small>Data de aprovação: {dateLabel(quote.approvedAt)}</small><small>Data limite: {dateLabel(quote.dueDate)}</small><small>Entrega: {dateLabel(quote.completedAt)}</small></div><div className="worker-history"><strong>Funcionários ({quote.workerAssignments?.length ?? 0})</strong><div>{quote.workerAssignments?.length ? quote.workerAssignments.map((assignment) => <p key={assignment.id}><i style={{ backgroundColor: assignment.colorSnapshot }} /><b>{assignment.worker.name}</b><small>{dateLabel(assignment.assignedAt)}{assignment.releasedAt ? ` até ${dateLabel(assignment.releasedAt)}` : ' · trabalhando agora'}</small></p>) : <small>Nenhum funcionário foi vinculado a este serviço.</small>}</div></div></div>}
     </section>
     <div className="cards">{quote.items.map((item) => <article className="detail-card" id={`projeto-${item.id}`} key={item.id}>
-      <span>{item.projectName || item.productType.name.toUpperCase()}</span>{!projetoTemDesenho(item.drawingData) && podeEditarOrcamento(quote) && <Link className="secondary-button" href={`/orcamentos/${id}/editar?detail=${item.id}`}>Adicionar desenhos</Link>}{projetoTemDesenho(item.drawingData) && <ImprimirDesenhoProjeto quoteId={id} itemId={item.id} quoteNumber={quote.number} customerName={quote.customerNameSnapshot} projectName={item.projectName || item.productType.name} />}<SavedItemDrawing item={item} notes={quote.notes} /><strong>{[...new Set(item.components.length ? item.components.map(component => component.materialNameSnapshot ?? item.materialNameSnapshot) : [item.materialNameSnapshot])].join(' · ')}</strong>
+      <span>{nomeProjeto(item).toUpperCase()}</span>{!projetoTemDesenho(item.drawingData) && podeEditarOrcamento(quote) && <Link className="secondary-button" href={`/orcamentos/${id}/editar?detail=${item.id}`}>Adicionar desenhos</Link>}{projetoTemDesenho(item.drawingData) && <ImprimirDesenhoProjeto quoteId={id} itemId={item.id} quoteNumber={quote.number} customerName={quote.customerNameSnapshot} projectName={nomeProjeto(item)} />}{entregas && entregasPorProjeto.has(item.id) && <NotaEntregaProjeto quoteId={id} customerName={quote.customerNameSnapshot} projeto={entregasPorProjeto.get(item.id)!} canDeliver={entregas.canDeliver} reason={entregas.reason} abrirAoCarregar={notaPedida === item.id}
+        aoRegistrar={(nota) => { void carregarEntregas(); if (nota.quoteDelivered) void api<Quote>(`/quotes/${id}`).then(setQuote); }} />}<SavedItemDrawing item={item} notes={quote.notes} /><strong>{[...new Set(item.components.length ? item.components.map(component => component.materialNameSnapshot ?? item.materialNameSnapshot) : [item.materialNameSnapshot])].join(' · ')}</strong>
       <small>{item.calculationMode === 'MANUAL_M2' ? 'Área manual registrada' : 'Área calculada pelos componentes'} · {item.billedQuantity.toLocaleString('pt-BR')} m² · Material: {formatarMoeda(item.materialSubtotal)}</small>
       {item.components.map((component) => <div className="quote-component" key={component.id}><strong>{component.label}</strong><small>{component.materialNameSnapshot ?? item.materialNameSnapshot}</small><small>{cm(component.lengthMm)} × {cm(component.widthMm)} cm · {component.orientation === 'HORIZONTAL' ? 'horizontal' : 'vertical'} · qtd. {component.quantity} · {(component.lengthMm * component.widthMm * component.quantity / 1_000_000).toLocaleString('pt-BR')} m²</small><small>Calculado: {formatarMoeda(Number(component.calculatedTotal))} · Aplicado: {formatarMoeda(Number(component.appliedTotal))} · Desconto: {formatarMoeda(Math.max(0, Number(component.calculatedTotal) - Number(component.appliedTotal)))}</small>{component.edges.map((edge, index) => <small key={`${edge.side}-${index}`}>↳ {rotuloLadoBorda(edge.side)}: {edge.serviceNameSnapshot} · Calculado {formatarMoeda(Number(edge.calculatedSubtotal))} · Aplicado {formatarMoeda(Number(edge.appliedSubtotal))}</small>)}</div>)}
       {item.cutouts.map((cutout) => <small key={cutout.id}>Recorte: {cutout.label ?? cutout.cutoutType}{cutout.lengthMm && cutout.widthMm ? ` · ${cm(cutout.lengthMm)} × ${cm(cutout.widthMm)} cm` : ''}</small>)}
