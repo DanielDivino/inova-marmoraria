@@ -11,10 +11,12 @@ import { CanvasPlanta } from './CanvasPlanta';
 import { EditorLado } from './EditorLado';
 import { JanelaTraco } from './JanelaTraco';
 import { adicionarPeca, novoRecursoBorda, novoRecursoCorpo } from './operacoes';
+import { PainelEstimativa, ResumoEstimativa } from './PainelEstimativa';
 import { PainelMedidas } from './PainelMedidas';
 import { PainelRevisoes } from './PainelRevisoes';
 import { ROTULO_RECURSO, type Ferramenta, type LadoEmEdicao, type Modo, type Selecao, type TipoBorda, type TipoCorpo } from './tipos';
 import { useDesenhoLivre } from './useDesenhoLivre';
+import { useEstimativa } from './useEstimativa';
 import { useDocumentoTecnico } from './useDocumentoTecnico';
 import '../../app/technical-editor.css';
 
@@ -40,6 +42,8 @@ export default function EditorTecnico({ designId }: { designId: string }) {
   const [modo, setModo] = useState<Modo>('MANUAL');
   const [passoMm, setPassoMm] = useState(10);
   const [visao, setVisao] = useState<Visao>('2D');
+  const [estimativaAberta, setEstimativaAberta] = useState(true);
+  const valor = useEstimativa(designId, documento);
   const livre = useDesenhoLivre({ documento, mudar: tecnico.mudar, aoSelecionar: setSelecao, aoMensagem: tecnico.setMensagem, passoMm });
   // O modo escolhido fica lembrado neste aparelho (conveniência; sem ele, começa no manual).
   useEffect(() => { try { const salvo = window.localStorage.getItem('inova-desenho-modo'); if (salvo === 'LIVRE') { setModo('LIVRE'); setFerramenta('TRACO_PECA'); } } catch { /* sem armazenamento local */ } }, []);
@@ -151,13 +155,21 @@ export default function EditorTecnico({ designId }: { designId: string }) {
       </div>
       <aside className="tec-lateral" aria-label="Propriedades">
         <button type="button" className="tec-fechar-folha" aria-label="Fechar painel" onClick={() => setFolha(null)}>×</button>
-        <div className={folha === 'revisoes' ? 'tec-so-desktop' : undefined}>
+        <div className={`tec-lateral-medidas${folha && folha !== 'medidas' ? ' tec-so-desktop' : ''}`}>
           <PainelMedidas documento={documento} selecao={selecao} materiais={tecnico.materiais} diagnosticos={tecnico.diagnosticos}
             aoMudar={mudar} aoSelecionar={setSelecao} aoAbrirLado={(pecaId, ladoId) => setLado({ pecaId, ladoId })} />
         </div>
         {folha === 'revisoes' && <div className="tec-so-celular"><PainelRevisoes revisoes={tecnico.revisoes} aoAtualizar={tecnico.recarregarRevisoes} aoMensagem={tecnico.setMensagem} /></div>}
+        {/* Estimativa: fixa no rodapé do painel no desktop (recolhível); no celular abre pela barra de baixo. */}
+        <div className="tec-lateral-estimativa">
+          <div className="tec-so-desktop"><ResumoEstimativa estimativa={valor.estimativa} aberto={estimativaAberta} aoAlternar={() => setEstimativaAberta((aberta) => !aberta)} /></div>
+          {(estimativaAberta || folha === 'valor') && <div className={`tec-estimativa-corpo${estimativaAberta && folha === 'valor' ? '' : estimativaAberta ? ' tec-so-desktop' : ' tec-so-celular'}`}>
+            <PainelEstimativa documento={documento} catalogo={valor.catalogo} estimativa={valor.estimativa} opcoes={valor.opcoes} erro={valor.erro} aoMudarOpcoes={valor.mudarOpcoes} />
+          </div>}
+        </div>
       </aside>
     </div>
+    <div className="tec-so-celular tec-barra-estimativa"><ResumoEstimativa estimativa={valor.estimativa} aberto={folha === 'valor'} aoAlternar={() => setFolha((atual) => atual === 'valor' ? null : 'valor')} /></div>
     <div className="tec-so-desktop"><PainelRevisoes revisoes={tecnico.revisoes} aoAtualizar={tecnico.recarregarRevisoes} aoMensagem={tecnico.setMensagem} /></div>
     <EditorLado peca={pecaDoLado} ladoId={lado?.ladoId ?? null} aoFechar={() => setLado(null)}
       aoMudarMedida={(mm) => {

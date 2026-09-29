@@ -26,9 +26,11 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados }: Prop
   // Nome no meio da peça; se uma cuba/recorte estiver ali, logo abaixo dela.
   const meio = sampleContour(peca.contour, 20).reduce((soma, p, _, lista) => ({ x: soma.x + p.x / lista.length, y: soma.y + p.y / lista.length }), { x: 0, y: 0 });
   const embaixo = recursos.filter((r) => !r.edgeId && Math.abs(r.x - meio.x) < Math.max(r.widthMm, r.diameterMm) / 2 + px(30) && Math.abs(r.y - meio.y) < Math.max(r.lengthMm, r.diameterMm) / 2 + px(10));
-  const centro = embaixo.length ? { x: meio.x, y: Math.min(...embaixo.map((r) => r.y - Math.max(r.lengthMm, r.diameterMm) / 2)) - px(12) } : meio;
-  // Alças dos vértices menores quando a peça aparece pequena na tela.
   const caixa = sampleContour(peca.contour, 20).reduce((c, p) => ({ minX: Math.min(c.minX, p.x), maxX: Math.max(c.maxX, p.x), minY: Math.min(c.minY, p.y), maxY: Math.max(c.maxY, p.y) }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+  const topoRecursos = Math.max(...embaixo.map((r) => r.y + Math.max(r.lengthMm, r.diameterMm) / 2)), baseRecursos = Math.min(...embaixo.map((r) => r.y - Math.max(r.lengthMm, r.diameterMm) / 2));
+  // Com cuba no meio, o nome vai para o lado (acima ou abaixo dela) com mais espaço.
+  const centro = !embaixo.length ? meio : caixa.maxY - topoRecursos >= baseRecursos - caixa.minY ? { x: meio.x, y: (topoRecursos + caixa.maxY) / 2 } : { x: meio.x, y: (baseRecursos + caixa.minY) / 2 };
+  // Alças dos vértices menores quando a peça aparece pequena na tela.
   const alca = Math.max(4, Math.min(9, Math.min(caixa.maxX - caixa.minX, caixa.maxY - caixa.minY) * escala / 8));
 
   return <g transform={`translate(${peca.x} ${peca.y}) rotate(${-peca.rotationDeg})`} className={`tec-peca${selecionada ? ' selecionada' : ''}${peca.locked ? ' travada' : ''}`}>
