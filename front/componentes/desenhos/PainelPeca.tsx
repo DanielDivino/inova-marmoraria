@@ -67,6 +67,8 @@ export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, a
     </div>
 
     <div className="tec-grade-campos">
+      <CampoMedida rotulo="Posição X" minimo={-100000} valorMm={peca.x} onChange={(x) => atualizar({ x })} />
+      <CampoMedida rotulo="Posição Y" minimo={-100000} valorMm={peca.y} onChange={(y) => atualizar({ y })} />
       <CampoMedida rotulo="Espessura" valorMm={peca.thicknessMm} onChange={(thicknessMm) => atualizar({ thicknessMm })} />
       <label className="tec-campo">Giro (graus)<input type="number" inputMode="numeric" value={peca.rotationDeg} onChange={(evento) => atualizar({ rotationDeg: Number(evento.target.value) || 0 })} /></label>
     </div>

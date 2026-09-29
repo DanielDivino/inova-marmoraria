@@ -54,6 +54,22 @@ export function reamostrar(pontos: Point[], passo: number): Point[] {
   return saida;
 }
 
+/**
+ * Média móvel curta (tira a tremida do dedo antes de simplificar). Os cantos
+ * arredondados por ela não importam: os vértices saem do cruzamento das retas.
+ * Aberto, as pontas ficam onde estão.
+ */
+export function suavizar(pontos: Point[], raio: number, fechado: boolean): Point[] {
+  if (raio < 1 || pontos.length < 2 * raio + 1) return pontos.slice();
+  const n = pontos.length;
+  return pontos.map((ponto, i) => {
+    if (!fechado && (i < raio || i >= n - raio)) return ponto;
+    let x = 0, y = 0;
+    for (let k = -raio; k <= raio; k++) { const vizinho = pontos[(i + k + n) % n]; x += vizinho.x; y += vizinho.y; }
+    return { x: x / (2 * raio + 1), y: y / (2 * raio + 1) };
+  });
+}
+
 /** Ramer–Douglas–Peucker, sem recursão (traços longos não estouram a pilha). */
 export function simplificarRdp(pontos: Point[], tolerancia: number): Point[] {
   if (pontos.length < 3) return pontos.slice();
@@ -156,8 +172,11 @@ export function organizarTraco(bruto: Point[], opcoes: OpcoesTraco = {}): TracoO
   if (tamanho < EPS) return { pontos: [], fechado: false, podeFechar: false, valido: false, motivo: 'Traço curto demais.' };
   const reamostrado = reamostrar(pontosValidos, Math.max(tamanho / 150, EPS));
   const perimetro = comprimentoTraco(reamostrado);
-  const fechado = opcoes.fechar || distancia(reamostrado[0], reamostrado[reamostrado.length - 1]) < (opcoes.fracaoFechamento ?? .08) * perimetro;
-  let simples = simplificarRdp(reamostrado, (opcoes.fracaoSimplificacao ?? .025) * tamanho);
+  const fechouSozinho = distancia(reamostrado[0], reamostrado[reamostrado.length - 1]) < (opcoes.fracaoFechamento ?? .08) * perimetro;
+  const fechado = opcoes.fechar || fechouSozinho;
+  // Média móvel curta (±3 pontos ≈ 2% do traço): tira a tremida sem transformar canto em chanfro.
+  // Fechado a pedido, o começo e o fim estão longe: a média não pode passar de um para o outro.
+  let simples = simplificarRdp(suavizar(reamostrado, 3, fechouSozinho), (opcoes.fracaoSimplificacao ?? .025) * tamanho);
   if (fechado && simples.length > 3 && distancia(simples[0], simples[simples.length - 1]) < .08 * perimetro) simples = simples.slice(0, -1);
   if (simples.length < (fechado ? 3 : 2)) return { pontos: simples, fechado, podeFechar: false, valido: false, motivo: 'Não deu para reconhecer a forma. Desenhe de novo, mais devagar.' };
 
@@ -223,12 +242,33 @@ export type RecorteDoTraco = { shape: 'RECTANGLE' | 'OVAL'; x: number; y: number
 const percentil = (valores: number[], p: number) => { const ordenados = [...valores].sort((a, b) => a - b); return ordenados[Math.min(ordenados.length - 1, Math.max(0, Math.round(p * (ordenados.length - 1))))]; };
 /**
  * Traço fechado dentro de uma peça vira recorte (cuba, cooktop): retangular ou
- * oval, o que o traço mais parecer. Cada ponto é comparado com os dois modelos
- * (no retângulo, max(|u|,|v|) = 1; na elipse, u² + v² = 1): ganha o de menor
- * desvio médio, o que resiste à tremida do dedo. A orientação vem da direção
- * principal do traço; as medidas ignoram os 2% de pontos mais fora.
+ * oval, o que o traço mais parecer. Primeiro tenta o mesmo organizador das peças
+ * (resistente à tremida): 4 lados em ângulo reto é retângulo, com as medidas dos
+ * próprios lados. Se não achar, compara cada ponto com os dois modelos (no
+ * retângulo max(|u|,|v|) = 1; na elipse u² + v² = 1) e mede pela direção
+ * principal do traço, ignorando os 2% de pontos mais fora.
  */
 export function recorteDoTraco(bruto: Point[], passoMm = 10): RecorteDoTraco | null {
+  const redondo = (v: number) => Math.max(passoMm, Math.round(v / passoMm) * passoMm);
+  // Recorte é pequeno: sem o lado mínimo de 5 cm das peças (vale só a fração do tamanho do traço).
+  const organizado = organizarTraco(bruto, { fechar: true, ladoMinimoMm: 0 });
+  const cantos = organizado.pontos;
+  const emEsquadro = organizado.valido && cantos.length === 4 && cantos.every((p, i) => {
+    const anterior = cantos[(i + 3) % 4], seguinte = cantos[(i + 1) % 4];
+    return Math.abs(diferencaAngulo(Math.atan2(p.y - anterior.y, p.x - anterior.x), Math.atan2(seguinte.y - p.y, seguinte.x - p.x)) - Math.PI / 2) < 12 * Math.PI / 180;
+  });
+  if (emEsquadro) {
+    const [a, b, c, d] = cantos;
+    const ladoAB = (distancia(a, b) + distancia(c, d)) / 2, ladoBC = (distancia(b, c) + distancia(d, a)) / 2;
+    const [inicio, fim] = ladoAB >= ladoBC ? [a, b] : [b, c];
+    let angulo = Math.atan2(fim.y - inicio.y, fim.x - inicio.x);
+    if (angulo > Math.PI / 2) angulo -= Math.PI; else if (angulo <= -Math.PI / 2) angulo += Math.PI;
+    angulo = endireitarAngulo(angulo, 10).angulo;
+    return {
+      shape: 'RECTANGLE', x: Math.round((a.x + b.x + c.x + d.x) / 4), y: Math.round((a.y + b.y + c.y + d.y) / 4),
+      widthMm: redondo(Math.max(ladoAB, ladoBC)), lengthMm: redondo(Math.min(ladoAB, ladoBC)), rotationDeg: Math.round(-angulo * 180 / Math.PI) || 0,
+    };
+  }
   const pontos = reamostrar(bruto, Math.max(diagonal(bruto) / 150, EPS));
   if (pontos.length < 6) return null;
   const cx = pontos.reduce((s, p) => s + p.x, 0) / pontos.length, cy = pontos.reduce((s, p) => s + p.y, 0) / pontos.length;
@@ -244,11 +284,9 @@ export function recorteDoTraco(bruto: Point[], passoMm = 10): RecorteDoTraco | n
   if (largura < EPS || comprimento < EPS) return null;
   const centro = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
   const normalizados = locais.map((p) => ({ u: (p.x - centro.x) / (largura / 2), v: (p.y - centro.y) / (comprimento / 2) }));
-  const desvio = (medida: (u: number, v: number) => number) => normalizados.reduce((s, { u, v }) => s + Math.abs(medida(u, v) - 1), 0) / normalizados.length;
-  const retangular = desvio((u, v) => Math.max(Math.abs(u), Math.abs(v))) <= desvio((u, v) => Math.hypot(u, v));
-  const redondo = (v: number) => Math.max(passoMm, Math.round(v / passoMm) * passoMm);
+  const desvio = (medida: (u: number, v: number) => number) => normalizados.reduce((soma, { u, v }) => soma + Math.abs(medida(u, v) - 1), 0) / normalizados.length;
   return {
-    shape: retangular ? 'RECTANGLE' : 'OVAL',
+    shape: desvio((u, v) => Math.max(Math.abs(u), Math.abs(v))) <= desvio((u, v) => Math.hypot(u, v)) ? 'RECTANGLE' : 'OVAL',
     x: Math.round(cx + centro.x * Math.cos(angulo) - centro.y * Math.sin(angulo)),
     y: Math.round(cy + centro.x * Math.sin(angulo) + centro.y * Math.cos(angulo)),
     widthMm: redondo(largura), lengthMm: redondo(comprimento),

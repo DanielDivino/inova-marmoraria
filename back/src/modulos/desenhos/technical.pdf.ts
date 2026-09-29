@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { rotate, sampleContour, featureContour, edgePoint, formatMeasure, type TechnicalDocument, type Piece, type Feature } from '@inova/domain/technical';
+import { rotate, sampleContour, featureContour, edgePoint, formatMeasure, cotasDaPeca, type TechnicalDocument, type Piece, type Feature } from '@inova/domain/technical';
 
 type PdfDocument = InstanceType<typeof PDFDocument>;
 type Point = { x: number; y: number };
@@ -48,6 +48,15 @@ export function renderizarPdfTecnico(pdf: PdfDocument, document: TechnicalDocume
     const label = point({ x: box.minX, y: box.maxY });
     pdf.fontSize(8).fillColor('#273126').text(`${piece.name} · ${formatMeasure(box.maxX - box.minX)} × ${formatMeasure(box.maxY - box.minY)} · ${piece.thicknessMm} mm`, label.x, label.y + 7, { width: 240 });
   }
+
+  // Medida de cada lado, do lado de fora da peça; o texto combinado ("medir no local") sai no lugar do número, em itálico.
+  for (const piece of pieces) for (const cota of cotasDaPeca(piece)) {
+    const meio = toWorld(cota.meio, piece), normal = rotate(cota.normal, piece.rotationDeg);
+    const lugar = point({ x: meio.x + normal.x * 11 / scale, y: meio.y + normal.y * 11 / scale });
+    pdf.font(cota.livre ? 'Helvetica-Oblique' : 'Helvetica').fontSize(6).fillColor(cota.livre ? '#a4481f' : '#7a6539')
+      .text(`${cota.curvo ? 'arco ' : ''}${cota.texto}`, lugar.x - 40, lugar.y - 3, { width: 80, align: 'center', lineBreak: false });
+  }
+  pdf.font('Helvetica');
 
   const featureLabel: Record<Feature['type'], string> = { SINK: 'Cuba', SCULPTED_SINK: 'Cuba esculpida', CUTOUT: 'Recorte', HOLE: 'Furo', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', EDGE_FINISH: 'Acabamento' };
   const edgeReport: string[] = [];

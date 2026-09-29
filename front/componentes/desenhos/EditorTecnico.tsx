@@ -37,6 +37,7 @@ export default function EditorTecnico({ designId }: { designId: string }) {
   const [selecao, setSelecao] = useState<Selecao>(null);
   const [pendenteBorda, setPendenteBorda] = useState<TipoBorda | null>(null);
   const [lado, setLado] = useState<LadoEmEdicao>(null);
+  const [cotaInicio, setCotaInicio] = useState<{ pieceId: string; vertexId: string } | null>(null);
   const [folha, setFolha] = useState<Folha>(null);
   const [pedidoEnquadrar, setPedidoEnquadrar] = useState(0);
   const [modo, setModo] = useState<Modo>('MANUAL');
@@ -64,7 +65,16 @@ export default function EditorTecnico({ designId }: { designId: string }) {
   const mudar = (proximo: TechnicalDocument) => tecnico.mudar(proximo);
 
   // No celular a folha aberta cobriria o desenho: ferramenta de desenho fecha a folha.
-  const escolherFerramenta = (proxima: Ferramenta) => { setFerramenta(proxima); setPendenteBorda(null); if (proxima !== 'SELECIONAR') setFolha(null); tecnico.setMensagem(proxima === 'TEXTO' ? 'Toque no desenho onde vai o texto.' : ''); };
+  const escolherFerramenta = (proxima: Ferramenta) => {
+    setFerramenta(proxima); setPendenteBorda(null); setCotaInicio(null); if (proxima !== 'SELECIONAR') setFolha(null);
+    tecnico.setMensagem(proxima === 'TEXTO' ? 'Toque no desenho onde vai o texto.' : proxima === 'COTA' ? 'Toque no primeiro ponto da cota (um vértice de qualquer peça).' : '');
+  };
+  const tocarVertice = (pieceId: string, vertexId: string) => {
+    if (!cotaInicio) { setCotaInicio({ pieceId, vertexId }); tecnico.setMensagem('Agora toque no segundo ponto da cota.'); return; }
+    if (cotaInicio.pieceId === pieceId && cotaInicio.vertexId === vertexId) return;
+    mudar({ ...documento, dimensions: [...documento.dimensions, { id: criarId(), from: cotaInicio, to: { pieceId, vertexId }, offsetMm: 150, layerId: 'dimensions' }] });
+    setCotaInicio(null); tecnico.setMensagem('Cota criada. Toque em outro ponto para criar mais uma, ou em Selecionar para sair.');
+  };
   const adicionarForma = (forma: PieceShape) => {
     const id = criarId();
     mudar(adicionarPeca(documento, forma, id));
@@ -146,7 +156,7 @@ export default function EditorTecnico({ designId }: { designId: string }) {
         {visao !== '3D' && <div className="tec-vista">
         <CanvasPlanta documento={documento} selecao={selecao} ferramenta={ferramenta} pendenteBorda={pendenteBorda} pedidoEnquadrar={pedidoEnquadrar}
           tracoPendente={livre.traco && { pontos: livre.traco.pontos, fechado: livre.traco.fechado, ladoReferencia: livre.traco.ladoReferencia }}
-          aoSelecionar={setSelecao} aoTocarLado={tocarLado} aoCriarTexto={criarTexto} aoTraco={livre.aoTraco} aoCancelarTraco={() => tecnico.setMensagem('Traço cancelado: dois dedos na tela mexem na vista.')}
+          aoSelecionar={setSelecao} aoTocarLado={tocarLado} aoCriarTexto={criarTexto} aoTocarVertice={tocarVertice} cotaInicio={cotaInicio} aoTraco={livre.aoTraco} aoCancelarTraco={() => tecnico.setMensagem('Traço cancelado: dois dedos na tela mexem na vista.')}
           substituir={tecnico.substituir} concluirGesto={tecnico.concluirGesto} />
         <JanelaTraco traco={livre.traco} recorte={livre.recorte} aoFechar={livre.fechar} aoTrocarLado={livre.trocarLado} aoDescartar={livre.descartar}
           aoCriarPeca={(mm) => { const erro = livre.criarPeca(mm); if (!erro) setFerramenta('SELECIONAR'); return erro; }} aoCriarRecorte={livre.criarRecorte} />

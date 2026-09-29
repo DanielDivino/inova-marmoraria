@@ -122,7 +122,8 @@ html.inova-dark .inova-theme .tec-aviso { background: #3c3219; color: #f1d58a; }
 
 /* Celular: desenho ocupando a tela, ferramentas embaixo e painéis como folhas que sobem. */
 @media (max-width: 760px) {
-  .tec-editor { --tec-altura-ferramentas: calc(78px + env(safe-area-inset-bottom)); padding: 0 0 var(--tec-altura-ferramentas); }
+  /* Coluna na altura da tela (menos a barra do app): o desenho fica com o espaço que sobrar, acima das barras fixas. */
+  .tec-editor { --tec-altura-ferramentas: calc(78px + env(safe-area-inset-bottom)); --tec-altura-estimativa: 48px; display: flex; flex-direction: column; box-sizing: border-box; height: calc(100dvh - 64px); padding: 0 0 calc(var(--tec-altura-ferramentas) + var(--tec-altura-estimativa)); }
   .tec-cabecalho { padding: 8px 12px 0; align-items: center; }
   .tec-cabecalho p { margin: 0; } .tec-cabecalho h1 { font-size: 18px; } .tec-cabecalho > div:first-child > a { display: none; }
   .tec-salvar .botao-contorno { display: none; }
@@ -132,7 +133,7 @@ html.inova-dark .inova-theme .tec-aviso { background: #3c3219; color: #f1d58a; }
   .tec-regra { display: none; }
   .tec-folhas { display: inline-flex; }
   .tec-so-desktop { display: none !important; } .tec-so-celular { display: block; }
-  .tec-area { display: block; height: calc(100dvh - 64px - 132px - var(--tec-altura-ferramentas)); min-height: 360px; border-radius: 0; border-left: 0; border-right: 0; }
+  .tec-area { display: block; flex: 1 1 auto; min-height: 240px; height: auto; border-radius: 0; border-left: 0; border-right: 0; }
   .tec-vistas { height: 100%; }
   .tec-vistas.lado-a-lado { grid-template-columns: 1fr; }
   .tec-ferramentas { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; flex-direction: row; gap: 6px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); overflow-x: auto; border-top: 1px solid var(--line); border-right: 0; background: var(--surface, #fff); box-shadow: 0 -4px 16px #0000001a; }
@@ -200,12 +201,14 @@ html.inova-dark .inova-theme .tec-conferencia .ok { color: #9fd8b4; }
 html.inova-dark .inova-theme :is(.tec-estimativa li.sem-preco > strong, .tec-estimativa li .tec-motivo) { color: #f0a097; }
 html.inova-dark .inova-theme .tec-resumo-estimativa small { background: #3c3219; color: #f1d58a; }
 @media (max-width: 760px) {
-  .tec-editor { --tec-altura-estimativa: 48px; }
-  .tec-area { height: calc(100dvh - 64px - 132px - var(--tec-altura-ferramentas) - var(--tec-altura-estimativa)); }
   .tec-barra-estimativa { position: fixed; z-index: 30; left: 0; right: 0; bottom: var(--tec-altura-ferramentas); border-top: 1px solid var(--line); background: var(--soft); }
   .tec-barra-estimativa .tec-resumo-estimativa { min-height: var(--tec-altura-estimativa); }
+  /* O painel lateral do desktop (display: flex, acima) no celular só aparece como folha. */
+  .tec-lateral { display: none; }
   .tec-editor[data-folha] .tec-lateral { display: block; bottom: calc(var(--tec-altura-ferramentas) + var(--tec-altura-estimativa)); overflow-y: auto; padding: 18px 14px 20px; }
   .tec-lateral-medidas { padding: 0; overflow: visible; }
   .tec-lateral-estimativa { max-height: none; overflow: visible; border-top: 0; background: transparent; }
   .tec-estimativa-corpo { padding: 0; }
 }
+.tec-cota-livre { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 6px 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+.tec-cota-livre > span { grid-column: 1 / -1; font-size: 13px; }

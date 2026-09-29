@@ -31,6 +31,7 @@ export function BarraFerramentas(props: Props) {
         <Botao rotulo="Desenhar recorte" icone="◌" ativo={ferramenta === 'TRACO_RECORTE'} desativado={!temPeca} aoClicar={() => props.aoFerramenta('TRACO_RECORTE')} />
       </>}
       <Botao rotulo="Texto" icone="T" ativo={ferramenta === 'TEXTO'} aoClicar={() => props.aoFerramenta('TEXTO')} />
+      <Botao rotulo="Cota livre" icone="↔" ativo={ferramenta === 'COTA'} desativado={!temPeca} aoClicar={() => props.aoFerramenta('COTA')} />
     </div>
     {modo === 'MANUAL' ? <div className="tec-grupo" aria-label="Formas prontas">
       <Botao rotulo="Reta" icone="▭" aoClicar={() => props.aoAdicionarForma('RECTANGLE')} />

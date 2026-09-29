@@ -36,6 +36,15 @@ describe('PDF técnico reproduz o que está no desenho', () => {
     expect(texts.some(text => typeof text === 'string' && text.includes('Saia') && text.includes('60cm'))).toBe(true);
   });
 
+  it('imprime a medida de cada lado e o texto combinado no lugar do número', async () => {
+    const document = documentoComComponentesECota();
+    document.pieces[0] = { ...document.pieces[0], dimensionLabels: { [document.pieces[0].contour[1].id]: 'medir no local' } };
+    const { texts } = await render(document, 'desenho-tecnico-medidas-dos-lados');
+    expect(texts).toContain('medir no local');
+    expect(texts.filter(text => text === '2m44').length).toBeGreaterThanOrEqual(2);
+    expect(texts).toContain('65cm');
+  });
+
   it('não gera páginas nem quebra quando não há peças', async () => {
     const { texts } = await render(emptyTechnicalDocument());
     expect(texts).toContain('Nenhuma peça foi adicionada a esta revisão.');

@@ -4,7 +4,7 @@ import { anguloLegivel, pontosSvg, Texto } from './svg';
 import { ROTULO_PERFIL, type Selecao } from './tipos';
 import { urlImagem } from './operacoes';
 
-type Props = { peca: Piece; recursos: Feature[]; escala: number; selecao: Selecao; destacarLados: boolean };
+type Props = { peca: Piece; recursos: Feature[]; escala: number; selecao: Selecao; destacarLados: boolean; mostrarVertices?: boolean; verticeMarcado?: string };
 const pontosDoLado = (peca: Piece, ladoId: string, inicio = 0, extensao = edgeLength(peca, ladoId)) =>
   Array.from({ length: 17 }, (_, i) => edgePoint(peca, ladoId, inicio + extensao * i / 16));
 
@@ -14,7 +14,7 @@ const pontosDoLado = (peca: Piece, ladoId: string, inicio = 0, extensao = edgeLe
  * recortes e furos, áreas de toque dos lados e alças dos vértices.
  * Os atributos data-alvo dizem ao canvas o que foi tocado.
  */
-export function PecaSvg({ peca, recursos, escala, selecao, destacarLados }: Props) {
+export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostrarVertices = false, verticeMarcado }: Props) {
   const px = (valor: number) => valor / escala;
   const selecionada = (selecao?.tipo === 'peca' && selecao.id === peca.id) || (selecao?.tipo === 'vertice' && selecao.pecaId === peca.id)
     || (selecao?.tipo === 'recurso' && recursos.some((recurso) => recurso.id === selecao.id));
@@ -84,7 +84,7 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados }: Prop
     {/* Área de toque de cada lado: tocar abre a medida; com rodabanca/saia/acabamento escolhido, coloca nele. */}
     {peca.contour.map((vertice) => <polyline key={`lado-${vertice.id}`} points={pontosSvg(pontosDoLado(peca, vertice.id))} className={`tec-lado${destacarLados ? ' destacado' : ''}`}
       strokeWidth={px(22)} fill="none" data-alvo="lado" data-peca={peca.id} data-lado={vertice.id} />)}
-    {selecionada && !peca.locked && peca.contour.map((vertice) => <circle key={vertice.id} cx={vertice.x} cy={vertice.y} r={px(selecao?.tipo === 'vertice' && selecao.verticeId === vertice.id ? alca + 3 : alca)}
-      className={`tec-vertice${selecao?.tipo === 'vertice' && selecao.verticeId === vertice.id ? ' selecionado' : ''}`} strokeWidth={px(2)} data-alvo="vertice" data-peca={peca.id} data-vertice={vertice.id} />)}
+    {((selecionada && !peca.locked) || mostrarVertices) && peca.contour.map((vertice) => { const marcado = (selecao?.tipo === 'vertice' && selecao.verticeId === vertice.id) || verticeMarcado === vertice.id; return <circle key={vertice.id} cx={vertice.x} cy={vertice.y} r={px(marcado ? alca + 3 : alca)}
+      className={`tec-vertice${marcado ? ' selecionado' : ''}`} strokeWidth={px(2)} data-alvo="vertice" data-peca={peca.id} data-vertice={vertice.id} />; })}
   </g>;
 }

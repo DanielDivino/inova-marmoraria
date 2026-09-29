@@ -1,8 +1,9 @@
 'use client';
 
-import { deletePiece, duplicatePiece, updatePiece, type Diagnostic, type Feature, type TechnicalDocument } from '@inova/domain/technical';
+import { deletePiece, duplicatePiece, formatMeasure, updatePiece, type Diagnostic, type Feature, type TechnicalDocument } from '@inova/domain/technical';
 import { criarId } from '../../utilitarios/id';
 import { CampoMedida } from './CampoMedida';
+import { pontoDaCota } from './CotasLivres';
 import { PainelPeca } from './PainelPeca';
 import { PainelRecurso } from './PainelRecurso';
 import { FONTE_TEXTO_PADRAO_MM, type MaterialVisual, type Selecao } from './tipos';
@@ -48,6 +49,17 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
     {!peca && !recurso && !vertice && !texto && <section className="tec-painel-secao">
       <p className="tec-dica">Toque numa peça, num lado, numa cuba ou num texto para editar. Toque na medida de um lado para digitar outra.</p>
       {documento.pieces.length > 0 && <div className="tec-lista-pecas">{documento.pieces.map((entrada) => <button type="button" key={entrada.id} className="botao-contorno" onClick={() => aoSelecionar({ tipo: 'peca', id: entrada.id })}>{entrada.locked ? '🔒 ' : ''}{entrada.name}</button>)}</div>}
+    </section>}
+    {documento.dimensions.length > 0 && <section className="tec-painel-secao" aria-label="Cotas livres">
+      <h3>Cotas livres</h3>
+      {documento.dimensions.map((cota, indice) => {
+        const a = pontoDaCota(documento, cota.from), b = pontoDaCota(documento, cota.to);
+        return <div key={cota.id} className="tec-cota-livre">
+          <span>Cota {indice + 1} · <strong>{a && b ? formatMeasure(Math.hypot(b.x - a.x, b.y - a.y)) : 'ponto removido'}</strong></span>
+          <CampoMedida rotulo="Afastamento" minimo={-100000} valorMm={cota.offsetMm} onChange={(offsetMm) => aoMudar({ ...documento, dimensions: documento.dimensions.map((entrada) => entrada.id === cota.id ? { ...entrada, offsetMm } : entrada) })} />
+          <button type="button" className="botao-contorno tec-perigo" aria-label={`Excluir cota ${indice + 1}`} onClick={() => aoMudar({ ...documento, dimensions: documento.dimensions.filter((entrada) => entrada.id !== cota.id) })}>Excluir</button>
+        </div>;
+      })}
     </section>}
     <section className="tec-conferencia" aria-label="Conferência">
       <h3>Conferência</h3>

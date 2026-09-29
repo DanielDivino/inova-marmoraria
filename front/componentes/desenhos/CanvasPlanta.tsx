@@ -3,6 +3,7 @@
 import { useEffect, useRef, type PointerEvent as EventoPonteiro } from 'react';
 import { snapPoint, updatePiece, type Point, type TechnicalDocument } from '@inova/domain/technical';
 import { Icone } from '../filtros/Filtros';
+import { CotasLivres } from './CotasLivres';
 import { PecaSvg } from './PecaSvg';
 import { Texto, pontosSvg } from './svg';
 import { arredondar, limitesDoDesenho, mundoParaLocal } from './operacoes';
@@ -16,6 +17,9 @@ type Props = {
   aoSelecionar: (selecao: Selecao) => void;
   aoTocarLado: (pecaId: string, ladoId: string) => void;
   aoCriarTexto: (ponto: Point) => void;
+  /** Ferramenta "Cota livre": o canvas avisa cada vértice tocado; `cotaInicio` é o primeiro já escolhido. */
+  aoTocarVertice: (pecaId: string, verticeId: string) => void;
+  cotaInicio: { pieceId: string; vertexId: string } | null;
   aoTraco: (pontos: Point[], ferramenta: 'TRACO_PECA' | 'TRACO_RECORTE') => void;
   aoCancelarTraco?: () => void;
   substituir: (documento: TechnicalDocument) => void;
@@ -84,6 +88,7 @@ export function CanvasPlanta(props: Props) {
     const dado = (nome: string) => alvo?.getAttribute(`data-${nome}`) ?? '';
     const tipo = alvo?.getAttribute('data-alvo');
     const peca = documento.pieces.find((entrada) => entrada.id === (dado('peca') || dado('id')));
+    if (tipo === 'vertice' && peca && ferramenta === 'COTA') { gesto.current = { ...base, tipo: 'toque', aoTocar: () => props.aoTocarVertice(peca.id, dado('vertice')) }; return; }
     if (tipo === 'vertice' && peca) { gesto.current = { ...base, tipo: 'vertice', pecaId: peca.id, verticeId: dado('vertice') }; return; }
     if (tipo === 'cota' && peca) { gesto.current = { ...base, tipo: 'toque', aoTocar: () => props.aoTocarLado(peca.id, dado('lado')) }; return; }
     if (tipo === 'recurso') {
@@ -195,7 +200,9 @@ export function CanvasPlanta(props: Props) {
       <g transform="scale(1 -1)">
         {gradeFina && <rect x={visivel.x} y={visivel.y} width={visivel.largura} height={visivel.altura} fill="url(#tec-grade-fina)" pointerEvents="none" />}
         <rect x={visivel.x} y={visivel.y} width={visivel.largura} height={visivel.altura} fill="url(#tec-grade)" pointerEvents="none" />
-        {documento.pieces.map((peca) => <PecaSvg key={peca.id} peca={peca} recursos={documento.features.filter((recurso) => recurso.pieceId === peca.id)} escala={camera.escala} selecao={selecao} destacarLados={!!pendenteBorda} />)}
+        {documento.pieces.map((peca) => <PecaSvg key={peca.id} peca={peca} recursos={documento.features.filter((recurso) => recurso.pieceId === peca.id)} escala={camera.escala} selecao={selecao} destacarLados={!!pendenteBorda}
+          mostrarVertices={ferramenta === 'COTA'} verticeMarcado={props.cotaInicio?.pieceId === peca.id ? props.cotaInicio.vertexId : undefined} />)}
+        <CotasLivres documento={documento} escala={camera.escala} />
         {documento.annotations.map((texto) => <Texto key={texto.id} x={texto.x} y={texto.y} tamanho={texto.fontSizeMm ?? FONTE_TEXTO_PADRAO_MM} data-alvo="texto" data-id={texto.id}
           className={`tec-texto${selecao?.tipo === 'texto' && selecao.id === texto.id ? ' selecionado' : ''}`}>{texto.text}</Texto>)}
         {tracoPendente && <g className="tec-traco-organizado" pointerEvents="none">
