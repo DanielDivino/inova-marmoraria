@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type PointerEvent as EventoPonteiro } from 'react';
-import { ajustarRecursosDeBorda, contornoValido, cotasDaPeca, posicaoNoBalcao, snapPoint, updatePiece, type Piece, type Point, type TechnicalDocument, type Vertex } from '@inova/domain/technical';
+import { ajustarRecursosDeBorda, centroDaPecaNoMundo, contornoValido, cotasDaPeca, girarPeca, posicaoNoBalcao, rotate, snapPoint, updatePiece, type Feature, type Piece, type Point, type TechnicalDocument, type Vertex } from '@inova/domain/technical';
 import { Icone } from '../filtros/Filtros';
 import { PreviaArea, type MarcacaoArea } from './AreaSecaMolhada';
 import { CotasLivres } from './CotasLivres';
@@ -41,8 +41,22 @@ type Gesto =
   | (Base & { tipo: 'toque'; aoTocar: () => void })
   | (Base & { tipo: 'traco'; pontos: Point[]; ferramenta: 'TRACO_PECA' | 'TRACO_RECORTE' })
   | (Base & { tipo: 'area' })
+  | (Base & { tipo: 'girar'; id: string; centro: Point; anguloInicial: number; giroInicial: number; giro: number })
+  | (Base & { tipo: 'borda-recurso'; id: string; lado: LadoRecurso; inicioLocal: Point; original: Pick<Feature, 'x' | 'y' | 'widthMm' | 'lengthMm'> })
   | { tipo: 'pinca'; distancia: number; centro: Point; camera: { x: number; y: number; escala: number } };
 const LIMIAR_ARRASTE_PX = 5;
+const grausDoPonto = (p: Point, centro: Point) => Math.atan2(p.y - centro.y, p.x - centro.x) * 180 / Math.PI;
+/** Giro livre, no grau inteiro; perto (3°) de 0°, 45°, 90°… encaixa. */
+function giroComEncaixe(graus: number) {
+  const giro = ((Math.round(graus) % 360) + 360) % 360, encaixe = Math.round(giro / 45) * 45;
+  return Math.abs(giro - encaixe) <= 3 ? encaixe % 360 : giro;
+}
+/** Borda da cuba/recorte puxada: direita, esquerda, cima e baixo, no giro do próprio recurso. */
+export type LadoRecurso = 'D' | 'E' | 'C' | 'B';
+/** Menor largura/comprimento de cuba ou recorte ao puxar a borda (5 cm). */
+const MENOR_RECURSO_MM = 50;
+/** Ponto da peça no eixo do recurso (origem no centro original, sem o giro dele). */
+const noEixoDoRecurso = (local: Point, centro: Point, giro: number) => rotate({ x: local.x - centro.x, y: local.y - centro.y }, -giro);
 
 /**
  * Planta 2D: SVG em mm (y para cima), com grade, peças, cotas e textos.
@@ -96,6 +110,8 @@ export function CanvasPlanta(props: Props) {
     if (evento.button !== 0 && evento.pointerType === 'mouse') return;
     if ((evento.target as Element).closest('.tec-zoom')) return;
     evento.currentTarget.setPointerCapture(evento.pointerId);
+    // Primeiro dedo de um toque novo (ou o mouse): dedo de um gesto antigo que não soltou aqui não pode virar pinça.
+    if (evento.isPrimary && ponteiros.current.size) { ponteiros.current.clear(); gesto.current = null; }
     ponteiros.current.set(evento.pointerId, { x: evento.clientX, y: evento.clientY });
     if (ponteiros.current.size === 2) { iniciarPinca(); return; }
     if (ponteiros.current.size > 2) return;
@@ -120,10 +136,26 @@ export function CanvasPlanta(props: Props) {
         return;
       }
     }
+    // Bolinha de girar: o ângulo do ponteiro em volta do centro da peça vira o giro dela.
+    if (tipo === 'girar' && peca && !peca.locked) {
+      const centro = centroDaPecaNoMundo(peca);
+      gesto.current = { ...base, tipo: 'girar', id: peca.id, centro, anguloInicial: grausDoPonto(mundo, centro), giroInicial: peca.rotationDeg, giro: peca.rotationDeg };
+      return;
+    }
     if (tipo === 'vertice' && peca && ferramenta === 'COTA') { gesto.current = { ...base, tipo: 'toque', aoTocar: () => props.aoTocarVertice(peca.id, dado('vertice')) }; return; }
     if (tipo === 'vertice' && peca) { gesto.current = { ...base, tipo: 'vertice', pecaId: peca.id, verticeId: dado('vertice') }; return; }
     if (tipo === 'cota' && peca) { gesto.current = { ...base, tipo: 'toque', aoTocar: () => props.aoTocarLado(peca.id, dado('lado')) }; return; }
-    if (tipo === 'recurso') {
+    // Borda da cuba/recorte selecionado: puxar muda o tamanho daquele lado (a borda oposta fica parada).
+    if (tipo === 'borda-recurso' && ferramenta === 'SELECIONAR') {
+      const recurso = documento.features.find((entrada) => entrada.id === dado('id'));
+      const pai = recurso && documento.pieces.find((entrada) => entrada.id === recurso.pieceId);
+      if (recurso && pai && !pai.locked) {
+        gesto.current = { ...base, tipo: 'borda-recurso', id: recurso.id, lado: dado('lado') as LadoRecurso,
+          inicioLocal: noEixoDoRecurso(mundoParaLocal(mundo, pai), recurso, recurso.rotationDeg), original: { x: recurso.x, y: recurso.y, widthMm: recurso.widthMm, lengthMm: recurso.lengthMm } };
+        return;
+      }
+    }
+    if (tipo === 'recurso' || tipo === 'borda-recurso') {
       const recurso = documento.features.find((entrada) => entrada.id === dado('id'));
       const pai = recurso && documento.pieces.find((entrada) => entrada.id === recurso.pieceId);
       if (recurso && pai) {
@@ -233,6 +265,28 @@ export function CanvasPlanta(props: Props) {
       return;
     }
     if (atual.tipo === 'area') return;
+    if (atual.tipo === 'girar') {
+      // Ângulo cresce no sentido anti-horário; o giro da peça é horário.
+      atual.giro = giroComEncaixe(atual.giroInicial - (grausDoPonto(mundo, atual.centro) - atual.anguloInicial));
+      // O ângulo aparece ao lado da bolinha: uma mensagem agora empurraria o desenho para baixo do dedo.
+      props.substituir(girarPeca(atual.antes, atual.id, atual.giro));
+      return;
+    }
+    if (atual.tipo === 'borda-recurso') {
+      const recurso = documento.features.find((entrada) => entrada.id === atual.id);
+      const pai = recurso && documento.pieces.find((entrada) => entrada.id === recurso.pieceId);
+      if (!recurso || !pai) return;
+      const agora = noEixoDoRecurso(mundoParaLocal(mundo, pai), atual.original, recurso.rotationDeg);
+      const deLado = atual.lado === 'D' || atual.lado === 'E', sinal = atual.lado === 'D' || atual.lado === 'C' ? 1 : -1;
+      const antes = deLado ? atual.original.widthMm : atual.original.lengthMm;
+      const tamanho = Math.max(MENOR_RECURSO_MM, arredondar(antes + (deLado ? agora.x - atual.inicioLocal.x : agora.y - atual.inicioLocal.y) * sinal));
+      // O centro anda metade do que a borda andou, no eixo do recurso: a borda oposta não sai do lugar.
+      const centro = rotate(deLado ? { x: (tamanho - antes) / 2 * sinal, y: 0 } : { x: 0, y: (tamanho - antes) / 2 * sinal }, recurso.rotationDeg);
+      const medida = deLado ? { widthMm: tamanho } : { lengthMm: tamanho };
+      props.substituir({ ...documento, features: documento.features.map((entrada) => entrada.id === recurso.id
+        ? { ...entrada, ...medida, x: Math.round((atual.original.x + centro.x) * 10) / 10, y: Math.round((atual.original.y + centro.y) * 10) / 10 } : entrada) });
+      return;
+    }
     props.substituir({ ...documento, annotations: documento.annotations.map((texto) => texto.id === atual.id ? { ...texto, x: arredondar(mundo.x - atual.desvio.x), y: arredondar(mundo.y - atual.desvio.y) } : texto) });
   }
 
@@ -256,6 +310,7 @@ export function CanvasPlanta(props: Props) {
       if (!cancelado && atual.pontos.length > 2) props.aoTraco(atual.pontos, atual.ferramenta);
       return;
     }
+    if (atual.moveu && atual.tipo === 'girar') props.aoAviso?.(`Peça girada para ${atual.giro}°. Ctrl+Z desfaz.`);
     if (atual.moveu && atual.tipo === 'lado') {
       // Saias, rodabancas e acabamentos continuam dentro dos lados que mudaram.
       const peca = documento.pieces.find((entrada) => entrada.id === atual.pecaId);

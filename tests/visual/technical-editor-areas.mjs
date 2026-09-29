@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
-import { emptyTechnicalDocument, makePiece, technicalDocumentSchema, validateTechnicalDocument } from '../../packages/domain/dist/tecnico/index.js';
+import { centroDaPecaNoMundo, emptyTechnicalDocument, makePiece, technicalDocumentSchema, validateTechnicalDocument } from '../../packages/domain/dist/tecnico/index.js';
 
 // API inteiramente simulada. Área seca/molhada marcada no desenho: clicar no começo,
 // levar o mouse (a faixa e o tamanho acompanham) e clicar no fim; ou arrastar e
@@ -95,10 +95,93 @@ try {
   await salvar();
   assert.deepEqual(zonas(), [{ kind: 'DRY', startMm: molhada.startMm, endMm: 2440 }]);
 
-  // 5) Delete apaga a peça selecionada; Ctrl+Z traz de volta.
+  // 5) Cuba: largura e comprimento lado a lado no painel; puxar a borda direita alarga só aquele lado.
+  await page.getByRole('button', { name: 'Cuba', exact: true }).click();
+  const painel = page.locator('.tec-painel');
+  const [largura, comprimento] = [painel.getByLabel('Largura', { exact: true }), painel.getByLabel('Comprimento', { exact: true })];
+  const [caixaLargura, caixaComprimento] = [await largura.boundingBox(), await comprimento.boundingBox()];
+  assert(Math.abs(caixaLargura.y - caixaComprimento.y) < 2 && caixaComprimento.x > caixaLargura.x, 'largura e comprimento lado a lado');
+  await salvar();
+  const cubaAntes = savedDocument.features[0];
+  const puxarBorda = async (lado, dx, dy) => {
+    const alca = await page.locator(`.tec-alca-recurso[data-lado="${lado}"]`).boundingBox();
+    const [x, y] = [alca.x + alca.width / 2, alca.y + alca.height / 2];
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 8 }); await page.mouse.up();
+  };
+  await puxarBorda('D', 60, 0);
+  await shot('05-cuba-alargada');
+  await salvar();
+  const cubaDepois = savedDocument.features[0];
+  assert(cubaDepois.widthMm > cubaAntes.widthMm && cubaDepois.widthMm % 10 === 0, 'cuba mais larga, no centímetro: ' + cubaDepois.widthMm);
+  assert.equal(cubaDepois.lengthMm, cubaAntes.lengthMm, 'comprimento não mudou');
+  assert.equal(cubaDepois.x - cubaDepois.widthMm / 2, cubaAntes.x - cubaAntes.widthMm / 2, 'a borda esquerda ficou parada');
+  assert.equal(await largura.inputValue(), (cubaDepois.widthMm / 1000).toFixed(2).replace('.', ','), 'o painel acompanha');
+  // Puxar a borda de cima para baixo encurta o comprimento; a de baixo fica parada.
+  await puxarBorda('C', 0, 25);
+  await salvar();
+  const cubaFinal = savedDocument.features[0];
+  assert(cubaFinal.lengthMm < cubaDepois.lengthMm, 'cuba mais curta: ' + cubaFinal.lengthMm);
+  assert.equal(cubaFinal.y - cubaFinal.lengthMm / 2, cubaDepois.y - cubaDepois.lengthMm / 2, 'a borda de baixo ficou parada');
+
+  // 6) Bolinha de girar: segurar e arrastar em arco gira a peça em volta do centro; o nome continua de pé.
+  await page.mouse.click(pedra.x + pedra.width * .1, pedra.y + pedra.height * .8);
+  const painelPeca = page.locator('section.tec-painel-secao[aria-label^="Peça"]');
+  const [campoNome, campoPedra] = [await painelPeca.getByLabel('Nome', { exact: true }).boundingBox(), await painelPeca.getByLabel('Pedra (visual e estimativa)').boundingBox()];
+  assert(campoPedra.y > campoNome.y && campoPedra.y - campoNome.y < 90, 'pedra logo abaixo do nome');
+  const centroAntes = centroDaPecaNoMundo(savedDocument.pieces[0]);
+  const bolinha = await page.locator('.tec-girar-toque').boundingBox();
+  const [cx, cy] = [pedra.x + pedra.width / 2, pedra.y + pedra.height / 2];
+  const raio = cy - (bolinha.y + bolinha.height / 2);
+  await page.mouse.move(cx, cy - raio); await page.mouse.down();
+  for (let graus = 80; graus >= -90; graus -= 10) await page.mouse.move(cx + raio * Math.cos(graus * Math.PI / 180), cy - raio * Math.sin(graus * Math.PI / 180));
+  assert.equal(await page.locator('.tec-girar-graus').textContent(), '180°', 'ângulo ao lado da bolinha enquanto gira');
+  await page.mouse.up();
+  await page.getByText('Peça girada para 180°. Ctrl+Z desfaz.').waitFor();
+  await shot('06-girada');
+  await salvar();
+  assert.equal(savedDocument.pieces[0].rotationDeg, 180);
+  const centroDepois = centroDaPecaNoMundo(savedDocument.pieces[0]);
+  assert(Math.hypot(centroDepois.x - centroAntes.x, centroDepois.y - centroAntes.y) < 1, 'girou em volta do centro');
+  await page.mouse.click(pedra.x + pedra.width / 2, pedra.y - 160); // desmarca: com a cuba no meio, o nome só aparece sem seleção
+  // Nome e cuba na horizontal para quem olha: sem giro nem espelho na tela (a e d positivos, b e c zero).
+  const naHorizontal = async (seletor) => {
+    const [a, b, c, d] = await page.locator(seletor).first().evaluate((texto) => { const m = texto.getScreenCTM(); return [m.a, m.b, m.c, m.d]; });
+    return a > 0 && d > 0 && Math.abs(b) < 1e-3 && Math.abs(c) < 1e-3;
+  };
+  assert(await naHorizontal('.tec-peca-nome'), 'nome na horizontal com a peça a 180°');
+  // A 45° (e a 90°) o nome e a cuba continuam na horizontal.
+  const quadro = await page.locator('.tec-canvas').boundingBox();
+  const desmarcar = () => page.mouse.click(quadro.x + 24, quadro.y + 24); // canto do quadro, sempre vazio
+  const selecionarPelaLista = async () => { await desmarcar(); await page.locator('.tec-lista-pecas').getByRole('button', { name: 'Balcão' }).click(); };
+  for (const graus of ['45', '90']) {
+    await selecionarPelaLista();
+    await painelPeca.getByLabel('Giro (graus)').fill(graus);
+    await desmarcar();
+    assert(await naHorizontal('.tec-peca-nome'), `nome na horizontal a ${graus}°`);
+    assert(await naHorizontal('.tec-recurso-rotulo'), `nome da cuba na horizontal a ${graus}°`);
+  }
+  await shot('06b-girada-90');
+  // Volta a 180° para os passos seguintes (a peça ocupa o mesmo lugar na tela).
+  await selecionarPelaLista();
+  await painelPeca.getByLabel('Giro (graus)').fill('180');
+  await desmarcar();
+
+  // 7) Nome da peça: apagar até a última letra deixa o campo vazio (não volta o nome) e salva sem nome.
+  await page.mouse.click(pedra.x + pedra.width * .1, pedra.y + pedra.height * .8);
+  const nome = page.locator('section.tec-painel-secao[aria-label^="Peça"]').getByLabel('Nome', { exact: true });
+  await nome.click();
+  await nome.press('End');
+  for (let i = 0; i < 'Balcão'.length; i++) await nome.press('Backspace');
+  assert.equal(await nome.inputValue(), '', 'campo do nome fica vazio');
+  await salvar();
+  assert.equal(savedDocument.pieces[0].name, '', 'salva sem nome');
+  assert.equal(await page.locator('.tec-peca-nome').count(), 0, 'peça sem nome fica sem rótulo no desenho');
+
+  // 8) Delete apaga a peça selecionada (com a cuba); Ctrl+Z traz de volta.
   await page.mouse.click(pedra.x + pedra.width * .1, pedra.y + pedra.height * .8);
   await page.keyboard.press('Delete');
-  await page.getByText('Balcão excluída. Ctrl+Z desfaz.').waitFor();
+  await page.getByText('Peça 1 excluída. Ctrl+Z desfaz.').waitFor();
   assert.equal(await page.locator('.tec-pedra').count(), 0, 'peça apagada com Delete');
   await page.keyboard.press('Control+z');
   await page.locator('.tec-pedra').first().waitFor();
@@ -107,7 +190,7 @@ try {
   await salvar();
   assert.equal(savedDocument.pieces.length, 0, 'Delete de novo apaga e salva');
   assert.deepEqual(errors, []);
-  console.log('OK: área seca/molhada marcada clicando e puxando (tamanho na hora) ou arrastando, escolha de seca ou molhada, Esc cancela, troca no painel e Delete apaga a peça (Ctrl+Z desfaz).');
+  console.log('OK: área seca/molhada marcada clicando e puxando (tamanho na hora) ou arrastando, escolha de seca ou molhada, Esc cancela, troca no painel; cuba redimensionada pelas bordas (largura e comprimento lado a lado no painel); pedra logo abaixo do nome; peça girada pela bolinha em volta do centro com o nome de pé; nome da peça pode ficar vazio; Delete apaga a peça (Ctrl+Z desfaz).');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

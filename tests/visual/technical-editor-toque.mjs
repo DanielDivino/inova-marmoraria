@@ -112,7 +112,28 @@ try {
   assert.equal(Math.max(...lados.map(([medida]) => medida)), 2400, 'escala pelo lado de 2m40');
   assert.deepEqual(savedDocument.features.map(recurso => [recurso.type, recurso.pieceId]), [['SINK', peca.id]]);
   assert.equal(validateTechnicalDocument(savedDocument).filter(d => d.severity !== 'WARNING').length, 0);
-  console.log('OK: desenho com o dedo no celular — traço organizado em esquadro, escala pela medida, dois dedos cancelam o traço, pinça aproxima e cuba desenhada dentro da peça; contorno salvo conferido.');
+
+  // Girar com o dedo: tocar na peça, segurar a bolinha de cima e arrastar em arco até a direita (90°).
+  await page.getByRole('button', { name: 'Selecionar', exact: true }).tap();
+  await page.waitForTimeout(300);
+  const pecaNaTela = await page.locator('.tec-pedra').first().boundingBox();
+  const [tx, ty] = [pecaNaTela.x + pecaNaTela.width * .12, pecaNaTela.y + pecaNaTela.height * .5];
+  await page.touchscreen.tap(tx, ty);
+  await page.locator('.tec-girar-toque').waitFor();
+  await page.waitForTimeout(300);
+  const [bolinha, pecaSelecionada] = [await page.locator('.tec-girar-toque').boundingBox(), await page.locator('.tec-pedra').first().boundingBox()];
+  const [gx, gy] = [pecaSelecionada.x + pecaSelecionada.width / 2, pecaSelecionada.y + pecaSelecionada.height / 2];
+  const raio = gy - (bolinha.y + bolinha.height / 2);
+  const topoAntes = (await page.locator('.tec-canvas').boundingBox()).y;
+  await toque('touchStart', [[gx, gy - raio]]);
+  for (let graus = 80; graus >= 0; graus -= 10) await toque('touchMove', [[gx + raio * Math.cos(graus * Math.PI / 180), gy - raio * Math.sin(graus * Math.PI / 180)]]);
+  assert.equal((await page.locator('.tec-canvas').boundingBox()).y, topoAntes, 'o desenho não sai do lugar sob o dedo enquanto gira');
+  await toque('touchEnd', []);
+  await page.getByText('Peça girada para 90°. Ctrl+Z desfaz.').waitFor();
+  await page.waitForTimeout(2600); // salvamento automático
+  await shot('03-girada-com-o-dedo');
+  assert.equal(savedDocument.pieces[0].rotationDeg, 90, 'girada com o dedo');
+  console.log('OK: desenho com o dedo no celular — traço organizado em esquadro, escala pela medida, dois dedos cancelam o traço, pinça aproxima, cuba desenhada dentro da peça e peça girada pela bolinha com o dedo; contorno salvo conferido.');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

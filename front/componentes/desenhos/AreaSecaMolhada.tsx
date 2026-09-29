@@ -27,13 +27,13 @@ export function PreviaArea({ peca, marcacao, escala }: { peca: Piece; marcacao: 
 }
 
 /** Depois do segundo clique: a área é seca ou molhada? */
-export function JanelaArea({ peca, marcacao, aoEscolher, aoCancelar }: {
-  peca: Piece | undefined; marcacao: MarcacaoArea | null; aoEscolher: (tipo: ZonaSecaMolhada['kind']) => void; aoCancelar: () => void;
+export function JanelaArea({ peca, nome, marcacao, aoEscolher, aoCancelar }: {
+  peca: Piece | undefined; nome: string; marcacao: MarcacaoArea | null; aoEscolher: (tipo: ZonaSecaMolhada['kind']) => void; aoCancelar: () => void;
 }) {
   if (!peca || !marcacao) return null;
   const inicio = Math.min(marcacao.inicio, marcacao.fim), fim = Math.max(marcacao.inicio, marcacao.fim);
   return <section className="tec-folha-traco" role="dialog" aria-label="Tipo da área">
-    <strong>Área de {formatMeasure(fim - inicio)} em {peca.name}</strong>
+    <strong>Área de {formatMeasure(fim - inicio)} em {nome}</strong>
     <p>De {formatMeasure(inicio)} a {formatMeasure(fim)} a partir da ponta esquerda. É área seca ou molhada?</p>
     <div className="tec-acoes">
       <button type="button" className="botao-destaque tec-botao-molhada" onClick={() => aoEscolher('WET')}>💧 Área molhada</button>

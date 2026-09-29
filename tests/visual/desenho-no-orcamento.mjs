@@ -103,6 +103,8 @@ try {
   await page.waitForFunction(() => /R\$/.test(document.querySelector('.tec-usar')?.textContent ?? ''));
   assert((await usar.innerText()).includes(reais(esperado.total)), `valor do desenho ${await usar.innerText()} × ${reais(esperado.total)}`);
   assert.equal(await tela.getByRole('button', { name: 'Enviar para conferência' }).count(), 0, 'vendedor não envia para conferência');
+  // A estimativa começa fechada, com o total na barra; aberta, mostra o M² fechado.
+  await tela.locator('.tec-lateral-estimativa .tec-so-desktop .tec-resumo-estimativa[aria-expanded="false"]').click();
   await tela.getByText(/M² fechado/).first().waitFor();
   await shot('02-desenho-no-orcamento');
 

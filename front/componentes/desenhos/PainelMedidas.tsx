@@ -1,6 +1,6 @@
 'use client';
 
-import { deletePiece, duplicatePiece, formatMeasure, updatePiece, type Diagnostic, type Feature, type TechnicalDocument } from '@inova/domain/technical';
+import { deletePiece, duplicatePiece, formatMeasure, nomeDaPeca, updatePiece, type Diagnostic, type Feature, type TechnicalDocument } from '@inova/domain/technical';
 import { criarId } from '../../utilitarios/id';
 import { CampoMedida } from './CampoMedida';
 import { pontoDaCota } from './CotasLivres';
@@ -28,8 +28,8 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
   return <div className="tec-painel">
     {peca && <PainelPeca key={peca.id} documento={documento} peca={peca} materiais={materiais} aoMudar={aoMudar} aoAbrirLado={(ladoId) => aoAbrirLado(peca.id, ladoId)} aoMarcarArea={aoMarcarArea}
       aoDuplicar={() => { const id = criarId(); aoMudar(duplicatePiece(documento, peca.id, id)); aoSelecionar({ tipo: 'peca', id }); }}
-      aoExcluir={() => { if (window.confirm(`Excluir ${peca.name}? Cubas, recortes e faixas dela também saem.`)) { aoMudar(deletePiece(documento, peca.id)); aoSelecionar(null); } }} />}
-    {recurso && paiDoRecurso && <PainelRecurso key={recurso.id} recurso={recurso} peca={paiDoRecurso} aoMudar={(patch) => mudarRecurso(recurso.id, patch)}
+      aoExcluir={() => { if (window.confirm(`Excluir ${nomeDaPeca(peca, documento.pieces)}? Cubas, recortes e faixas dela também saem.`)) { aoMudar(deletePiece(documento, peca.id)); aoSelecionar(null); } }} />}
+    {recurso && paiDoRecurso && <PainelRecurso key={recurso.id} recurso={recurso} peca={paiDoRecurso} nomePeca={nomeDaPeca(paiDoRecurso, documento.pieces)} aoMudar={(patch) => mudarRecurso(recurso.id, patch)}
       aoExcluir={() => { aoMudar({ ...documento, features: documento.features.filter((entrada) => entrada.id !== recurso.id) }); aoSelecionar(null); }} />}
     {vertice && pecaDoVertice && <section className="tec-painel-secao" aria-label="Vértice">
       <h3>Vértice {pecaDoVertice.contour.indexOf(vertice) + 1} · {pecaDoVertice.name}</h3>
@@ -50,7 +50,7 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
     </section>}
     {!peca && !recurso && !vertice && !texto && <section className="tec-painel-secao">
       <p className="tec-dica">Arraste um lado para esticar ou encolher a peça (os lados vizinhos acompanham). Toque num lado ou na medida para digitar outra; toque numa cuba ou num texto para editar. Com uma peça selecionada, Delete apaga (Ctrl+Z desfaz).</p>
-      {documento.pieces.length > 0 && <div className="tec-lista-pecas">{documento.pieces.map((entrada) => <button type="button" key={entrada.id} className="botao-contorno" onClick={() => aoSelecionar({ tipo: 'peca', id: entrada.id })}>{entrada.locked ? '🔒 ' : ''}{entrada.name}</button>)}</div>}
+      {documento.pieces.length > 0 && <div className="tec-lista-pecas">{documento.pieces.map((entrada) => <button type="button" key={entrada.id} className="botao-contorno" onClick={() => aoSelecionar({ tipo: 'peca', id: entrada.id })}>{entrada.locked ? '🔒 ' : ''}{nomeDaPeca(entrada, documento.pieces)}</button>)}</div>}
     </section>}
     {documento.dimensions.length > 0 && <section className="tec-painel-secao" aria-label="Cotas livres">
       <h3>Cotas livres</h3>
