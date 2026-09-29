@@ -1,6 +1,6 @@
 'use client';
 
-import { areasDaPeca, bounds, bracosU, contornoDosParametros, edgeLength, formatMeasure, NOME_AREA, problemaParametros, tirarArea, trocarTipoArea, updatePiece, type Piece, type PieceParameters, type PieceShape, type TechnicalDocument } from '@inova/domain/technical';
+import { areasDaPeca, bounds, girarPeca, nomeDaPeca, bracosU, contornoDosParametros, edgeLength, formatMeasure, NOME_AREA, problemaParametros, tirarArea, trocarTipoArea, updatePiece, type Piece, type PieceParameters, type PieceShape, type TechnicalDocument } from '@inova/domain/technical';
 import { useState } from 'react';
 import { CampoMedida } from './CampoMedida';
 import type { MaterialVisual } from './tipos';
@@ -38,9 +38,15 @@ export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, a
   const areas = areasDaPeca(peca);
   const mudarAreas = (wetDryZones: Piece['wetDryZones']) => atualizar({ wetDryZones });
 
-  return <section className="tec-painel-secao" aria-label={`Peça ${peca.name}`}>
+  return <section className="tec-painel-secao" aria-label={`Peça ${nomeDaPeca(peca, documento.pieces)}`}>
     {peca.locked && <p className="tec-aviso">Peça travada: destrave para mudar medidas ou posição.</p>}
-    <label className="tec-campo">Nome<input value={peca.name} onChange={(evento) => atualizar({ name: evento.target.value || 'Peça' })} /></label>
+    <label className="tec-campo">Nome<input value={peca.name} placeholder={`Sem nome (aparece como ${nomeDaPeca({ ...peca, name: '' }, documento.pieces)})`} onChange={(evento) => atualizar({ name: evento.target.value })} /></label>
+    <label className="tec-campo">Pedra (visual e estimativa)
+      <select value={peca.material?.id ?? ''} onChange={(evento) => {
+        const material = materiais.find((entrada) => entrada.id === evento.target.value);
+        atualizar({ material: material ? { id: material.id, name: material.name, imageUrl: material.imageUrl ?? undefined, textureScaleMm: 600, veinRotationDeg: 0, roughness: .25 } : undefined });
+      }}><option value="">Sem pedra</option>{materiais.map((material) => <option key={material.id} value={material.id}>{material.name}</option>)}</select>
+    </label>
     <label className="tec-campo">Forma
       <select value={parametros?.shape ?? 'FREE'} onChange={(evento) => trocarForma(evento.target.value as PieceShape)}>
         {!parametros && <option value="FREE">Contorno livre (lados e vértices)</option>}
@@ -85,16 +91,11 @@ export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, a
       <CampoMedida rotulo="Posição X" minimo={-100000} valorMm={peca.x} onChange={(x) => atualizar({ x })} />
       <CampoMedida rotulo="Posição Y" minimo={-100000} valorMm={peca.y} onChange={(y) => atualizar({ y })} />
       <CampoMedida rotulo="Espessura" valorMm={peca.thicknessMm} onChange={(thicknessMm) => atualizar({ thicknessMm })} />
-      <label className="tec-campo">Giro (graus)<input type="number" inputMode="numeric" value={peca.rotationDeg} onChange={(evento) => atualizar({ rotationDeg: Number(evento.target.value) || 0 })} /></label>
+      <label className="tec-campo">Giro (graus)<input type="number" inputMode="numeric" value={peca.rotationDeg} onChange={(evento) => aoMudar(girarPeca(documento, peca.id, Number(evento.target.value) || 0))} /></label>
     </div>
-    <label className="tec-campo">Pedra (visual e estimativa)
-      <select value={peca.material?.id ?? ''} onChange={(evento) => {
-        const material = materiais.find((entrada) => entrada.id === evento.target.value);
-        atualizar({ material: material ? { id: material.id, name: material.name, imageUrl: material.imageUrl ?? undefined, textureScaleMm: 600, veinRotationDeg: 0, roughness: .25 } : undefined });
-      }}><option value="">Sem pedra</option>{materiais.map((material) => <option key={material.id} value={material.id}>{material.name}</option>)}</select>
-    </label>
+
     <div className="tec-acoes">
-      <button type="button" className="botao-contorno" onClick={() => atualizar({ rotationDeg: (peca.rotationDeg + 90) % 360 })}>↻ Girar 90°</button>
+      <button type="button" className="botao-contorno" onClick={() => aoMudar(girarPeca(documento, peca.id, peca.rotationDeg + 90))}>↻ Girar 90°</button>
       {/* updatePiece ignora peças travadas; o cadeado muda o documento direto. */}
       <button type="button" className="botao-contorno" onClick={() => aoMudar({ ...documento, pieces: documento.pieces.map((entrada) => entrada.id === peca.id ? { ...entrada, locked: !entrada.locked } : entrada) })}>{peca.locked ? '🔓 Destravar peça' : '🔒 Travar peça'}</button>
       <button type="button" className="botao-contorno" onClick={aoDuplicar}>⧉ Duplicar</button>

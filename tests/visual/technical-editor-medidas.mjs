@@ -82,9 +82,13 @@ try {
   await page.locator('.tec-painel').getByLabel('Pedra (visual e estimativa)').selectOption('mat-1');
   await botao('Cuba').click();
 
-  // Estimativa: U + reta de Granito a R$ 600/m² e o recorte de cuba (R$ 180).
-  await page.getByText('Estimativa com as regras do orçamento. Não muda o valor de nenhum orçamento.').waitFor();
+  // Estimativa: começa fechada (só o total na barra); um clique abre. U + reta de Granito a R$ 600/m² e o recorte de cuba (R$ 180).
   const estimativa = page.locator('.tec-lateral-estimativa');
+  const resumo = estimativa.locator('.tec-so-desktop .tec-resumo-estimativa');
+  assert.equal(await resumo.getAttribute('aria-expanded'), 'false', 'estimativa fechada por padrão');
+  assert.equal(await estimativa.locator('.tec-totais').count(), 0, 'sem o corpo da estimativa até abrir');
+  await resumo.click();
+  await page.getByText('Estimativa com as regras do orçamento. Não muda o valor de nenhum orçamento.').waitFor();
   const total = await estimativa.locator('.tec-totais div').first().locator('dd').innerText();
   await estimativa.getByLabel('Adicionar serviço do projeto').selectOption('s-montagem');
   const comMontagem = await estimativa.locator('.tec-totais div').first().locator('dd').innerText();

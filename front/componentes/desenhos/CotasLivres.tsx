@@ -20,7 +20,8 @@ export function CotasLivres({ documento, escala }: { documento: TechnicalDocumen
       const n = { x: -(b.y - a.y) / comprimento, y: (b.x - a.x) / comprimento };
       const a2 = { x: a.x + n.x * cota.offsetMm, y: a.y + n.y * cota.offsetMm }, b2 = { x: b.x + n.x * cota.offsetMm, y: b.y + n.y * cota.offsetMm };
       const angulo = anguloLegivel(Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI);
-      return <g key={cota.id} className="tec-cota">
+      // Cota livre só desenha: toque nela cai na peça de baixo.
+      return <g key={cota.id} className="tec-cota" pointerEvents="none">
         <line className="tec-chamada" x1={a.x} y1={a.y} x2={a2.x} y2={a2.y} strokeWidth={px(1)} />
         <line className="tec-chamada" x1={b.x} y1={b.y} x2={b2.x} y2={b2.y} strokeWidth={px(1)} />
         <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y} strokeWidth={px(1.2)} />

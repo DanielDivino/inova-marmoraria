@@ -4,7 +4,7 @@ import { calcularComponente, calcularSubtotalMaterial } from '../calculos/compon
 import { calcularAcabamentoBorda } from '../orcamentos/edge-finishes.js';
 import { areaCobradaPecaM2, estimarDesenho, type CatalogoEstimativa } from './estimate.js';
 import { contornoDosParametros, makePiece } from './geometry.js';
-import { emptyTechnicalDocument, featureSchema, type Feature, type Piece, type TechnicalDocument } from './schema.js';
+import { emptyTechnicalDocument, featureSchema, nomeDaPeca, pieceSchema, type Feature, type Piece, type TechnicalDocument } from './schema.js';
 
 const catalogo: CatalogoEstimativa = {
   materials: [{ id: 'granito', name: 'Granito Preto São Gabriel', billingUnit: 'SQUARE_METER', currentPrice: 600 }, { id: 'sem-preco', name: 'Quartzo novo', billingUnit: 'SQUARE_METER', currentPrice: null }],
@@ -74,6 +74,14 @@ describe('estimativa pelo desenho', () => {
     expect(estimativa.linhas.find((linha) => linha.id === 'chanfro')).toMatchObject({ subtotal: null, semPreco: 'Escolha o serviço de acabamento.' });
     expect(estimativa.itensSemPreco).toBe(3);
     expect(estimativa.total).toBe(720 + 120 + 48 + 140 + 180 + 30);
+  });
+
+  it('peça sem nome é aceita e aparece como "Peça N" no valor', () => {
+    const doc = cozinha();
+    doc.pieces[1] = pieceSchema.parse({ ...doc.pieces[1], name: '' });
+    expect(doc.pieces[1].name).toBe('');
+    expect(nomeDaPeca(doc.pieces[1], doc.pieces)).toBe('Peça 2');
+    expect(estimarDesenho(doc, catalogo).linhas.find((linha) => linha.id === 'b')).toMatchObject({ descricao: 'Peça 2 · Granito Preto São Gabriel' });
   });
 
   it('usa o serviço escolhido para o componente e cobra peça irregular pela área do contorno', () => {

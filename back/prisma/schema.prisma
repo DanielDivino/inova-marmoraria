@@ -128,6 +128,7 @@ model User {
   revisionDecisions    RevisionDecision[]  @relation("RevisionDecisionMaker")
   productionReleases   ProductionRelease[] @relation("ProductionReleaseMaker")
   projectDeliveries    ProjectDelivery[]   @relation("ProjectDeliveryCreator")
+  quoteEditorDraft     QuoteEditorDraft?
 }
 
 /** Funcionário da oficina — pessoa atribuída a uma OS para acompanhar o
@@ -224,6 +225,18 @@ model CompanySetting {
   /// M² fechado: o valor da pedra é calculado com as peças arredondadas para cima, de 5 em 5 cm.
   closedSquareMeter Boolean  @default(true)
   updatedAt         DateTime @updatedAt
+}
+
+/// Rascunho do Novo orçamento de cada usuário (clientes abertos e os seus projetos),
+/// guardado no servidor para o celular e o computador mostrarem o mesmo atendimento.
+/// "version" sobe a cada gravação: quem grava informa a versão que conhecia e, se outro
+/// aparelho gravou antes, recebe a versão atual para juntar as mudanças.
+model QuoteEditorDraft {
+  userId    String   @id
+  data      Json
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Service {

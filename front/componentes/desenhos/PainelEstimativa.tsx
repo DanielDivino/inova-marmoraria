@@ -1,6 +1,6 @@
 'use client';
 
-import { servicoSugerido, type CatalogoEstimativa, type EstimativaDesenho, type LinhaEstimativa, type OpcoesEstimativa, type TechnicalDocument } from '@inova/domain/technical';
+import { nomeDaPeca, servicoSugerido, type CatalogoEstimativa, type EstimativaDesenho, type LinhaEstimativa, type OpcoesEstimativa, type TechnicalDocument } from '@inova/domain/technical';
 import { formatarMoeda } from '../../utilitarios/formatadores';
 
 const numero = (valor: number, casas = 2) => valor.toLocaleString('pt-BR', { maximumFractionDigits: casas });
@@ -53,7 +53,7 @@ export function PainelEstimativa({ documento, catalogo, estimativa, opcoes, erro
   return <section className="tec-estimativa" aria-label="Estimativa de valor">
     <p className="tec-dica">{noOrcamento ? 'Valor com as regras do orçamento. Vai para o resumo quando você usar o desenho no orçamento.' : 'Estimativa com as regras do orçamento. Não muda o valor de nenhum orçamento.'}{m2Fechado ? ' Pedra com M² fechado (medidas arredondadas de 5 em 5 cm).' : ''}</p>
     <p className="tec-area-total">Área total <strong>{numero(estimativa.areaTotalM2, 3)} m²</strong>{estimativa.areaCobradaM2 !== estimativa.areaTotalM2 && <> · cobrada <strong>{numero(estimativa.areaCobradaM2, 3)} m²</strong> (M² fechado)</>}</p>
-    {porPeca.map(({ peca, linhas }) => <div key={peca.id} className="tec-estimativa-grupo"><h4>{peca.name}</h4><ul>{linhas.map(linhaHtml)}</ul></div>)}
+    {porPeca.map(({ peca, linhas }) => <div key={peca.id} className="tec-estimativa-grupo"><h4>{nomeDaPeca(peca, documento.pieces)}</h4><ul>{linhas.map(linhaHtml)}</ul></div>)}
     <div className="tec-estimativa-grupo">
       <h4>Serviços do projeto</h4>
       {linhasGerais.length > 0 && <ul>{linhasGerais.map((linha) => {

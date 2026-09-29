@@ -21,7 +21,8 @@ function zonasDoFormatoAntigo(valor: unknown) {
 }
 const visual = z.object({ id: z.string().optional(), name: z.string().max(160).optional(), imageUrl: z.string().regex(/^\/uploads\/materials\/[a-zA-Z0-9._-]+$/).optional(), textureScaleMm: z.number().positive().max(100000).default(600), veinRotationDeg: n.default(0), roughness: z.number().min(0).max(1).default(.25) }).strict();
 export const pieceSchema = z.object({
-  id, name: z.string().trim().min(1).max(160), contour: z.array(point).min(3).max(1000), thicknessMm: n,
+  // Nome pode ficar vazio (peça sem nome); onde precisa identificar, use nomeDaPeca.
+  id, name: z.string().trim().max(160).default(''), contour: z.array(point).min(3).max(1000), thicknessMm: n,
   x: n, y: n, z: n.default(0), rotationDeg: n.default(0), tiltDeg: n.default(0), locked: z.boolean().default(false),
   material: visual.optional(), layerId: id.default('pieces'), geometryMode: z.enum(['PARAMETRIC', 'FREE']).default('FREE'),
   // U: width = comprimento total, length = fundo (profundidade do trecho do fundo), braços com comprimento e largura próprios.
@@ -65,6 +66,8 @@ export type TechnicalDocument = z.infer<typeof technicalDocumentSchema>;
 export type Piece = TechnicalDocument['pieces'][number];
 export type Feature = TechnicalDocument['features'][number];
 export type Vertex = Piece['contour'][number];
+/** Nome para mostrar: o digitado ou, se a peça está sem nome, "Peça N" pela posição no desenho. */
+export const nomeDaPeca = (peca: Pick<Piece, 'id' | 'name'>, pecas: Pick<Piece, 'id'>[]) => peca.name.trim() || `Peça ${Math.max(0, pecas.findIndex((entrada) => entrada.id === peca.id)) + 1}`;
 export type Annotation = TechnicalDocument['annotations'][number];
 export type ZonaSecaMolhada = Piece['wetDryZones'][number];
 export type PieceShape = NonNullable<Piece['parameters']>['shape'];

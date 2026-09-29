@@ -31,12 +31,13 @@ export function CotasPeca({ peca, recursos, escala, mostrarDistancias }: { peca:
         return <line x1={p.x - (d.x + n.x) * px(4)} y1={p.y - (d.y + n.y) * px(4)} x2={p.x + (d.x + n.x) * px(4)} y2={p.y + (d.y + n.y) * px(4)} />;
       };
       return <g key={cota.ladoId} className={`tec-cota${cota.livre ? ' livre' : ''}`}>
-        {!cota.curvo && <>
+        {/* Linhas só desenham: toque nelas cai na peça de baixo (a etiqueta da medida é que abre a medida). */}
+        {!cota.curvo && <g pointerEvents="none">
           <line className="tec-chamada" x1={a.x + n.x * px(4)} y1={a.y + n.y * px(4)} x2={a2.x + n.x * px(5)} y2={a2.y + n.y * px(5)} strokeWidth={px(1)} />
           <line className="tec-chamada" x1={b.x + n.x * px(4)} y1={b.y + n.y * px(4)} x2={b2.x + n.x * px(5)} y2={b2.y + n.y * px(5)} strokeWidth={px(1)} />
           <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y} strokeWidth={px(1)} />
           <g strokeWidth={px(1.4)}>{tique(a2)}{tique(b2)}</g>
-        </>}
+        </g>}
         <g transform={`translate(${centro.x} ${centro.y}) rotate(${angulo})`} {...dados} role="button" aria-label={`Medida do lado ${cota.indice + 1}: ${cota.texto}`}>
           <rect className="tec-cota-fundo" x={-largura / 2} y={-px(10)} width={largura} height={px(20)} rx={px(5)} {...dados} />
         </g>
@@ -46,7 +47,7 @@ export function CotasPeca({ peca, recursos, escala, mostrarDistancias }: { peca:
     {mostrarDistancias && recursos.flatMap((recurso) => distanciasAteBordas(recurso, peca).filter((d) => d.distancia >= 1).map((d, indice) => {
       const meio = { x: (d.de.x + d.ate.x) / 2, y: (d.de.y + d.ate.y) / 2 };
       const vertical = Math.abs(d.ate.x - d.de.x) < 1;
-      return <g key={`${recurso.id}-${indice}`} className="tec-distancia">
+      return <g key={`${recurso.id}-${indice}`} className="tec-distancia" pointerEvents="none">
         <line x1={d.de.x} y1={d.de.y} x2={d.ate.x} y2={d.ate.y} strokeWidth={px(1)} strokeDasharray={`${px(4)} ${px(3)}`} />
         <Texto x={meio.x + (vertical ? px(10) : 0)} y={meio.y + (vertical ? 0 : px(9))} tamanho={px(10)} angulo={vertical ? anguloLegivel(90 - peca.rotationDeg) + peca.rotationDeg : anguloLegivel(-peca.rotationDeg) + peca.rotationDeg}>{formatMeasure(d.distancia)}</Texto>
       </g>;

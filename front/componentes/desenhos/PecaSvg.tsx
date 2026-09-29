@@ -5,6 +5,32 @@ import { ROTULO_PERFIL, type Selecao } from './tipos';
 import { urlImagem } from './operacoes';
 
 type Props = { peca: Piece; recursos: Feature[]; escala: number; selecao: Selecao; destacarLados: boolean; mostrarVertices?: boolean; verticeMarcado?: string };
+
+/**
+ * Alças nas quatro bordas da cuba/recorte selecionado: puxar uma borda muda o
+ * tamanho daquele lado (o canvas trata o arraste, data-alvo "borda-recurso").
+ */
+function BordasDoRecurso({ recurso, giro, px, giroPeca }: { recurso: Feature; giro: string; px: (valor: number) => number; giroPeca: number }) {
+  const [meiaLargura, meioComprimento, cx, cy] = [recurso.widthMm / 2, recurso.lengthMm / 2, recurso.x, recurso.y];
+  // Na tela, a borda de lado anda na horizontal quando o giro total fica perto de 0° ou 180°.
+  const deitado = Math.abs(((recurso.rotationDeg + giroPeca) % 180 + 180) % 180 - 90) > 45;
+  const bordas = [
+    { lado: 'D', a: [cx + meiaLargura, cy - meioComprimento], b: [cx + meiaLargura, cy + meioComprimento], cursor: deitado ? 'ew-resize' : 'ns-resize' },
+    { lado: 'E', a: [cx - meiaLargura, cy - meioComprimento], b: [cx - meiaLargura, cy + meioComprimento], cursor: deitado ? 'ew-resize' : 'ns-resize' },
+    { lado: 'C', a: [cx - meiaLargura, cy + meioComprimento], b: [cx + meiaLargura, cy + meioComprimento], cursor: deitado ? 'ns-resize' : 'ew-resize' },
+    { lado: 'B', a: [cx - meiaLargura, cy - meioComprimento], b: [cx + meiaLargura, cy - meioComprimento], cursor: deitado ? 'ns-resize' : 'ew-resize' },
+  ];
+  return <g transform={giro}>
+    {bordas.map(({ lado, a, b, cursor }) => {
+      const dados = { 'data-alvo': 'borda-recurso', 'data-id': recurso.id, 'data-lado': lado, style: { cursor } };
+      const meio = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      return <g key={lado}>
+        <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} className="tec-borda-recurso" strokeWidth={px(14)} {...dados} />
+        <rect x={meio[0] - px(5)} y={meio[1] - px(5)} width={px(10)} height={px(10)} rx={px(2)} className="tec-alca-recurso" strokeWidth={px(1.5)} aria-label={`Puxar borda ${lado}`} {...dados} />
+      </g>;
+    })}
+  </g>;
+}
 const pontosDoLado = (peca: Piece, ladoId: string, inicio = 0, extensao = edgeLength(peca, ladoId)) =>
   Array.from({ length: 17 }, (_, i) => edgePoint(peca, ladoId, inicio + extensao * i / 16));
 
@@ -23,6 +49,7 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
   const textura = peca.material?.textureScaleMm ?? 600;
   const contorno = pontosSvg(sampleContour(peca.contour, Math.max(1, px(1.5))));
   const recursoSelecionado = (id: string) => selecao?.tipo === 'recurso' && selecao.id === id;
+  const recursoAtivo = recursos.find((recurso) => recursoSelecionado(recurso.id) && !recurso.edgeId && recurso.type !== 'HOLE');
   // Nome no meio da peça; se uma cuba/recorte estiver ali, logo abaixo dela.
   const meio = sampleContour(peca.contour, 20).reduce((soma, p, _, lista) => ({ x: soma.x + p.x / lista.length, y: soma.y + p.y / lista.length }), { x: 0, y: 0 });
   const embaixo = recursos.filter((r) => !r.edgeId && Math.abs(r.x - meio.x) < Math.max(r.widthMm, r.diameterMm) / 2 + px(30) && Math.abs(r.y - meio.y) < Math.max(r.lengthMm, r.diameterMm) / 2 + px(10));
@@ -33,6 +60,10 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
   // Alças dos vértices menores quando a peça aparece pequena na tela.
   const alca = Math.max(4, Math.min(9, Math.min(caixa.maxX - caixa.minX, caixa.maxY - caixa.minY) * escala / 8));
   const areas = areasDaPeca(peca);
+  // Textos de dentro da peça (nome, cuba, áreas) sempre na horizontal para quem olha, em qualquer giro
+  // (o grupo gira a peça; este ângulo desfaz o giro só no texto).
+  const anguloTexto = peca.rotationDeg;
+  const girando = selecao?.tipo === 'peca' && selecao.id === peca.id && !peca.locked;
 
   return <g transform={`translate(${peca.x} ${peca.y}) rotate(${-peca.rotationDeg})`} className={`tec-peca${selecionada ? ' selecionada' : ''}${peca.locked ? ' travada' : ''}`}>
     {imagem && <defs><pattern id={`pedra-${peca.id}`} width={textura} height={textura} patternUnits="userSpaceOnUse" patternTransform={`rotate(${peca.material?.veinRotationDeg ?? 0})`}>
@@ -49,10 +80,6 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
         {areas.flatMap((area) => [area.x0, area.x1]).filter((x, indice, lista) => x > caixa.minX + .5 && x < caixa.maxX - .5 && lista.indexOf(x) === indice)
           .map((x) => <line key={`divisa-${x}`} x1={x} y1={caixa.minY} x2={x} y2={caixa.maxY} className="tec-area-divisa" strokeWidth={px(1.6)} strokeDasharray={`${px(6)} ${px(4)}`} />)}
       </g>
-      {areas.map((area, indice) => {
-        const meioX = (area.x0 + area.x1) / 2, faixa = faixaDentroDaPeca(peca, meioX);
-        return faixa && <Texto key={`rotulo-${indice}`} x={meioX} y={faixa.y0 + Math.min(px(14), (faixa.y1 - faixa.y0) / 2)} tamanho={px(10)} className={`tec-area-rotulo ${area.tipo === 'WET' ? 'molhada' : 'seca'}`}>{NOME_AREA[area.tipo]} · {formatMeasure(area.comprimentoMm)}</Texto>;
-      })}
     </g>}
     <polygon points={contorno} className="tec-contorno" strokeWidth={px(selecionada ? 2.6 : 1.6)} pointerEvents="none" />
 
@@ -67,7 +94,7 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
           const meio = trecho[8];
           return <g key={recurso.id} className={classe} {...dados}>
             <polyline points={pontosSvg(trecho)} strokeWidth={px(ativo ? 6 : 4)} fill="none" {...dados} />
-            <Texto x={meio.x} y={meio.y} tamanho={px(10)} className="tec-recurso-rotulo" pointerEvents="none">{ROTULO_PERFIL[recurso.profile]}</Texto>
+            <Texto x={meio.x} y={meio.y} tamanho={px(10)} angulo={anguloTexto} className="tec-recurso-rotulo" pointerEvents="none">{ROTULO_PERFIL[recurso.profile]}</Texto>
           </g>;
         }
         // Rodabanca e saia vistas de cima: faixa colada ao lado, por fora da peça.
@@ -88,13 +115,34 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
         {recurso.shape === 'OVAL'
           ? <ellipse cx={recurso.x} cy={recurso.y} rx={recurso.widthMm / 2} ry={recurso.lengthMm / 2} transform={giro} strokeWidth={px(1.4)} {...dados} />
           : <rect x={recurso.x - recurso.widthMm / 2} y={recurso.y - recurso.lengthMm / 2} width={recurso.widthMm} height={recurso.lengthMm} rx={recurso.radiusMm} transform={giro} strokeWidth={px(1.4)} {...dados} />}
-        <Texto x={recurso.x} y={recurso.y} tamanho={px(10)} className="tec-recurso-rotulo" pointerEvents="none">{recurso.name}</Texto>
+        <Texto x={recurso.x} y={recurso.y} tamanho={px(10)} angulo={anguloTexto} className="tec-recurso-rotulo" pointerEvents="none">{recurso.name}</Texto>
       </g>;
     })}
 
+    {/* Nome e tamanho de cada área, por cima dos componentes e no maior trecho da área sem cuba/recorte. */}
+    {areas.length > 0 && <g className="tec-areas-rotulos" pointerEvents="none">
+      {areas.map((area, indice) => {
+        const ocupados = recursos.filter((recurso) => !recurso.edgeId).map((recurso) => {
+          const meia = recurso.type === 'HOLE' ? recurso.diameterMm / 2 : Math.max(recurso.widthMm, recurso.lengthMm) / 2;
+          return [recurso.x - meia, recurso.x + meia] as const;
+        }).sort((a, b) => a[0] - b[0]);
+        // Trechos livres dentro da área; sem nenhum, fica no meio dela.
+        const livres: [number, number][] = [];
+        let de = area.x0;
+        for (const [a, b] of ocupados) { if (a > de) livres.push([de, Math.min(a, area.x1)]); de = Math.max(de, b); if (de >= area.x1) break; }
+        if (de < area.x1) livres.push([de, area.x1]);
+        const maior = livres.filter(([a, b]) => b > a).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+        const meioX = maior ? (maior[0] + maior[1]) / 2 : (area.x0 + area.x1) / 2, faixa = faixaDentroDaPeca(peca, meioX);
+        if (!faixa) return null;
+        // Texto na horizontal da tela: afasta da frente da peça o quanto a caixa do texto ocupa na direção dela (depende do giro).
+        const texto = `${NOME_AREA[area.tipo]} · ${formatMeasure(area.comprimentoMm)}`, giro = peca.rotationDeg * Math.PI / 180;
+        const recuo = Math.abs(px(texto.length * 3.1) * Math.sin(giro)) + Math.abs(px(6) * Math.cos(giro)) + px(6);
+        return <Texto key={`rotulo-${indice}`} x={meioX} y={faixa.y0 + Math.min(recuo, (faixa.y1 - faixa.y0) / 2)} tamanho={px(10)} angulo={anguloTexto} className={`tec-area-rotulo ${area.tipo === 'WET' ? 'molhada' : 'seca'}`}>{texto}</Texto>;
+      })}
+    </g>}
     <CotasPeca peca={peca} recursos={recursos} escala={escala} mostrarDistancias={selecionada} />
     {/* Selecionada com cubas, as distâncias ocupam o meio: o nome sai para não embolar. */}
-    {!(selecionada && embaixo.length) && <Texto x={centro.x} y={centro.y} tamanho={px(12)} className="tec-peca-nome" pointerEvents="none">{peca.locked ? '🔒 ' : ''}{peca.name}</Texto>}
+    {!(selecionada && embaixo.length) && (peca.name.trim() || peca.locked) && <Texto x={centro.x} y={centro.y} tamanho={px(12)} angulo={anguloTexto} className="tec-peca-nome" pointerEvents="none">{peca.locked ? '🔒 ' : ''}{peca.name}</Texto>}
 
     {/* Área de toque de cada lado: tocar abre a medida; com rodabanca/saia/acabamento escolhido, coloca nele. */}
     {peca.contour.map((vertice, indice) => {
@@ -107,5 +155,16 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
     })}
     {((selecionada && !peca.locked) || mostrarVertices) && peca.contour.map((vertice) => { const marcado = (selecao?.tipo === 'vertice' && selecao.verticeId === vertice.id) || verticeMarcado === vertice.id; return <circle key={vertice.id} cx={vertice.x} cy={vertice.y} r={px(marcado ? alca + 3 : alca)}
       className={`tec-vertice${marcado ? ' selecionado' : ''}`} strokeWidth={px(2)} data-alvo="vertice" data-peca={peca.id} data-vertice={vertice.id} />; })}
+    {/* Bolinha de girar, presa em cima da peça selecionada (acima da medida de cima): segurar e arrastar gira em volta do centro. */}
+    {girando && <g className="tec-girar">
+      <line x1={(caixa.minX + caixa.maxX) / 2} y1={caixa.maxY + px(36)} x2={(caixa.minX + caixa.maxX) / 2} y2={caixa.maxY + px(52)} strokeWidth={px(1.6)} pointerEvents="none" />
+      <circle cx={(caixa.minX + caixa.maxX) / 2} cy={caixa.maxY + px(64)} r={px(12)} strokeWidth={px(2)} className="tec-girar-bolinha" pointerEvents="none" />
+      <Texto x={(caixa.minX + caixa.maxX) / 2} y={caixa.maxY + px(64)} tamanho={px(15)} angulo={anguloTexto} className="tec-girar-icone" pointerEvents="none">↻</Texto>
+      <Texto x={(caixa.minX + caixa.maxX) / 2 + px(38)} y={caixa.maxY + px(64)} tamanho={px(12)} angulo={anguloTexto} className="tec-girar-graus" pointerEvents="none">{Math.round(peca.rotationDeg)}°</Texto>
+      {/* Área de toque maior que a bolinha, para o dedo. */}
+      <circle cx={(caixa.minX + caixa.maxX) / 2} cy={caixa.maxY + px(64)} r={px(22)} className="tec-girar-toque" data-alvo="girar" data-peca={peca.id} role="button" aria-label={`Girar ${peca.name || 'a peça'}`} />
+    </g>}
+    {/* Alças da cuba/recorte selecionado por último: ficam acima das distâncias e dos lados da peça. */}
+    {recursoAtivo && !peca.locked && <BordasDoRecurso recurso={recursoAtivo} giro={`rotate(${-recursoAtivo.rotationDeg} ${recursoAtivo.x} ${recursoAtivo.y})`} px={px} giroPeca={peca.rotationDeg} />}
   </g>;
 }

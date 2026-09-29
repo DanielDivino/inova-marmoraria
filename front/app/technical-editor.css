@@ -15,7 +15,8 @@ html.inova-dark .inova-theme .tec-editor {
 .tec-cabecalho p { margin: 10px 0 2px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .tec-cabecalho h1 { margin: 0; font: 400 26px/1.15 Georgia, serif; }
 .tec-salvar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.tec-estado { padding: 6px 10px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 12px; }
+/* Largura fixa (cabe "Falha ao salvar"): trocar Salvo/Rascunho/Salvando não muda a altura do cabeçalho nem empurra o desenho sob o dedo. */
+.tec-estado { box-sizing: border-box; min-width: 112px; padding: 6px 10px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 12px; text-align: center; white-space: nowrap; }
 .tec-estado.saved { color: #356139; background: #e7f0e4; } .tec-estado.saving { color: #775f2f; background: #f5eddb; } .tec-estado.error { color: #873f38; background: #f8e6e3; }
 .tec-mensagem, .tec-alerta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 12px 0 0; padding: 9px 13px; border-radius: 10px; font-size: 13px; }
 .tec-mensagem { border: 1px solid color-mix(in srgb, var(--green) 35%, var(--line)); background: color-mix(in srgb, var(--green) 7%, var(--surface, #fff)); }
@@ -236,6 +237,11 @@ html.inova-dark .inova-theme .tec-area-seca { fill: rgba(224, 196, 141, .12); }
 html.inova-dark .inova-theme .tec-area-previa-faixa { fill: rgba(96, 164, 230, .32); }
 html.inova-dark .inova-theme .tec-area-previa-rotulo { fill: #d6ebff; stroke: rgba(20, 23, 21, .9); }
 .tec-botao-molhada { background: #2f6fa8 !important; border-color: #2f6fa8 !important; }
+/* Cuba/recorte selecionado: bordas para puxar (faixa invisível) e alças visíveis no meio de cada borda. */
+.tec-borda-recurso { stroke: transparent; fill: none; }
+.tec-borda-recurso:hover { stroke: rgba(154, 78, 56, .25); }
+.tec-alca-recurso { fill: #fff; stroke: var(--tec-corte-borda); }
+html.inova-dark .inova-theme .tec-alca-recurso { fill: #1c201e; }
 .tec-area-rotulo { font-weight: 700; }
 .tec-area-rotulo.molhada { fill: #255a8a; }
 .tec-area-rotulo.seca { fill: #7a6539; }
@@ -251,3 +257,10 @@ html.inova-dark .inova-theme .tec-area-rotulo.seca { fill: #e0c48d; }
 .tec-area-linha .botao-contorno { min-height: 32px; padding: 4px 10px; font-size: 12px; }
 .tec-area-linha .text-button { font-size: 18px; padding: 6px; }
 .tec-dividir-areas { justify-self: start; }
+/* Bolinha de girar da peça selecionada: haste, bolinha com ↻ e área de toque maior (invisível). */
+.tec-girar line { stroke: var(--tec-destaque); }
+.tec-girar-bolinha { fill: var(--tec-papel); stroke: var(--tec-destaque); }
+.tec-girar-icone { fill: var(--tec-destaque); font-weight: 800; }
+.tec-girar-toque { fill: transparent; cursor: grab; }
+.tec-girar-toque:active { cursor: grabbing; }
+.tec-girar-graus { fill: var(--tec-destaque); font-weight: 800; paint-order: stroke; stroke: var(--tec-papel); stroke-width: .3em; }

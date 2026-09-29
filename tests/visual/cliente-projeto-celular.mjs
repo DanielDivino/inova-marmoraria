@@ -23,6 +23,8 @@ await page.route('**/api/**', async route => {
   const url = new URL(request.url());
   requests.push(`${request.method()} ${url.pathname}`);
   if (url.pathname === '/api/auth/me') return route.fulfill({ json: { user: { id: 'mobile-tabs-test', name: 'Teste', role: 'SELLER', maxDiscountPercent: 10 } } });
+  // Rascunho do Novo orçamento no servidor (vazio: vale o deste navegador).
+  if (url.pathname === '/api/quote-draft') return route.fulfill({ json: request.method() === 'GET' ? { version: null } : { saved: true, version: 1 } });
   if (url.pathname === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
   // Desenhos técnicos do cliente (botão Desenho técnico do Novo orçamento).
   if (/^\/api\/customers\/[^/]+\/designs$/.test(url.pathname)) return route.fulfill({ json: { designs: [] } });

@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ajustarRecursosDeBorda, alterarMedidaLado, deletePiece, formatMeasure, marcarArea, NOME_AREA, updatePiece, type EstimativaDesenho, type Piece, type PieceShape, type Point, type TechnicalDocument } from '@inova/domain/technical';
+import { ajustarRecursosDeBorda, alterarMedidaLado, deletePiece, formatMeasure, marcarArea, NOME_AREA, nomeDaPeca, updatePiece, type EstimativaDesenho, type Piece, type PieceShape, type Point, type TechnicalDocument } from '@inova/domain/technical';
 import { api } from '../../utilitarios/api';
 import { formatarMoeda } from '../../utilitarios/formatadores';
 import { criarId } from '../../utilitarios/id';
@@ -55,7 +55,8 @@ export default function EditorTecnico({ designId, noOrcamento }: { designId: str
   const [modo, setModo] = useState<Modo>('MANUAL');
   const [passoMm, setPassoMm] = useState(10);
   const [visao, setVisao] = useState<Visao>('2D');
-  const [estimativaAberta, setEstimativaAberta] = useState(true);
+  // Estimativa começa fechada (só o total na barra); um toque abre.
+  const [estimativaAberta, setEstimativaAberta] = useState(false);
   /** Área marcada no balcão esperando a escolha: seca ou molhada. */
   const [areaPendente, setAreaPendente] = useState<MarcacaoArea | null>(null);
   // Teclado: Delete apaga o que está selecionado; Esc cancela a área. A função muda a cada render (ref).
@@ -96,8 +97,8 @@ export default function EditorTecnico({ designId, noOrcamento }: { designId: str
     if (selecao?.tipo === 'peca') {
       const peca = documento.pieces.find((entrada) => entrada.id === selecao.id);
       if (!peca) return false;
-      if (peca.locked) { tecnico.setMensagem(`${peca.name} está travada: destrave para excluir.`); return true; }
-      mudar(deletePiece(documento, peca.id)); setSelecao(null); tecnico.setMensagem(`${peca.name} excluída. Ctrl+Z desfaz.`);
+      if (peca.locked) { tecnico.setMensagem(`${nomeDaPeca(peca, documento.pieces)} está travada: destrave para excluir.`); return true; }
+      mudar(deletePiece(documento, peca.id)); setSelecao(null); tecnico.setMensagem(`${nomeDaPeca(peca, documento.pieces)} excluída. Ctrl+Z desfaz.`);
       return true;
     }
     if (selecao?.tipo === 'recurso') {
@@ -126,9 +127,9 @@ export default function EditorTecnico({ designId, noOrcamento }: { designId: str
     const peca = areaPendente && documento.pieces.find((entrada) => entrada.id === areaPendente.pecaId);
     if (!areaPendente || !peca) return;
     setAreaPendente(null);
-    if (peca.locked) { tecnico.setMensagem(`${peca.name} está travada: destrave para marcar áreas.`); return; }
+    if (peca.locked) { tecnico.setMensagem(`${nomeDaPeca(peca, documento.pieces)} está travada: destrave para marcar áreas.`); return; }
     mudar(updatePiece(documento, peca.id, { wetDryZones: marcarArea(peca, areaPendente.inicio, areaPendente.fim, tipo) }));
-    tecnico.setMensagem(`${NOME_AREA[tipo]} de ${formatMeasure(Math.abs(areaPendente.fim - areaPendente.inicio))} marcada em ${peca.name}. Marque outra ou volte a Selecionar.`);
+    tecnico.setMensagem(`${NOME_AREA[tipo]} de ${formatMeasure(Math.abs(areaPendente.fim - areaPendente.inicio))} marcada em ${nomeDaPeca(peca, documento.pieces)}. Marque outra ou volte a Selecionar.`);
   };
   const tocarVertice = (pieceId: string, vertexId: string) => {
     if (!cotaInicio) { setCotaInicio({ pieceId, vertexId }); tecnico.setMensagem('Agora toque no segundo ponto da cota.'); return; }
@@ -151,7 +152,7 @@ export default function EditorTecnico({ designId, noOrcamento }: { designId: str
     if (!pecaAtiva) return;
     setPendenteBorda((atual) => atual === tipo ? null : tipo);
     setSelecao({ tipo: 'peca', id: pecaAtiva.id });
-    tecnico.setMensagem(`Toque no lado de ${pecaAtiva.name} onde vai ${ROTULO_RECURSO[tipo].toLowerCase()}.`);
+    tecnico.setMensagem(`Toque no lado de ${nomeDaPeca(pecaAtiva, documento.pieces)} onde vai ${ROTULO_RECURSO[tipo].toLowerCase()}.`);
   };
   const tocarLado = (pecaId: string, ladoId: string) => {
     const peca = documento.pieces.find((entrada) => entrada.id === pecaId);
@@ -178,7 +179,7 @@ export default function EditorTecnico({ designId, noOrcamento }: { designId: str
   const usarNoOrcamento = async () => {
     if (!noOrcamento || !valor.estimativa) return;
     if (valor.estimativa.problemas.length) {
-      setFolha('valor');
+      setFolha('valor'); setEstimativaAberta(true);
       tecnico.setMensagem(`Para usar no orçamento, resolva: ${valor.estimativa.problemas.slice(0, 3).join(' · ')}${valor.estimativa.problemas.length > 3 ? ' …' : ''}`);
       return;
     }
@@ -192,6 +193,7 @@ export default function EditorTecnico({ designId, noOrcamento }: { designId: str
     catch (causa) { tecnico.setMensagem(causa instanceof Error ? causa.message : 'Não foi possível enviar a revisão.'); }
   };
 
+  const pecaDaArea = areaPendente ? documento.pieces.find((entrada) => entrada.id === areaPendente.pecaId) : undefined;
   const pecaDoLado = lado ? documento.pieces.find((peca) => peca.id === lado.pecaId) ?? null : null;
   const mudarPecaDoLado = (patch: (peca: Piece) => Partial<Piece>) => {
     if (!pecaDoLado) return;
@@ -240,7 +242,7 @@ export default function EditorTecnico({ designId, noOrcamento }: { designId: str
           aoSelecionar={setSelecao} aoTocarLado={tocarLado} aoCriarTexto={criarTexto} aoTocarVertice={tocarVertice} cotaInicio={cotaInicio} aoTraco={livre.aoTraco} aoCancelarTraco={() => tecnico.setMensagem('Traço cancelado: dois dedos na tela mexem na vista.')} aoAviso={tecnico.setMensagem}
           aoMarcarArea={(pecaId, inicio, fim) => { setAreaPendente({ pecaId, inicio, fim }); tecnico.setMensagem(''); }} areaPendente={areaPendente}
           substituir={tecnico.substituir} concluirGesto={tecnico.concluirGesto} />
-        <JanelaArea peca={areaPendente ? documento.pieces.find((entrada) => entrada.id === areaPendente.pecaId) : undefined} marcacao={areaPendente}
+        <JanelaArea peca={pecaDaArea} nome={pecaDaArea ? nomeDaPeca(pecaDaArea, documento.pieces) : ''} marcacao={areaPendente}
           aoEscolher={escolherTipoArea} aoCancelar={() => { setAreaPendente(null); tecnico.setMensagem(''); }} />
         <JanelaTraco traco={livre.traco} recorte={livre.recorte} aoFechar={livre.fechar} aoTrocarLado={livre.trocarLado} aoDescartar={livre.descartar}
           aoCriarPeca={(mm) => { const erro = livre.criarPeca(mm); if (!erro) setFerramenta('SELECIONAR'); return erro; }} aoCriarRecorte={livre.criarRecorte} />
