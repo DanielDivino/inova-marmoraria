@@ -2,15 +2,16 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
-import { emptyTechnicalDocument, validateTechnicalDocument } from '../../packages/domain/dist/tecnico/index.js';
+import { emptyTechnicalDocument, technicalDocumentSchema, validateTechnicalDocument } from '../../packages/domain/dist/tecnico/index.js';
 
 // API inteiramente simulada: não cria clientes, projetos nem desenhos reais.
-// Cobre o editor técnico 2D: peças, arraste com encaixe, cubas, cuba esculpida, furo,
-// saia (feature de borda), curvatura de vértice (arco) e cota entre dois vértices.
+// Modo manual do editor técnico: formas prontas (reta, L, U), arraste com encaixe,
+// cubas e furo, saia no lado, curvatura no vértice, cota livre, medida digitada
+// num lado (com texto livre e cadeado), vista 3D e revisão devolvida com motivo.
 const output = resolve(import.meta.dirname, '../../.test-artifacts/technical-editor');
 mkdirSync(output, { recursive: true });
 const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
-const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? (existsSync(installed) ? installed : undefined) });
+const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? (existsSync(installed) ? installed : undefined), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1500, height: 1050 } });
 page.setDefaultTimeout(15000);
 const consoleErrors = [];
@@ -20,6 +21,7 @@ page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push('cons
 let savedDocument = emptyTechnicalDocument();
 let version = 1;
 const revisions = [];
+const decisions = [];
 
 await page.route('**/api/**', async route => {
   const path = new URL(route.request().url()).pathname;
@@ -31,86 +33,117 @@ await page.route('**/api/**', async route => {
   }
   if (path === '/api/designs/design-1' && method === 'GET') return route.fulfill({ json: { revisions } });
   if (path === '/api/catalog/materials/visual') return route.fulfill({ json: [{ id: 'mat-1', name: 'Granito Branco Dallas', category: 'Granito', imageUrl: null }] });
+  if (path === '/api/catalog') return route.fulfill({ json: { productTypes: [], materials: [], services: [] } });
   if (path === '/api/designs/design-1/draft' && method === 'PUT') {
     const body = route.request().postDataJSON();
-    if (body.baseVersion !== version) return route.fulfill({ status: 409, json: { code: 'DESIGN_VERSION_CONFLICT', message: 'conflito' } });
-    savedDocument = body.document; version += 1;
-    const diagnostics = validateTechnicalDocument(savedDocument);
-    return route.fulfill({ json: { id: 'draft-1', version, schemaVersion: savedDocument.schemaVersion, document: savedDocument, updatedAt: new Date().toISOString(), diagnostics } });
+    if (body.baseVersion !== version) return route.fulfill({ status: 409, json: { code: 'DESIGN_VERSION_CONFLICT', message: 'Este desenho foi alterado em outra sessão. Atualize para recuperar sua cópia.' } });
+    savedDocument = technicalDocumentSchema.parse(body.document); version += 1;
+    return route.fulfill({ json: { id: 'draft-1', version, schemaVersion: 1, document: savedDocument, updatedAt: new Date().toISOString(), diagnostics: validateTechnicalDocument(savedDocument) } });
+  }
+  if (path === '/api/designs/design-1/revisions' && method === 'POST') {
+    revisions.unshift({ id: 'rev-1', number: 1, status: 'IN_REVIEW', contentHash: 'abc123def456', createdAt: new Date().toISOString(), createdBy: { name: 'Administrador Inova' }, decisions: [], releases: [], document: savedDocument });
+    return route.fulfill({ status: 201, json: revisions[0] });
+  }
+  if (path === '/api/revisions/rev-1/decisions') {
+    const body = route.request().postDataJSON(); decisions.push(body);
+    if (body.decision === 'RETURN' && !body.note) return route.fulfill({ status: 422, json: { message: 'Informe o motivo da devolução.' } });
+    revisions[0] = { ...revisions[0], status: body.decision === 'RETURN' ? 'RETURNED' : 'APPROVED', decisions: [{ decision: body.decision, note: body.note, decidedBy: { name: 'Administrador Inova' }, decidedAt: new Date().toISOString() }] };
+    return route.fulfill({ json: revisions[0] });
   }
   console.log('rota não simulada:', method, path);
   return route.fulfill({ status: 404, json: { message: 'not mocked' } });
 });
 
-const shot = name => page.screenshot({ path: resolve(output, name + '.png'), fullPage: true });
-// Elementos SVG com stroke transparente (áreas de clique invisíveis) não passam na checagem de
-// visibilidade do Playwright, embora recebam cliques reais de mouse normalmente; por isso
-// clicamos pela coordenada central em vez de usar locator.click().
-const clickAt = async locator => { const box = await locator.boundingBox(); await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2); };
+const shot = name => page.screenshot({ path: resolve(output, name + '.png') });
+const clicarNoCentro = async locator => { const box = await locator.boundingBox(); await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2); await page.waitForTimeout(150); };
+const botao = name => page.getByRole('button', { name, exact: true });
 
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/projetos/project-1/desenhos/design-1');
-  await page.locator('.technical-editor').waitFor();
+  await page.locator('.tec-editor').waitFor();
+  await botao('📐 Manual').click();
   await shot('01-vazio');
 
-  await page.getByRole('button', { name: '＋ Bancada' }).click();
-  await page.getByRole('button', { name: '⌞ Peça em L' }).click();
+  for (const forma of ['Reta', 'Em L', 'Em U']) await botao(forma).click();
   await page.waitForTimeout(300);
-  await shot('02-duas-pecas');
+  assert.equal(await page.locator('.tec-pedra').count(), 3, 'três peças prontas');
+  await shot('02-formas');
 
-  // arrastar a primeira peça (retângulo) no canvas, testando o encaixe (snap)
-  const firstPiece = page.locator('.technical-piece').first();
-  const pieceBox = await firstPiece.boundingBox();
-  const startX = pieceBox.x + pieceBox.width / 2, startY = pieceBox.y + pieceBox.height / 2;
-  await page.mouse.move(startX, startY);
+  // Arrastar a primeira peça (encaixe na grade de 1 cm e nas outras peças).
+  const pedra = await page.locator('.tec-pedra').first().boundingBox();
+  await page.mouse.move(pedra.x + pedra.width / 2, pedra.y + pedra.height / 2);
   await page.mouse.down();
-  await page.mouse.move(startX - 18, startY - 22, { steps: 12 });
+  await page.mouse.move(pedra.x + pedra.width / 2 - 30, pedra.y + pedra.height / 2 + 40, { steps: 12 });
   await page.mouse.up();
-  await page.waitForTimeout(300);
-  await shot('03-apos-arrastar');
-  await firstPiece.click();
+  await page.waitForTimeout(200);
+
+  // Cubas e furo na peça selecionada (a que foi arrastada).
+  for (const nome of ['Cuba', 'Cuba esculpida', 'Furo']) { await clicarNoCentro(page.locator('.tec-pedra').first()); await botao(nome).click(); }
+  // Saia: escolher e tocar num lado da peça.
+  await clicarNoCentro(page.locator('.tec-pedra').first());
+  await botao('Saia').click();
+  await clicarNoCentro(page.locator('.tec-peca').first().locator('.tec-lado').nth(0));
+  await shot('03-componentes');
+
+  // Curvatura no vértice selecionado.
+  await clicarNoCentro(page.locator('.tec-pedra').first());
+  await clicarNoCentro(page.locator('.tec-peca').first().locator('.tec-vertice').nth(1));
+  await page.getByLabel('Curvatura do lado seguinte').fill('0.4');
   await page.waitForTimeout(150);
 
-  // adicionar cuba, cuba esculpida e furo na peça selecionada
-  await page.getByRole('button', { name: '◯ Adicionar cuba' }).click();
-  await page.getByRole('button', { name: '◐ Cuba esculpida' }).click();
-  await page.getByRole('button', { name: '• Adicionar furo' }).click();
-  await page.waitForTimeout(200);
-  await shot('04-componentes-de-corpo');
+  // Cota livre entre dois vértices.
+  await botao('Cota livre').click();
+  const vertices = page.locator('.tec-peca').nth(1).locator('.tec-vertice');
+  await clicarNoCentro(vertices.nth(0));
+  await clicarNoCentro(vertices.nth(3));
+  await botao('Selecionar').click();
 
-  // adicionar saia (feature de borda): clicar no botão e depois numa aresta da peça ativa
-  await page.getByRole('button', { name: '▭ Adicionar saia' }).click();
-  await clickAt(page.locator('.technical-edge-hit').first());
-  await page.waitForTimeout(200);
-  await shot('05-saia-na-borda');
+  // Medida digitada no lado da peça em L (toque na cota), texto livre e cadeado.
+  await clicarNoCentro(page.locator('.tec-peca').nth(1).locator('.tec-cota-fundo').first());
+  const janela = page.getByRole('dialog', { name: /^Lado 1/ });
+  await janela.getByLabel('Medida do lado').fill('2m60');
+  await janela.getByLabel('Medida do lado').press('Enter');
+  await janela.getByLabel('Texto no lugar da medida').fill('encosto na parede');
+  await janela.getByLabel('Texto no lugar da medida').press('Enter');
+  await janela.getByRole('button', { name: /Travar este lado/ }).click();
+  await shot('04-lado');
+  await janela.getByRole('button', { name: 'Pronto' }).click();
 
-  // selecionar um vértice e aplicar curvatura (arco)
-  await clickAt(page.locator('.technical-vertex').first());
-  await page.waitForTimeout(150);
-  const bulgeInput = page.getByLabel('Curvatura (arco)');
-  await bulgeInput.fill('0.4');
-  await bulgeInput.blur();
-  await page.waitForTimeout(200);
-  await shot('06-curvatura-no-vertice');
+  // Vista 3D (three.js) ao lado da planta.
+  await botao('Lado a lado').click();
+  await page.locator('.tec-3d canvas').waitFor({ timeout: 20000 });
+  await page.waitForTimeout(800);
+  await shot('05-lado-a-lado');
+  await botao('Planta 2D').click();
 
-  // criar uma cota clicando em dois vértices
-  await page.getByRole('button', { name: '📏 Cota (clique 2 vértices)' }).click();
-  const vertices = page.locator('.technical-vertex');
-  await clickAt(vertices.nth(0));
-  await clickAt(vertices.nth(1));
-  await page.waitForTimeout(300);
-  await shot('07-cota-criada');
-
-  await page.waitForTimeout(2200); // aguardar o autosave (debounce de 2s)
-  await shot('08-final-apos-autosave');
+  // Salva agora (o automático também salva 2 s depois da última mudança; o "Salvo" some logo depois).
+  await botao('Salvar agora').click();
   await page.getByText('Salvo', { exact: true }).waitFor();
 
-  assert.equal(consoleErrors.length, 0, 'não deve haver erros de console/página: ' + consoleErrors.join('\n'));
-  assert.equal(savedDocument.pieces.length, 2, 'as duas peças criadas devem ter sido salvas');
-  assert.deepEqual(savedDocument.features.map(f => f.type).sort(), ['HOLE', 'SCULPTED_SINK', 'SINK', 'SKIRT'].sort(), 'cuba, cuba esculpida, furo e saia devem ter sido salvos');
-  assert.equal(savedDocument.dimensions.length, 1, 'a cota criada deve ter sido salva');
-  assert.ok(savedDocument.pieces.some(piece => piece.contour.some(vertex => vertex.bulge !== 0)), 'a curvatura aplicada ao vértice deve ter sido salva');
-  console.log('OK: editor técnico 2D — peças, arraste com encaixe, componentes de corpo e de borda, curvatura e cota validados.');
+  // Revisão: enviar, devolver pedindo o motivo.
+  await botao('Enviar para conferência').click();
+  await page.getByText('Em conferência', { exact: true }).waitFor();
+  await botao('Devolver').click();
+  await page.getByLabel('Motivo da devolução').fill('Conferir a medida do fundo');
+  await botao('Devolver revisão').click();
+  await page.getByText('Devolvida', { exact: true }).waitFor();
+  await shot('06-revisao');
+
+  const [reta, emL, emU] = savedDocument.pieces;
+  assert.equal(consoleErrors.length, 0, 'sem erros de console/página: ' + consoleErrors.join('\n'));
+  assert.deepEqual(savedDocument.pieces.map(peca => peca.parameters?.shape ?? 'LIVRE'), ['LIVRE', 'LIVRE', 'U'], 'reta (virou livre com a curvatura), L (virou livre com a medida digitada) e U');
+  assert.notDeepEqual([reta.x, reta.y], [0, 0], 'a peça arrastada mudou de lugar');
+  assert(reta.contour.some(vertice => vertice.bulge !== 0), 'curvatura salva');
+  assert.deepEqual(savedDocument.features.map(recurso => recurso.type).sort(), ['HOLE', 'SCULPTED_SINK', 'SINK', 'SKIRT']);
+  const lado1 = emL.contour[0], lado1Fim = emL.contour[1];
+  assert.equal(Math.round(Math.hypot(lado1Fim.x - lado1.x, lado1Fim.y - lado1.y)), 2600, 'medida digitada no lado');
+  assert.equal(emL.dimensionLabels[lado1.id], 'encosto na parede');
+  assert.deepEqual(emL.lockedEdges, [lado1.id]);
+  assert.equal(savedDocument.dimensions.length, 1, 'cota livre salva');
+  assert.equal(emU.contour.length, 8, 'peça em U com 8 lados');
+  assert.equal(validateTechnicalDocument(savedDocument).filter(d => d.severity === 'STRUCTURAL').length, 0);
+  assert.deepEqual(decisions, [{ decision: 'RETURN', note: 'Conferir a medida do fundo' }]);
+  console.log('OK: editor técnico manual — reta/L/U, arraste com encaixe, cubas, furo, saia, curvatura, cota livre, medida por lado com texto e cadeado, 3D, salvamento e revisão devolvida com motivo.');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

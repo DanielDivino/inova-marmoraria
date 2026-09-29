@@ -31,9 +31,17 @@ const projectMaterial = async name => {
   await page.locator('.quick-project-fields .material-picker summary').click();
   await page.locator('.quick-project-fields .material-picker-panel button').filter({ hasText: name }).click();
 };
-const rowMaterial = async name => {
-  await page.locator('.quick-services .quick-material-override .material-picker summary').click();
-  await page.locator('.quick-services .quick-material-override .material-picker-panel button').filter({ hasText: name }).click();
+// "Opções da peça N" abre a linha com a pedra só desta peça e os acabamentos dela.
+const abrirOpcoes = async numero => {
+  // No desktop o botão visível é o "Opções" da linha; o nomeado "Opções da peça N" é o do celular.
+  const botao = page.locator('[data-quick-row]').nth(numero - 1).locator('.quick-options-button:visible').first();
+  if ((await botao.getAttribute('aria-expanded')) !== 'true') await botao.click();
+  return page.locator('#' + await botao.getAttribute('aria-controls'));
+};
+const rowMaterial = async (numero, name) => {
+  const opcoes = await abrirOpcoes(numero);
+  await opcoes.locator('.quick-material-override .picker-summary').click();
+  await page.getByRole('dialog', { name: 'Escolher material' }).getByRole('button').filter({ hasText: name }).click();
 };
 const step = number => page.locator('.project-step').nth(number - 1).getByRole('button').click();
 // Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
@@ -49,12 +57,12 @@ try {
   // (material, medidas, acabamentos, rodabanca) é sempre criado; "Detalhado" só
   // divide as peças já orçadas em produção, nunca recalcula o valor.
   await expect(page.getByRole('button', { name: 'Orçamento Rápido' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('dialog')).toHaveCount(0);
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
   assert.equal(await contarProjetos(), 1);
   await selecionarCliente();
   await page.getByRole('dialog').getByPlaceholder('Digite nome, telefone ou CPF').fill('João');
   await page.locator('.customer-result').click();
-  await expect(page.locator('dialog')).toHaveCount(0);
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
   await expect(page.locator('.atendimento-barra')).toContainText('João da Silva');
   await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Trocar cliente', exact: true }).click();
   await page.keyboard.press('Escape');
@@ -68,18 +76,21 @@ try {
   await page.getByLabel('Tipo da peça 2', { exact: true }).selectOption('THRESHOLD');
   await page.getByLabel('Comprimento da peça 2 (m)', { exact: true }).fill('1,00');
   await page.getByLabel('Largura da peça 2 (m)', { exact: true }).fill('0,20');
-  await page.getByRole('button', { name: 'Detalhar', exact: true }).nth(1).click();
-  await rowMaterial('Branco Itaúnas');
-  await page.getByRole('button', { name: '+ Acabamentos desta peça', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+  await rowMaterial(2, 'Branco Itaúnas');
+  const opcoesPeca2 = await abrirOpcoes(2);
+  await opcoesPeca2.getByRole('button', { name: 'Adicionar acabamento', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: /^Acabamentos de/ });
   await dialog.locator('fieldset').filter({ hasText: 'Vista' }).getByLabel('Inferior', { exact: true }).check();
   await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
-  await page.locator('.quick-services .quick-edge').filter({ hasText: 'Vista' }).getByLabel(/Altura do acabamento/).fill('5');
+  await opcoesPeca2.locator('.quick-acabamento').filter({ hasText: 'Vista' }).getByLabel(/Altura do acabamento/).fill('5');
   await expect(page.locator('.summary-grand-total')).toContainText('970,00');
-  // Rodabanca no mesmo menu de acabamentos, desenhada de forma independente.
-  await page.locator('.quick-services .quick-sides > div').filter({ hasText: 'Inferior' }).getByRole('button', { name: '+ Rodabanca', exact: true }).click();
+  // Rodabanca é uma peça própria (tipo "Rodabanca"), da mesma pedra da soleira e cobrada pela área.
+  await page.getByRole('button', { name: '+ Adicionar item', exact: true }).click();
   await expect(page.locator('[data-quick-row]')).toHaveCount(3);
+  await page.getByLabel('Tipo da peça 3', { exact: true }).selectOption('BACKSPLASH');
+  await page.getByLabel('Comprimento da peça 3 (m)', { exact: true }).fill('1,00');
   await page.getByLabel('Largura da peça 3 (m)', { exact: true }).fill('0,10');
+  await rowMaterial(3, 'Branco Itaúnas');
   await expect(page.locator('.summary-grand-total')).toContainText('1.070,00');
   await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
   await step(2);
@@ -133,7 +144,9 @@ try {
   await expect(page.locator('#project-step-1')).toBeVisible();
   await step(2);
   await expect(page.locator('#project-step-2')).toBeVisible();
-  await page.locator('.quote-summary-actions').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
+  // Com desenho, o salvar fica nas ações da etapa (não no resumo do orçamento rápido).
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('button', { name: 'Salvar orçamento', exact: true }).first().click();
   await page.waitForURL('**/orcamentos');
   assert.equal(saved.items.length, 2);
   assert.deepEqual(saved.items[0].components.map(piece => piece.materialId), ['stone-a', 'stone-b', 'stone-b']);

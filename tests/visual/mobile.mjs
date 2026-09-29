@@ -1,13 +1,14 @@
 import { chromium } from 'playwright';
 import { expect } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 
 // Intercepta todas as APIs: o fluxo de preenchimento/salvamento não altera dados reais.
 const output = resolve('.test-artifacts/mobile');
 mkdirSync(output, { recursive: true });
-const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE });
+const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
+const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? (existsSync(installed) ? installed : undefined) });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true });
 page.setDefaultTimeout(15000);
 const errors = [];
@@ -60,7 +61,8 @@ try {
   await page.locator('.customer-result').click();
   await page.locator('#project-name').fill('Cozinha no celular');
   await page.locator('.quick-project-fields .picker-summary').click();
-  await page.getByRole('button').filter({ hasText: /^Granito Preto São Gabriel/ }).click();
+  // O botão da pedra começa com o ícone da miniatura.
+  await page.getByRole('button').filter({ hasText: /Granito Preto São Gabriel/ }).click();
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('2,00');
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).press('Enter');
   await expect(page.getByLabel('Largura da peça 1 (m)', { exact: true })).toBeFocused();
@@ -78,11 +80,10 @@ try {
   await page.getByLabel('Novo tipo / descrição', { exact: true }).fill('Complemento lateral');
   await page.locator('.type-description-form').getByRole('button', { name: 'Adicionar', exact: true }).click();
   await expect(page.locator('.mobile-quote-bar strong')).toContainText('1.164,00');
-  await page.getByRole('button', { name: 'Detalhar', exact: true }).first().click();
-  await page.getByLabel('Valor final da peça (material + acabamentos)', { exact: true }).fill('800');
-  await expect(page.locator('.mobile-quote-bar strong')).toContainText('1.244,00');
-  await page.getByLabel('Valor final da peça (material + acabamentos)', { exact: true }).fill('');
-  await page.getByRole('button', { name: 'Detalhar', exact: true }).first().click();
+  // Opções da peça: pedra só desta peça e acabamentos (o valor manual da peça saiu da linha).
+  await page.getByRole('button', { name: 'Opções da peça 1', exact: true }).click();
+  await expect(page.locator('#' + (await page.getByRole('button', { name: 'Opções da peça 1', exact: true }).getAttribute('aria-controls'))).getByText('Material desta peça')).toBeVisible();
+  await page.getByRole('button', { name: 'Opções da peça 1', exact: true }).click();
   await expect(page.locator('.mobile-quote-bar strong')).toContainText('1.164,00');
   await page.getByRole('button', { name: '+ Acabamentos', exact: true }).click();
   const services = page.getByRole('dialog', { name: /^Acabamentos de/ });
@@ -109,7 +110,8 @@ try {
     for (const width of [320, 360, 390, 430, 760]) {
       await page.setViewportSize({ width, height: 844 });
       await noOverflow(`${width}, ${dark ? 'escuro' : 'claro'}`);
-      for (const input of await page.locator('[data-quick-row] input').all()) {
+      // Só os campos visíveis: a linha de opções da peça fica escondida até ser aberta.
+      for (const input of await page.locator('[data-quick-row] input:visible').all()) {
         const box = await input.boundingBox();
         assert(box && box.width >= 70 && box.x >= 0 && box.x + box.width <= width, 'Campo de peça cabe na tela');
         assert(box.height >= 44, 'Campo acessível ao toque');
@@ -124,17 +126,21 @@ try {
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.locator('.mobile-quote-bar').getByRole('button', { name: 'Ver resumo', exact: false }).click();
   await expect(page.locator('.quote-summary-card')).toBeFocused();
-  await expect(page.locator('.mobile-quote-bar')).not.toBeVisible();
+  // O resumo abre como janela sobre a página; a barra continua com "Fechar resumo".
+  await expect(page.locator('.mobile-quote-bar').getByRole('button', { name: /Fechar resumo/ })).toHaveAttribute('aria-expanded', 'true');
   await page.getByLabel('Observações do orçamento', { exact: true }).fill('Medidas conferidas no celular.');
   await page.reload();
-  await expect(page.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('2');
+  // Máscara de metros: o rascunho reabre com duas casas.
+  await expect(page.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('2,00');
   await expect(page.getByLabel('Observações do orçamento', { exact: true })).toHaveValue('Medidas conferidas no celular.');
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(page.getByRole('button', { name: 'Abrir menu', exact: true })).not.toBeVisible();
   assert.equal(await page.locator('.quick-table').evaluate(el => getComputedStyle(el).display), 'table');
   await page.screenshot({ path: resolve(output, 'desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
+  // No celular o botão de salvar fica no resumo, que abre pela barra de baixo.
+  await page.locator('.mobile-quote-bar').getByRole('button', { name: /Ver resumo/ }).click();
+  await page.locator('.quote-summary-card').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
   await page.waitForURL('**/orcamentos');
   assert.equal(saved.items[0].components.length, 1);
   assert.equal(saved.items[0].components[0].lengthMm, 2000);
