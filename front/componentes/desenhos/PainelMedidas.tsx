@@ -47,7 +47,7 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
       <button type="button" className="botao-contorno tec-perigo" onClick={() => { aoMudar({ ...documento, annotations: documento.annotations.filter((entrada) => entrada.id !== texto.id) }); aoSelecionar(null); }}>Excluir texto</button>
     </section>}
     {!peca && !recurso && !vertice && !texto && <section className="tec-painel-secao">
-      <p className="tec-dica">Toque numa peça, num lado, numa cuba ou num texto para editar. Toque na medida de um lado para digitar outra.</p>
+      <p className="tec-dica">Arraste um lado para esticar ou encolher a peça (os lados vizinhos acompanham). Toque num lado ou na medida para digitar outra; toque numa cuba ou num texto para editar.</p>
       {documento.pieces.length > 0 && <div className="tec-lista-pecas">{documento.pieces.map((entrada) => <button type="button" key={entrada.id} className="botao-contorno" onClick={() => aoSelecionar({ tipo: 'peca', id: entrada.id })}>{entrada.locked ? '🔒 ' : ''}{entrada.name}</button>)}</div>}
     </section>}
     {documento.dimensions.length > 0 && <section className="tec-painel-secao" aria-label="Cotas livres">

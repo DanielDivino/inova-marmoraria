@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatMeasure, parseFriendlyMeasure } from '@inova/domain/technical';
+import { formatMeasure } from '@inova/domain/technical';
+import type { CampoMetros } from '../../utilitarios/quick-quote';
+import { EntradaMetros, metrosParaMm } from './CampoMedida';
 import type { RecorteEmAndamento, TracoEmAndamento } from './useDesenhoLivre';
 
 /**
@@ -12,10 +14,10 @@ export function JanelaTraco({ traco, recorte, aoFechar, aoTrocarLado, aoCriarPec
   traco: TracoEmAndamento | null; recorte: RecorteEmAndamento | null;
   aoFechar: () => void; aoTrocarLado: () => void; aoCriarPeca: (mm: number) => string | null; aoCriarRecorte: (tipo: 'SINK' | 'CUTOUT') => void; aoDescartar: () => void;
 }) {
-  const [texto, setTexto] = useState('');
+  const [campo, setCampo] = useState<CampoMetros>({ texto: '', livre: false });
   const [erro, setErro] = useState('');
   const lado = traco && traco.ladoReferencia !== null ? traco.pontos.length : 0;
-  useEffect(() => { setErro(''); setTexto(''); }, [traco?.brutos, traco?.ladoReferencia]);
+  useEffect(() => { setErro(''); setCampo({ texto: '', livre: false }); }, [traco?.brutos, traco?.ladoReferencia]);
   if (recorte) return <section className="tec-folha-traco" role="dialog" aria-label="Recorte desenhado">
     <strong>Recorte {recorte.recorte.shape === 'OVAL' ? 'oval' : 'retangular'} · {formatMeasure(recorte.recorte.widthMm)} × {formatMeasure(recorte.recorte.lengthMm)}</strong>
     <p>As medidas podem ser ajustadas depois no painel.</p>
@@ -31,15 +33,15 @@ export function JanelaTraco({ traco, recorte, aoFechar, aoTrocarLado, aoCriarPec
     <div className="tec-acoes"><button type="button" className="botao-destaque" onClick={aoDescartar}>Desfazer traço</button></div>
   </section>;
   const confirmar = () => {
-    const mm = parseFriendlyMeasure(texto);
-    if (mm === null || mm < 10) { setErro('Digite a medida real do lado destacado (ex.: 2m40).'); return; }
+    const mm = metrosParaMm(campo.texto);
+    if (mm === null || mm < 10) { setErro('Digite a medida real do lado destacado, só com números (ex.: 240 para 2,40 m).'); return; }
     setErro(aoCriarPeca(mm) ?? '');
   };
   return <section className="tec-folha-traco" role="dialog" aria-label="Medida de referência">
     <strong>Qual a medida do lado destacado?</strong>
     <p>A peça toda ganha escala a partir dele ({lado} lados). Depois é só tocar nos outros lados para ajustar.</p>
     <form className="tec-referencia" onSubmit={(evento) => { evento.preventDefault(); confirmar(); }}>
-      <input type="text" inputMode="decimal" autoFocus aria-label="Medida do lado destacado" placeholder="ex.: 2m40" value={texto} onChange={(evento) => setTexto(evento.target.value)} />
+      <span className="tec-campo-metros"><EntradaMetros autoFocus aria-label="Medida do lado destacado" valor={campo} aoMudar={setCampo} /><i aria-hidden="true">m</i></span>
       <button type="submit" className="botao-destaque">Criar peça</button>
     </form>
     {erro && <p role="alert" className="form-error">{erro}</p>}

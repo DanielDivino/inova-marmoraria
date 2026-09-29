@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type PointerEvent as EventoPonteiro } from 'react';
-import { snapPoint, updatePiece, type Point, type TechnicalDocument } from '@inova/domain/technical';
+import { ajustarRecursosDeBorda, contornoValido, cotasDaPeca, snapPoint, updatePiece, type Point, type TechnicalDocument, type Vertex } from '@inova/domain/technical';
 import { Icone } from '../filtros/Filtros';
 import { CotasLivres } from './CotasLivres';
 import { PecaSvg } from './PecaSvg';
@@ -22,6 +22,7 @@ type Props = {
   cotaInicio: { pieceId: string; vertexId: string } | null;
   aoTraco: (pontos: Point[], ferramenta: 'TRACO_PECA' | 'TRACO_RECORTE') => void;
   aoCancelarTraco?: () => void;
+  aoAviso?: (texto: string) => void;
   substituir: (documento: TechnicalDocument) => void;
   concluirGesto: (antes: TechnicalDocument) => void;
 };
@@ -30,6 +31,7 @@ type Gesto =
   | (Base & { tipo: 'fundo'; camera: { x: number; y: number; escala: number } })
   | (Base & { tipo: 'peca'; id: string; desvio: Point; aoTocar: () => void })
   | (Base & { tipo: 'vertice'; pecaId: string; verticeId: string })
+  | (Base & { tipo: 'lado'; pecaId: string; indice: number; normal: Point; inicioLocal: Point; contorno: Vertex[]; bloqueio?: string; aoTocar: () => void })
   | (Base & { tipo: 'recurso'; id: string; desvio: Point })
   | (Base & { tipo: 'texto'; id: string; desvio: Point })
   | (Base & { tipo: 'toque'; aoTocar: () => void })
@@ -105,6 +107,16 @@ export function CanvasPlanta(props: Props) {
       const texto = documento.annotations.find((entrada) => entrada.id === dado('id'));
       if (texto) { gesto.current = { ...base, tipo: 'texto', id: texto.id, desvio: { x: mundo.x - texto.x, y: mundo.y - texto.y } }; props.aoSelecionar({ tipo: 'texto', id: texto.id }); return; }
     }
+    // Puxar um lado: os dois cantos dele andam juntos para fora/para dentro e os lados vizinhos esticam ou encolhem.
+    if (tipo === 'lado' && peca && ferramenta === 'SELECIONAR' && !peca.locked) {
+      const indice = peca.contour.findIndex((vertice) => vertice.id === dado('lado'));
+      const total = peca.contour.length;
+      const vizinhos = [peca.contour[(indice - 1 + total) % total].id, peca.contour[(indice + 1) % total].id];
+      gesto.current = { ...base, tipo: 'lado', pecaId: peca.id, indice, normal: cotasDaPeca(peca)[indice].normal, inicioLocal: mundoParaLocal(mundo, peca), contorno: peca.contour,
+        bloqueio: vizinhos.some((id) => peca.lockedEdges.includes(id)) ? 'Os lados vizinhos estão travados: destrave o cadeado para puxar este lado.' : undefined,
+        aoTocar: () => props.aoTocarLado(peca.id, dado('lado')) };
+      return;
+    }
     if ((tipo === 'peca' || tipo === 'lado') && peca) {
       const aoTocar = tipo === 'lado' ? () => props.aoTocarLado(peca.id, dado('lado')) : () => props.aoSelecionar({ tipo: 'peca', id: peca.id });
       if (ferramenta === 'SELECIONAR' && !peca.locked) gesto.current = { ...base, tipo: 'peca', id: peca.id, desvio: { x: mundo.x - peca.x, y: mundo.y - peca.y }, aoTocar };
@@ -151,6 +163,19 @@ export function CanvasPlanta(props: Props) {
       props.substituir(updatePiece(documento, atual.id, { x: destino.x, y: destino.y }));
       return;
     }
+    if (atual.tipo === 'lado') {
+      if (atual.bloqueio) { props.aoAviso?.(atual.bloqueio); atual.bloqueio = ''; return; }
+      if (atual.bloqueio === '') return;
+      const peca = documento.pieces.find((entrada) => entrada.id === atual.pecaId);
+      if (!peca) return;
+      const local = mundoParaLocal(mundo, peca), n = atual.normal, total = atual.contorno.length;
+      const avanco = arredondar((local.x - atual.inicioLocal.x) * n.x + (local.y - atual.inicioLocal.y) * n.y);
+      const contour = atual.contorno.map((vertice, indice) => indice === atual.indice || indice === (atual.indice + 1) % total
+        ? { ...vertice, x: Math.round((vertice.x + n.x * avanco) * 10) / 10, y: Math.round((vertice.y + n.y * avanco) * 10) / 10 } : vertice);
+      // Encolher até cruzar ou zerar um lado vizinho não vale: a peça fica no último tamanho possível.
+      if (contornoValido(contour)) props.substituir(updatePiece(documento, peca.id, { contour, geometryMode: 'FREE', parameters: undefined }));
+      return;
+    }
     if (atual.tipo === 'vertice') {
       const peca = documento.pieces.find((entrada) => entrada.id === atual.pecaId);
       if (!peca) return;
@@ -181,9 +206,14 @@ export function CanvasPlanta(props: Props) {
       if (!cancelado && atual.pontos.length > 2) props.aoTraco(atual.pontos, atual.ferramenta);
       return;
     }
+    if (atual.moveu && atual.tipo === 'lado') {
+      // Saias, rodabancas e acabamentos continuam dentro dos lados que mudaram.
+      const peca = documento.pieces.find((entrada) => entrada.id === atual.pecaId);
+      if (peca && peca.contour !== atual.contorno) props.substituir(ajustarRecursosDeBorda(documento, peca));
+    }
     if (cancelado) { if (atual.moveu && atual.tipo !== 'fundo' && atual.tipo !== 'toque') props.concluirGesto(atual.antes); return; }
     if (atual.moveu) { if (atual.tipo !== 'fundo' && atual.tipo !== 'toque') props.concluirGesto(atual.antes); return; }
-    if (atual.tipo === 'peca' || atual.tipo === 'toque') atual.aoTocar();
+    if (atual.tipo === 'peca' || atual.tipo === 'toque' || atual.tipo === 'lado') atual.aoTocar();
     else if (atual.tipo === 'vertice') props.aoSelecionar({ tipo: 'vertice', pecaId: atual.pecaId, verticeId: atual.verticeId });
     else if (atual.tipo === 'fundo') { if (ferramenta === 'TEXTO') props.aoCriarTexto(telaParaMundo(evento.clientX, evento.clientY)); else props.aoSelecionar(null); }
   }

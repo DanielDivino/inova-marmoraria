@@ -63,7 +63,7 @@ try {
   await tracar([[cx - 140, cy + 40], [cx + 140, cy + 36], [cx + 143, cy - 50], [cx - 138, cy - 46]]);
   await page.getByText('Qual a medida do lado destacado?').waitFor();
   await shot('01-traco-organizado');
-  await page.getByLabel('Medida do lado destacado').fill('2m40');
+  await page.getByLabel('Medida do lado destacado').fill('240');
   await page.getByRole('button', { name: 'Criar peça', exact: true }).tap();
   await page.waitForTimeout(300);
 

@@ -82,8 +82,14 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
     {!(selecionada && embaixo.length) && <Texto x={centro.x} y={centro.y} tamanho={px(12)} className="tec-peca-nome" pointerEvents="none">{peca.locked ? '🔒 ' : ''}{peca.name}</Texto>}
 
     {/* Área de toque de cada lado: tocar abre a medida; com rodabanca/saia/acabamento escolhido, coloca nele. */}
-    {peca.contour.map((vertice) => <polyline key={`lado-${vertice.id}`} points={pontosSvg(pontosDoLado(peca, vertice.id))} className={`tec-lado${destacarLados ? ' destacado' : ''}`}
-      strokeWidth={px(22)} fill="none" data-alvo="lado" data-peca={peca.id} data-lado={vertice.id} />)}
+    {peca.contour.map((vertice, indice) => {
+      // Cursor de esticar na direção em que o lado anda ao ser puxado.
+      const seguinte = peca.contour[(indice + 1) % peca.contour.length];
+      const angulo = Math.abs(((Math.atan2(seguinte.y - vertice.y, seguinte.x - vertice.x) * 180 / Math.PI - peca.rotationDeg) % 180 + 180) % 180);
+      const cursor = angulo < 30 || angulo > 150 ? 'ns-resize' : angulo > 60 && angulo < 120 ? 'ew-resize' : 'move';
+      return <polyline key={`lado-${vertice.id}`} points={pontosSvg(pontosDoLado(peca, vertice.id))} className={`tec-lado${destacarLados ? ' destacado' : ''}`} style={peca.locked ? undefined : { cursor }}
+        strokeWidth={px(22)} fill="none" data-alvo="lado" data-peca={peca.id} data-lado={vertice.id} />;
+    })}
     {((selecionada && !peca.locked) || mostrarVertices) && peca.contour.map((vertice) => { const marcado = (selecao?.tipo === 'vertice' && selecao.verticeId === vertice.id) || verticeMarcado === vertice.id; return <circle key={vertice.id} cx={vertice.x} cy={vertice.y} r={px(marcado ? alca + 3 : alca)}
       className={`tec-vertice${marcado ? ' selecionado' : ''}`} strokeWidth={px(2)} data-alvo="vertice" data-peca={peca.id} data-vertice={vertice.id} />; })}
   </g>;

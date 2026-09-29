@@ -27,7 +27,7 @@ export function EditorLado({ peca, ladoId, aoFechar, aoMudarMedida, aoMudarTexto
     rodape={<button type="button" className="botao-destaque" onClick={aoFechar}>Pronto</button>}>
     {aberto && <>
       {curvo ? <p className="tec-aviso">Lado curvo: mude a curvatura no vértice ou as medidas da forma.</p>
-        : <CampoMedida rotulo="Medida do lado" valorMm={edgeLength(peca!, ladoId!)} autoFocus onChange={(mm) => setErro(aoMudarMedida(mm) ?? '')} />}
+        : <CampoMedida rotulo="Medida do lado" valorMm={edgeLength(peca!, ladoId!)} autoFocus onChange={(mm) => { const motivo = aoMudarMedida(mm); setErro(motivo ?? ''); return !motivo; }} />}
       {erro && <p role="alert" className="form-error">{erro}</p>}
       <label className="tec-campo">Texto no lugar da medida
         <input type="text" maxLength={120} placeholder="ex.: medir no local, encosto na parede" value={texto}

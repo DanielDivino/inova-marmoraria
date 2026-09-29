@@ -64,7 +64,7 @@ try {
   await tracar([[x, y], [x + 400, y], [x + 400, y - 100], [x + 100, y - 100], [x + 100, y - 300], [x, y - 300]]);
   await page.getByText('Qual a medida do lado destacado?').waitFor();
   await shot('01-l-organizado');
-  await page.getByLabel('Medida do lado destacado').fill('2m40');
+  await page.getByLabel('Medida do lado destacado').fill('240');
   await page.getByRole('button', { name: 'Criar peça', exact: true }).click();
   await page.waitForTimeout(200);
 
@@ -74,7 +74,7 @@ try {
   await page.getByText('A forma não fechou.').waitFor();
   await shot('02-aberto');
   await page.getByRole('button', { name: 'Fechar a forma', exact: true }).click();
-  await page.getByLabel('Medida do lado destacado').fill('1m50');
+  await page.getByLabel('Medida do lado destacado').fill('150');
   await page.getByRole('button', { name: 'Criar peça', exact: true }).click();
 
   // 3) Recorte desenhado dentro do L vira cuba.

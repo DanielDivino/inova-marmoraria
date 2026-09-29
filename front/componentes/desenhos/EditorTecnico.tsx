@@ -156,7 +156,7 @@ export default function EditorTecnico({ designId }: { designId: string }) {
         {visao !== '3D' && <div className="tec-vista">
         <CanvasPlanta documento={documento} selecao={selecao} ferramenta={ferramenta} pendenteBorda={pendenteBorda} pedidoEnquadrar={pedidoEnquadrar}
           tracoPendente={livre.traco && { pontos: livre.traco.pontos, fechado: livre.traco.fechado, ladoReferencia: livre.traco.ladoReferencia }}
-          aoSelecionar={setSelecao} aoTocarLado={tocarLado} aoCriarTexto={criarTexto} aoTocarVertice={tocarVertice} cotaInicio={cotaInicio} aoTraco={livre.aoTraco} aoCancelarTraco={() => tecnico.setMensagem('Traço cancelado: dois dedos na tela mexem na vista.')}
+          aoSelecionar={setSelecao} aoTocarLado={tocarLado} aoCriarTexto={criarTexto} aoTocarVertice={tocarVertice} cotaInicio={cotaInicio} aoTraco={livre.aoTraco} aoCancelarTraco={() => tecnico.setMensagem('Traço cancelado: dois dedos na tela mexem na vista.')} aoAviso={tecnico.setMensagem}
           substituir={tecnico.substituir} concluirGesto={tecnico.concluirGesto} />
         <JanelaTraco traco={livre.traco} recorte={livre.recorte} aoFechar={livre.fechar} aoTrocarLado={livre.trocarLado} aoDescartar={livre.descartar}
           aoCriarPeca={(mm) => { const erro = livre.criarPeca(mm); if (!erro) setFerramenta('SELECIONAR'); return erro; }} aoCriarRecorte={livre.criarRecorte} />

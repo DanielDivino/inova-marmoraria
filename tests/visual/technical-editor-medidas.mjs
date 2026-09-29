@@ -51,10 +51,14 @@ try {
 
   // Peça em U com braços e larguras diferentes, digitados no painel.
   await botao('Em U').click();
-  await campo('Braço esquerdo', '1m80');
-  await campo('Largura braço dir.', '55cm');
+  // Só números: a vírgula entra sozinha (180 → 1,80 m), como no Orçamento Rápido.
+  const braco = page.locator('.tec-painel').getByLabel('Braço esquerdo', { exact: true });
+  await braco.click(); await braco.press('Control+a'); await page.keyboard.type('180');
+  assert.equal(await braco.inputValue(), '1,80');
+  await braco.press('Enter'); await page.waitForTimeout(120);
+  await campo('Largura braço dir.', '55');
   // Soma das larguras maior que o comprimento: avisa e não aplica.
-  await campo('Largura braço esq.', '2m30');
+  await campo('Largura braço esq.', '230');
   assert.match(await page.locator('.tec-painel .tec-aviso').innerText(), /larguras dos braços/);
   await page.locator('.tec-painel').getByLabel('Pedra (visual e estimativa)').selectOption('mat-1');
 
@@ -67,7 +71,7 @@ try {
   }
   await page.locator('.tec-lados .tec-lado-botao').nth(0).click();
   const janela = page.getByRole('dialog', { name: /^Lado 1/ });
-  await janela.getByLabel('Medida do lado').fill('3m');
+  await janela.getByLabel('Medida do lado').fill('300');
   await janela.getByLabel('Medida do lado').press('Enter');
   assert.match(await janela.getByRole('alert').innerText(), /travados/);
   await shot('01-lado-travado');
@@ -99,6 +103,36 @@ try {
   const areaU = (2600 * 600 + 600 * (1800 - 600) + 550 * (1500 - 600)) / 1e6, areaReta = 2440 * 650 / 1e6;
   assert.equal(numero(total), Math.round((areaU * 600 + areaReta * 600 + 180) * 100) / 100, 'total da estimativa');
 
+  // Puxar um lado inteiro: os dois cantos andam juntos e os lados vizinhos esticam.
+  const puxar = async (lado, dx, dy) => {
+    const caixa = await lado.boundingBox();
+    const x = caixa.x + caixa.width / 2, y = caixa.y + caixa.height / 2;
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 10 }); await page.mouse.up(); await page.waitForTimeout(200);
+  };
+  const medida = (contorno, i) => { const a = contorno[i], b = contorno[(i + 1) % contorno.length]; return Math.round(Math.hypot(b.x - a.x, b.y - a.y)); };
+  // Reta com os lados 2 e 4 travados: puxar o lado 1 mudaria os dois, então avisa e não mexe.
+  await puxar(page.locator('.tec-peca').nth(1).locator('.tec-lado').nth(0), 0, 40);
+  assert.match(await page.locator('.tec-mensagem').innerText(), /lados vizinhos estão travados/);
+  // U: puxar o lado de fora do braço direito para a direita alarga a peça.
+  const antes = savedDocument.pieces[0].contour.map((vertice) => ({ ...vertice }));
+  await puxar(page.locator('.tec-peca').nth(0).locator('.tec-lado').nth(5), 45, 0);
+  await shot('03-lado-puxado');
+  await botao('Salvar agora').click();
+  await page.getByText('Salvo', { exact: true }).waitFor();
+  const depois = savedDocument.pieces[0].contour;
+  const avanco = depois[5].x - antes[5].x;
+  assert(avanco >= 100 && avanco % 10 === 0, 'lado andou para fora em centímetros inteiros: ' + avanco);
+  assert.equal(depois[6].x - antes[6].x, avanco, 'os dois cantos do lado andam juntos');
+  assert.equal(medida(depois, 5), medida(antes, 5), 'o lado puxado mantém a medida');
+  assert.equal(medida(depois, 4), medida(antes, 4) + avanco, 'lado de baixo do braço direito esticou junto');
+  assert.equal(medida(depois, 6), medida(antes, 6) + avanco, 'fundo esticou junto');
+  assert.equal(savedDocument.pieces[0].geometryMode, 'FREE');
+  assert.deepEqual(savedDocument.pieces[1].contour.map((v) => [v.x, v.y]), reta.contour.map((v) => [v.x, v.y]), 'a reta travada não mudou');
+  // A estimativa acompanha o desenho: entra a área acrescentada (avanço × 1m50 do braço) a R$ 600/m².
+  const totalDepois = await estimativa.locator('.tec-totais div').first().locator('dd').innerText();
+  assert.equal(Math.round((numero(totalDepois) - numero(comMontagem)) * 100), Math.round(avanco * 1500 / 1e6 * 600 * 100), 'estimativa com a área nova');
+
   // Celular: desenho ocupando a tela, ferramentas embaixo com botões grandes e folhas que sobem.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
@@ -106,14 +140,14 @@ try {
   const alturas = await page.locator('.tec-ferramenta').evaluateAll(els => els.filter(el => el.getBoundingClientRect().width > 0).map(el => el.getBoundingClientRect().height));
   assert(alturas.length > 5 && alturas.every(altura => altura >= 44), 'botões das ferramentas com pelo menos 44 px: ' + alturas.join(','));
   const barra = page.locator('.tec-barra-estimativa .tec-resumo-estimativa');
-  assert.equal(await barra.locator('strong').innerText(), comMontagem, 'barra da estimativa no rodapé');
+  assert.equal(await barra.locator('strong').innerText(), totalDepois, 'barra da estimativa no rodapé');
   await barra.click();
   await page.locator('.tec-lateral .tec-totais').waitFor();
   await shot('03-celular-estimativa');
   await page.getByRole('button', { name: 'Fechar painel', exact: true }).click();
   await shot('04-celular');
   assert.deepEqual(errors, []);
-  console.log('OK: medidas digitadas (U pelo painel, aviso de medida impossível, lado travado), estimativa com as regras do orçamento e layout do celular com ferramentas grandes e folhas.');
+  console.log('OK: medidas só com números (vírgula automática), U pelo painel, aviso de medida impossível, lado travado, puxar lado inteiro (vizinhos acompanham; bloqueio com vizinho travado), estimativa com as regras do orçamento e layout do celular.');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

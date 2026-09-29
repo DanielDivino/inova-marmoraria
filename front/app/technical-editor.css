@@ -212,3 +212,9 @@ html.inova-dark .inova-theme .tec-resumo-estimativa small { background: #3c3219;
 }
 .tec-cota-livre { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 6px 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
 .tec-cota-livre > span { grid-column: 1 / -1; font-size: 13px; }
+
+/* Medida em metros: só números, com o "m" dentro do campo. */
+.tec-campo-metros { position: relative; display: block; flex: 1; min-width: 0; }
+.tec-campo-metros > input { box-sizing: border-box; width: 100%; padding-right: 26px !important; }
+.tec-campo-metros > i { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-style: normal; font-size: 13px; pointer-events: none; }
+.tec-referencia .tec-campo-metros > input { min-height: 46px; padding: 0 30px 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 17px; }

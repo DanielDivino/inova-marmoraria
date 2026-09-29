@@ -101,7 +101,7 @@ try {
   // Medida digitada no lado da peça em L (toque na cota), texto livre e cadeado.
   await clicarNoCentro(page.locator('.tec-peca').nth(1).locator('.tec-cota-fundo').first());
   const janela = page.getByRole('dialog', { name: /^Lado 1/ });
-  await janela.getByLabel('Medida do lado').fill('2m60');
+  await janela.getByLabel('Medida do lado').fill('260'); // só números: vira 2,60 m
   await janela.getByLabel('Medida do lado').press('Enter');
   await janela.getByLabel('Texto no lugar da medida').fill('encosto na parede');
   await janela.getByLabel('Texto no lugar da medida').press('Enter');
