@@ -317,4 +317,7 @@
   html.inova-dark .inova-theme .form-error { color: #f0aaa2; }
   html.inova-dark .inova-theme a { text-decoration-color: #8b7653; }
   html.inova-dark .inova-theme hr { border-color: var(--line); }
+  html.inova-dark .inova-theme .cliente-rapido-opcao { background: #252a27; border-color: #766548; }
+  html.inova-dark .inova-theme .cliente-rapido-opcao.ativo { background: #343a35; border-color: var(--green); }
+  html.inova-dark .inova-theme .cliente-rapido-aviso { color: var(--green); }
 }

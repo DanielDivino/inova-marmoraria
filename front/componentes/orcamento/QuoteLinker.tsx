@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '../../utilitarios/api';
 
-export type QuoteLink = { id: string; number: string; customerId: string; customer: { id: string; name: string; phone: string }; items?: { projectName?: string | null }[] };
+export type QuoteLink = { id: string; number: string; customerId: string; customer: { id: string; name: string; phone: string | null }; items?: { projectName?: string | null }[] };
 export function VincularOrcamento({ value, onChange }: { value: QuoteLink | null; onChange: (value: QuoteLink | null) => void }) {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
@@ -28,7 +28,7 @@ export function VincularOrcamento({ value, onChange }: { value: QuoteLink | null
     {value ? <div><Link href={`/orcamentos/${value.id}`}>{value.number} · {value.customer.name}</Link> <button className="text-button" type="button" onClick={() => onChange(null)}>Remover vínculo</button></div> : <>
       <input className="search" aria-label="Buscar orçamento para vincular" placeholder="Número, cliente ou telefone" value={search} onChange={(event) => setSearch(event.target.value)} />
       {error && <p role="alert" className="form-error">{error}</p>}
-      {loading ? <p role="status">Buscando orçamentos…</p> : <div className="customer-results">{results.map((quote) => <button type="button" className="customer-result" key={quote.id} onClick={() => onChange(quote)}><strong>{quote.number} · {quote.customer.name}</strong><small>{quote.items?.map((item) => item.projectName).filter(Boolean).join(' · ') || quote.customer.phone}</small></button>)}{!results.length && !error && <p className="customer-help">Nenhum orçamento encontrado.</p>}</div>}
+      {loading ? <p role="status">Buscando orçamentos…</p> : <div className="customer-results">{results.map((quote) => <button type="button" className="customer-result" key={quote.id} onClick={() => onChange(quote)}><strong>{quote.number} · {quote.customer.name}</strong><small>{quote.items?.map((item) => item.projectName).filter(Boolean).join(' · ') || quote.customer.phone || ''}</small></button>)}{!results.length && !error && <p className="customer-help">Nenhum orçamento encontrado.</p>}</div>}
     </>}
   </details>;
 }

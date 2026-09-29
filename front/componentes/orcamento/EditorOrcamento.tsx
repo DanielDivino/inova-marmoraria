@@ -27,13 +27,14 @@ import { createPortal } from 'react-dom';
 import { Icone, useCelular } from '../filtros/Filtros';
 import { BarraAtendimento } from './BarraAtendimento';
 import { RecortesDaPeca } from './ProductionCutouts';
+import { OpcaoClienteRapido, contatoCliente, payloadCliente } from '../clientes/ClienteRapido';
 
 type BillingUnit = 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED';
 type MaterialImage = { id: string; url: string; alt?: string | null; isPrimary: boolean };
 type Material = { id: string; name: string; category: string; billingUnit: BillingUnit; currentPrice: number; images?: MaterialImage[] };
 type Service = { id: string; name: string; category: string; billingUnit: BillingUnit; currentPrice: number };
 type ProductType = { id: string; name: string };
-type Customer = { id: string; name: string; phone: string; document?: string | null; email?: string | null; address?: string | null; neighborhood?: string | null; city?: string | null; postalCode?: string | null; complement?: string | null; notes?: string | null };
+type Customer = { id: string; name: string; phone: string | null; isQuick?: boolean; document?: string | null; email?: string | null; address?: string | null; neighborhood?: string | null; city?: string | null; postalCode?: string | null; complement?: string | null; notes?: string | null };
 type Catalog = { materials: Material[]; services: Service[]; productTypes: ProductType[] };
 type ClientWorkspace = { id: string; customer: Customer | null; items: DraftItem[]; activeIndex: number; discount: string; validUntil: string; notes: string; parentQuote: QuoteLink | null };
 type CustomerTarget = { kind: 'WORKSPACE'; workspaceId: string } | { kind: 'NEW_WORKSPACE' };
@@ -82,6 +83,8 @@ export default function EditorOrcamento() {
   const [customerError, setCustomerError] = useState('');
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
+  /** Novo cadastro como cliente rápido: nenhum dado é exigido para já fazer os projetos. */
+  const [clienteRapido, setClienteRapido] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', document: '', email: '', address: '', neighborhood: '', city: '', postalCode: '', complement: '', notes: '' });
@@ -459,13 +462,15 @@ export default function EditorOrcamento() {
     setCustomerTarget(null);
     setEditingCustomerId(null);
     setCustomerMode(null);
-    setCustomerForm({ name: entry.name, phone: entry.phone, document: entry.document ?? '', email: entry.email ?? '', address: entry.address ?? '', neighborhood: entry.neighborhood ?? '', city: entry.city ?? '', postalCode: entry.postalCode ?? '', complement: entry.complement ?? '', notes: entry.notes ?? '' });
+    setCustomerForm({ name: entry.name, phone: entry.phone ?? '', document: entry.document ?? '', email: entry.email ?? '', address: entry.address ?? '', neighborhood: entry.neighborhood ?? '', city: entry.city ?? '', postalCode: entry.postalCode ?? '', complement: entry.complement ?? '', notes: entry.notes ?? '' });
     setCustomerSearch('');
     setCustomers([]);
   };
   const openCustomerSearch = () => { setCustomerError(''); setEditingCustomerId(null); setCustomerMode('EXISTING'); setCustomerSearch(''); setCustomers([]); };
-  const openNewCustomer = () => { setCustomerError(''); setEditingCustomerId(null); setCustomerMode('NEW'); setCustomerForm({ name: '', phone: '', document: '', email: '', address: '', neighborhood: '', city: '', postalCode: '', complement: '', notes: '' }); };
+  const openNewCustomer = () => { setCustomerError(''); setEditingCustomerId(null); setClienteRapido(false); setCustomerMode('NEW'); setCustomerForm({ name: '', phone: '', document: '', email: '', address: '', neighborhood: '', city: '', postalCode: '', complement: '', notes: '' }); };
   const editCustomer = () => { if (!customer) return; selectCustomer(customer); setEditingCustomerId(customer.id); setCustomerMode('NEW'); };
+  const novoClienteRapido = clienteRapido && !editingCustomerId;
+  const editandoClienteRapido = !!editingCustomerId && !!customer?.isQuick;
   const closeCustomerDialog = () => { if (savingCustomer) return; setCustomerError(''); setCustomerMode(null); setCustomerTarget(null); setEditingCustomerId(null); };
   const customerTargetForNewTab = (): CustomerTarget => {
     const empty = workspaces.find(entry => !entry.customer && !entry.parentQuote && entry.items.every(project => !projetoPreenchido(project)));
@@ -478,7 +483,7 @@ export default function EditorOrcamento() {
     if (savingCustomer) return;
     setSavingCustomer(true);
     setCustomerError('');
-    try { const payload = Object.fromEntries(Object.entries(customerForm).map(([key, value]) => [key, value || null])); const saved = editingCustomerId ? await api<Customer>('/customers/' + editingCustomerId, { method: 'PATCH', body: JSON.stringify(payload) }) : await api<Customer>('/customers', { method: 'POST', body: JSON.stringify(payload) }); selectCustomer(saved); }
+    try { const payload = payloadCliente(customerForm, clienteRapido && !editingCustomerId); const saved = editingCustomerId ? await api<Customer>('/customers/' + editingCustomerId, { method: 'PATCH', body: JSON.stringify(payload) }) : await api<Customer>('/customers', { method: 'POST', body: JSON.stringify(payload) }); selectCustomer(saved); }
     catch (cause) { setCustomerError(cause instanceof Error ? cause.message : 'Não foi possível salvar o cliente.'); }
     finally { setSavingCustomer(false); }
   }
@@ -633,20 +638,22 @@ export default function EditorOrcamento() {
       <div className="customer-mode-tabs"><button type="button" disabled={savingCustomer} onClick={openCustomerSearch}>Selecionar cliente</button><button type="button" disabled={savingCustomer} onClick={openNewCustomer}>Novo cliente</button></div>
       {customerError && <p className="form-error" role="alert">{customerError}</p>}
       {customerMode === 'NEW' ? <><form className="inline-form customer-form" onSubmit={salvarCliente}>
-        <input value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} placeholder="Nome" required />
-        <input value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} placeholder="Telefone" required />
-        <input value={customerForm.document} onChange={(event) => setCustomerForm({ ...customerForm, document: event.target.value })} placeholder="CPF (opcional)" />
+        {!editingCustomerId && <OpcaoClienteRapido ativo={clienteRapido} aoMudar={setClienteRapido} />}
+        {editandoClienteRapido && <p className="cliente-rapido-aviso">Cliente rápido: informe o telefone para completar o cadastro.</p>}
+        <input value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} placeholder={novoClienteRapido ? 'Nome (opcional)' : 'Nome'} aria-label="Nome" required={!novoClienteRapido} />
+        <input value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} placeholder={novoClienteRapido || editandoClienteRapido ? 'Telefone (opcional)' : 'Telefone'} aria-label="Telefone" required={!novoClienteRapido && !editandoClienteRapido} />
+        {!novoClienteRapido && <><input value={customerForm.document} onChange={(event) => setCustomerForm({ ...customerForm, document: event.target.value })} placeholder="CPF (opcional)" />
         <input value={customerForm.email} onChange={(event) => setCustomerForm({ ...customerForm, email: event.target.value })} placeholder="E-mail" />
         <input value={customerForm.address} onChange={(event) => setCustomerForm({ ...customerForm, address: event.target.value })} placeholder="Endereço / obra" />
         <input value={customerForm.neighborhood} onChange={(event) => setCustomerForm({ ...customerForm, neighborhood: event.target.value })} placeholder="Bairro" />
         <input value={customerForm.city} onChange={(event) => setCustomerForm({ ...customerForm, city: event.target.value })} placeholder="Cidade" />
         <input value={customerForm.postalCode} onChange={(event) => setCustomerForm({ ...customerForm, postalCode: event.target.value })} placeholder="CEP" />
         <input value={customerForm.complement} onChange={(event) => setCustomerForm({ ...customerForm, complement: event.target.value })} placeholder="Complemento" />
-        <textarea value={customerForm.notes} onChange={(event) => setCustomerForm({ ...customerForm, notes: event.target.value })} placeholder="Observações" />
-        <button className="primary-button" disabled={savingCustomer}>{savingCustomer ? 'Salvando…' : editingCustomerId ? 'Salvar alterações' : 'Salvar e selecionar cliente'}</button>
+        <textarea value={customerForm.notes} onChange={(event) => setCustomerForm({ ...customerForm, notes: event.target.value })} placeholder="Observações" /></>}
+        <button className="primary-button" disabled={savingCustomer}>{savingCustomer ? 'Salvando…' : editingCustomerId ? 'Salvar alterações' : novoClienteRapido ? 'Criar cliente rápido e selecionar' : 'Salvar e selecionar cliente'}</button>
       </form><button type="button" className="text-button customer-back" disabled={savingCustomer} onClick={openCustomerSearch}>← Voltar para busca</button></> : <>
         <label className="customer-search-label">Buscar cliente existente<input className="search" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Digite nome, telefone ou CPF" autoFocus /></label>
-        {customerSearch.trim().length < 2 ? <p className="customer-help">Comece digitando para localizar um cliente cadastrado.</p> : customers.length ? <div className="customer-results">{customers.map((entry) => <button className="customer-result" key={entry.id} onClick={() => selectCustomer(entry)}><strong>{entry.name}</strong><small>{entry.phone}{entry.document ? ` · ${entry.document}` : ''}</small></button>)}</div> : <p className="customer-help">Nenhum cliente encontrado. <button type="button" className="text-button" onClick={openNewCustomer}>Cadastrar novo cliente</button></p>}
+        {customerSearch.trim().length < 2 ? <p className="customer-help">Comece digitando para localizar um cliente cadastrado.</p> : customers.length ? <div className="customer-results">{customers.map((entry) => <button className="customer-result" key={entry.id} onClick={() => selectCustomer(entry)}><strong>{entry.name}</strong><small>{contatoCliente(entry)}</small></button>)}</div> : <p className="customer-help">Nenhum cliente encontrado. <button type="button" className="text-button" onClick={openNewCustomer}>Cadastrar novo cliente</button></p>}
       </>}
     </dialog>}
     {error && <p className="form-error" role="alert">{error}</p>}

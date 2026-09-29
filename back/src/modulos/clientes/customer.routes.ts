@@ -2,7 +2,7 @@ import { escopoClientes, escopoOrcamentos, exigirClienteProprio, exigirPermissao
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { customerSchema, digitsOnly } from './customer.schema.js';
+import { customerSchema, customerUpdateSchema, digitsOnly, quickCustomerSchema } from './customer.schema.js';
 import { prisma } from '../../config/prisma.js';
 import { AppError, idSchema, schemaConsultaPaginada, enviarPaginado } from '../../compartilhado/http.js';
 
@@ -27,10 +27,29 @@ export async function registrarRotasClientes(app: FastifyInstance) {
   });
   app.get('/:id', authenticated, async (request) => { const customer = await prisma.customer.findUnique({ where: idSchema.parse(request.params), include: { owner: { select: { id: true, name: true } }, _count: { select: { quotes: { where: escopoOrcamentos(request.user) } } } } }); if (!customer) throw new AppError(404, 'Cliente não encontrado.', 'NOT_FOUND'); return customer; });
   app.post('/', authenticated, async (request, reply) => {
-    const input = customerSchema.parse(request.body); await validarContatoUnico(input);
+    const body = request.body as { quick?: unknown } | null;
+    if (body?.quick === true) {
+      const input = quickCustomerSchema.parse(body); await validarContatoUnico(input);
+      const name = input.name || `Cliente rápido ${await proximoNumeroClienteRapido()}`;
+      return reply.status(201).send(await prisma.customer.create({ data: { ...input, name, isQuick: !input.phone, ownerId: request.user.id } }).catch(tratarConflitoContato));
+    }
+    const input = customerSchema.parse(body); await validarContatoUnico(input);
     return reply.status(201).send(await prisma.customer.create({ data: { ...input, ownerId: request.user.id } }).catch(tratarConflitoContato));
   });
-  app.patch('/:id', authenticated, async (request) => { const { id } = idSchema.parse(request.params); const input = customerSchema.partial().parse(request.body); const customer = await prisma.customer.findUnique({ where: { id } }); if (!customer) throw new AppError(404, 'Cliente não encontrado.', 'NOT_FOUND'); await validarContatoUnico(input, id); return prisma.customer.update({ where: { id }, data: input }).catch(tratarConflitoContato); });
+  app.patch('/:id', authenticated, async (request) => {
+    const { id } = idSchema.parse(request.params); const input = customerUpdateSchema.parse(request.body);
+    const customer = await prisma.customer.findUnique({ where: { id } }); if (!customer) throw new AppError(404, 'Cliente não encontrado.', 'NOT_FOUND');
+    await validarContatoUnico(input, id);
+    // Cliente rápido: ao ganhar telefone vira cadastro completo, e os orçamentos dele passam a mostrar os dados informados.
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.customer.update({ where: { id }, data: { ...input, ...(customer.isQuick && input.phone ? { isQuick: false } : {}) } });
+      if (customer.isQuick) {
+        await tx.quote.updateMany({ where: { customerId: id }, data: { customerNameSnapshot: updated.name, customerPhoneSnapshot: updated.phone } });
+        if (updated.address) await tx.quote.updateMany({ where: { customerId: id, workAddressSnapshot: null }, data: { workAddressSnapshot: updated.address } });
+      }
+      return updated;
+    }).catch(tratarConflitoContato);
+  });
   app.patch('/:id/owner', { preHandler: [app.authenticate, exigirPermissao('administration')] }, async (request) => {
     const { id } = idSchema.parse(request.params);
     const { ownerId } = z.object({ ownerId: z.string().cuid().nullable() }).strict().parse(request.body);
@@ -45,6 +64,11 @@ export async function registrarRotasClientes(app: FastifyInstance) {
   });
 }
 
+/** Próximo número livre para "Cliente rápido N". */
+async function proximoNumeroClienteRapido() {
+  const clientes = await prisma.customer.findMany({ where: { name: { startsWith: 'Cliente rápido ' } }, select: { name: true } });
+  return Math.max(0, ...clientes.map(({ name }) => Number(/^Cliente rápido (\d+)$/.exec(name)?.[1] ?? 0))) + 1;
+}
 function tratarConflitoContato(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new AppError(409, 'Já existe cliente com este telefone.', 'PHONE_IN_USE');
   throw error;

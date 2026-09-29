@@ -152,7 +152,9 @@ model Customer {
   @@index([ownerId, name])
   id          String   @id @default(cuid())
   name        String
-  phone       String   @unique
+  /// Opcional só no cliente rápido (cadastro sem dados para já fazer projetos).
+  phone       String?  @unique
+  isQuick     Boolean  @default(false)
   email       String?
   document    String?
   address     String?

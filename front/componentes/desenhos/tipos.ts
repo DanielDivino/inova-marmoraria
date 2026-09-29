@@ -6,7 +6,7 @@ export type Revisao = {
   decisions: { decision: string; note?: string | null; decidedBy: { name: string }; decidedAt: string }[]; releases: { id: string; releasedAt: string }[];
 };
 export type RascunhoResposta = {
-  design: { id: string; name: string; project: { id: string; name: string; job: { customer: { name: string; phone: string } } } };
+  design: { id: string; name: string; project: { id: string; name: string; job: { customer: { name: string; phone: string | null } } } };
   draft: { id: string; version: number; document: TechnicalDocument; updatedAt: string };
   diagnostics: Diagnostic[];
 };
