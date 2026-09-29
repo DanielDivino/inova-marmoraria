@@ -4,9 +4,10 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { customerSchema, customerUpdateSchema, digitsOnly, quickCustomerSchema } from './customer.schema.js';
 import { prisma } from '../../config/prisma.js';
-import { AppError, idSchema, schemaConsultaPaginada, enviarPaginado } from '../../compartilhado/http.js';
+import { AppError, idSchema, schemaConsultaPaginada } from '../../compartilhado/http.js';
 
-const querySchema = schemaConsultaPaginada({ search: z.string().optional() });
+/** `tipo` separa os clientes cadastrados dos sem cadastro (orçamento sem cadastro); sem ele, vêm todos. */
+const querySchema = schemaConsultaPaginada({ search: z.string().optional(), tipo: z.enum(['cadastrados', 'sem-cadastro']).optional() });
 export async function registrarRotasClientes(app: FastifyInstance) {
   const authenticated = { preHandler: [app.authenticate, exigirClienteProprio] };
   app.get('/', authenticated, async (request, reply) => {
@@ -14,9 +15,12 @@ export async function registrarRotasClientes(app: FastifyInstance) {
     const digits = digitsOnly(query.search ?? '');
     const matches = digits ? await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM "Customer" WHERE regexp_replace(phone, '[^0-9]', '', 'g') LIKE ${'%' + digits + '%'} OR regexp_replace(COALESCE(document, ''), '[^0-9]', '', 'g') LIKE ${'%' + digits + '%'}` : [];
     const searchWhere = query.search ? { OR: [{ id: { in: matches.map((entry) => entry.id) } }, { name: { contains: query.search, mode: 'insensitive' as const } }, { phone: { contains: query.search } }, { document: { contains: query.search } }] } : {};
-    const where = { AND: [searchWhere, escopoClientes(request.user)] };
-    const [data, total] = await prisma.$transaction([prisma.customer.findMany({ where, orderBy: { name: 'asc' }, skip: (query.page - 1) * query.limit, take: query.limit, include: { quotes: { where: escopoOrcamentos(request.user), orderBy: { createdAt: 'desc' }, take: 1, select: { number: true, createdAt: true, status: true, items: { take: 1, orderBy: { id: 'asc' }, select: { materialNameSnapshot: true, projectName: true, components: { orderBy: { sortOrder: 'asc' }, select: { label: true, componentType: true } } } } } } } }), prisma.customer.count({ where })]);
-    return enviarPaginado(reply, query.page, query.limit, total, data);
+    const base = { AND: [searchWhere, escopoClientes(request.user)] };
+    const where = query.tipo ? { AND: [...base.AND, { isQuick: query.tipo === 'sem-cadastro' }] } : base;
+    const [data, total, semCadastro, todos] = await prisma.$transaction([prisma.customer.findMany({ where, orderBy: { name: 'asc' }, skip: (query.page - 1) * query.limit, take: query.limit, include: { quotes: { where: escopoOrcamentos(request.user), orderBy: { createdAt: 'desc' }, take: 1, select: { number: true, createdAt: true, status: true, items: { take: 1, orderBy: { id: 'asc' }, select: { materialNameSnapshot: true, projectName: true, components: { orderBy: { sortOrder: 'asc' }, select: { label: true, componentType: true } } } } } } } }), prisma.customer.count({ where }),
+      prisma.customer.count({ where: { AND: [...base.AND, { isQuick: true }] } }), prisma.customer.count({ where: base })]);
+    // Contagem das duas abas (com a mesma busca), para achar rápido os sem cadastro.
+    return reply.send({ data, meta: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) }, counts: { cadastrados: todos - semCadastro, semCadastro } });
   });
   app.get('/:id/quotes', authenticated, async (request) => {
     const { id } = idSchema.parse(request.params);
@@ -30,7 +34,7 @@ export async function registrarRotasClientes(app: FastifyInstance) {
     const body = request.body as { quick?: unknown } | null;
     if (body?.quick === true) {
       const input = quickCustomerSchema.parse(body); await validarContatoUnico(input);
-      const name = input.name || `Cliente rápido ${await proximoNumeroClienteRapido()}`;
+      const name = input.name || `Sem cadastro ${await proximoNumeroSemCadastro()}`;
       return reply.status(201).send(await prisma.customer.create({ data: { ...input, name, isQuick: !input.phone, ownerId: request.user.id } }).catch(tratarConflitoContato));
     }
     const input = customerSchema.parse(body); await validarContatoUnico(input);
@@ -40,7 +44,7 @@ export async function registrarRotasClientes(app: FastifyInstance) {
     const { id } = idSchema.parse(request.params); const input = customerUpdateSchema.parse(request.body);
     const customer = await prisma.customer.findUnique({ where: { id } }); if (!customer) throw new AppError(404, 'Cliente não encontrado.', 'NOT_FOUND');
     await validarContatoUnico(input, id);
-    // Cliente rápido: ao ganhar telefone vira cadastro completo, e os orçamentos dele passam a mostrar os dados informados.
+    // Sem cadastro (cliente rápido): ao ganhar telefone vira cadastro completo, e os orçamentos dele passam a mostrar os dados informados.
     return prisma.$transaction(async (tx) => {
       const updated = await tx.customer.update({ where: { id }, data: { ...input, ...(customer.isQuick && input.phone ? { isQuick: false } : {}) } });
       if (customer.isQuick) {
@@ -64,10 +68,10 @@ export async function registrarRotasClientes(app: FastifyInstance) {
   });
 }
 
-/** Próximo número livre para "Cliente rápido N". */
-async function proximoNumeroClienteRapido() {
-  const clientes = await prisma.customer.findMany({ where: { name: { startsWith: 'Cliente rápido ' } }, select: { name: true } });
-  return Math.max(0, ...clientes.map(({ name }) => Number(/^Cliente rápido (\d+)$/.exec(name)?.[1] ?? 0))) + 1;
+/** Próximo número livre para "Sem cadastro N" (orçamento sem cadastro). */
+async function proximoNumeroSemCadastro() {
+  const clientes = await prisma.customer.findMany({ where: { name: { startsWith: 'Sem cadastro ' } }, select: { name: true } });
+  return Math.max(0, ...clientes.map(({ name }) => Number(/^Sem cadastro (\d+)$/.exec(name)?.[1] ?? 0))) + 1;
 }
 function tratarConflitoContato(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new AppError(409, 'Já existe cliente com este telefone.', 'PHONE_IN_USE');

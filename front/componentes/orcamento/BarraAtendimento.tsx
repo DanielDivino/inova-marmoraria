@@ -43,6 +43,8 @@ type Props = {
   aoEscolherCliente: (index: number) => void;
   aoSelecionarCliente: () => void;
   aoCadastrarCliente: () => void;
+  /** Cria um cliente sem nenhum dado (orçamento sem cadastro) e já seleciona. */
+  aoSemCadastro?: () => void;
   aoOutroCliente?: () => void;
   aoRemoverCliente?: () => void;
   aoEditarCliente?: () => void;
@@ -55,7 +57,7 @@ type Props = {
  * Barra do atendimento: Cliente ▾ › Projeto ▾ · + Projeto · Editar cliente.
  * Substitui as abas de clientes, os botões de cliente e as abas de projetos.
  */
-export function BarraAtendimento({ clientes, clienteAtivo, clienteNome, projetos, projetoAtivo, aoEscolherCliente, aoSelecionarCliente, aoCadastrarCliente, aoOutroCliente, aoRemoverCliente, aoEditarCliente, aoEscolherProjeto, aoAdicionarProjeto, aoExcluirProjeto }: Props) {
+export function BarraAtendimento({ clientes, clienteAtivo, clienteNome, projetos, projetoAtivo, aoEscolherCliente, aoSelecionarCliente, aoCadastrarCliente, aoSemCadastro, aoOutroCliente, aoRemoverCliente, aoEditarCliente, aoEscolherProjeto, aoAdicionarProjeto, aoExcluirProjeto }: Props) {
   const projeto = projetos[projetoAtivo];
   const nomeCliente = (nome: string | null, index: number) => nome || `Cliente ${index + 1}`;
   return <nav className="atendimento-barra" aria-label="Cliente e projeto">
@@ -77,6 +79,7 @@ export function BarraAtendimento({ clientes, clienteAtivo, clienteNome, projetos
             <button type="button" role="menuitem" onClick={() => { fechar(); aoSelecionarCliente(); }}><Icone nome="buscar" tamanho={16} />Selecionar cliente existente</button>
             <button type="button" role="menuitem" onClick={() => { fechar(); aoCadastrarCliente(); }}><Icone nome="mais" tamanho={16} />Cadastrar novo cliente</button>
           </>}
+        {aoSemCadastro && <button type="button" role="menuitem" onClick={() => { fechar(); aoSemCadastro(); }}><Icone nome="raio" tamanho={16} />Orçamento sem cadastro</button>}
         {aoOutroCliente && <button type="button" role="menuitem" onClick={() => { fechar(); aoOutroCliente(); }}><Icone nome="equipe" tamanho={16} />+ Outro cliente neste orçamento</button>}
         {aoRemoverCliente && <button type="button" role="menuitem" className="perigo" onClick={() => { fechar(); aoRemoverCliente(); }}><Icone nome="fechar" tamanho={16} />Remover este cliente</button>}
       </>}

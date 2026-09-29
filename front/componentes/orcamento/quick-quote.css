@@ -30,6 +30,8 @@ html .inova-theme .project-builder .modo-e-etapas > div.quote-mode-switch { flex
 .quick-heading small, .quick-quote td small { display:block; color:#77766f; font-size:11px; }
 .quick-round-toggle { display:flex; align-items:center; gap:6px; flex-shrink:0; padding:7px 10px; border:1px solid #ded7ca; border-radius:6px; background:#fffaf0; color:#71532c; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
 .quick-round-toggle input { width:auto; }
+.quick-round-toggle.travado { cursor: help; }
+.quick-round-toggle.travado input { accent-color: #b6811e; opacity: 1; cursor: help; }
 @media(max-width:560px) { .quick-heading { flex-direction:column; } }
 .quick-project-fields { display:grid; grid-template-columns:1fr 1fr; align-items:end; gap:10px; margin-bottom:12px; }
 .quick-project-fields label { display:grid; gap:5px; font-size:12px; }

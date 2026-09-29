@@ -1,4 +1,4 @@
-import { cotasDaPeca, edgeLength, edgePoint, sampleContour, type Feature, type Piece } from '@inova/domain/technical';
+import { areasDaPeca, cotasDaPeca, edgeLength, edgePoint, faixaDentroDaPeca, formatMeasure, NOME_AREA, sampleContour, type Feature, type Piece } from '@inova/domain/technical';
 import { CotasPeca } from './CotasPeca';
 import { anguloLegivel, pontosSvg, Texto } from './svg';
 import { ROTULO_PERFIL, type Selecao } from './tipos';
@@ -32,6 +32,7 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
   const centro = !embaixo.length ? meio : caixa.maxY - topoRecursos >= baseRecursos - caixa.minY ? { x: meio.x, y: (topoRecursos + caixa.maxY) / 2 } : { x: meio.x, y: (baseRecursos + caixa.minY) / 2 };
   // Alças dos vértices menores quando a peça aparece pequena na tela.
   const alca = Math.max(4, Math.min(9, Math.min(caixa.maxX - caixa.minX, caixa.maxY - caixa.minY) * escala / 8));
+  const areas = areasDaPeca(peca);
 
   return <g transform={`translate(${peca.x} ${peca.y}) rotate(${-peca.rotationDeg})`} className={`tec-peca${selecionada ? ' selecionada' : ''}${peca.locked ? ' travada' : ''}`}>
     {imagem && <defs><pattern id={`pedra-${peca.id}`} width={textura} height={textura} patternUnits="userSpaceOnUse" patternTransform={`rotate(${peca.material?.veinRotationDeg ?? 0})`}>
@@ -39,6 +40,20 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
     </pattern></defs>}
     {/* Estilo inline: a regra de CSS da cor neutra venceria o atributo fill. */}
     <polygon points={contorno} className="tec-pedra" style={imagem ? { fill: `url(#pedra-${peca.id})` } : undefined} data-alvo="peca" data-id={peca.id} />
+    {/* Área seca e molhada: a molhada tingida, divisas tracejadas e o nome com o tamanho junto à frente do balcão. */}
+    {areas.length > 0 && <g className="tec-areas-balcao" pointerEvents="none">
+      <defs><clipPath id={`areas-${peca.id}`}><polygon points={contorno} /></clipPath></defs>
+      <g clipPath={`url(#areas-${peca.id})`}>
+        {areas.map((area) => <rect key={area.indice} x={area.x0} y={caixa.minY} width={area.x1 - area.x0} height={caixa.maxY - caixa.minY} className={area.tipo === 'WET' ? 'tec-area-molhada' : 'tec-area-seca'} />)}
+        {/* Divisas nas duas pontas de cada área (menos nas pontas da peça). */}
+        {areas.flatMap((area) => [area.x0, area.x1]).filter((x, indice, lista) => x > caixa.minX + .5 && x < caixa.maxX - .5 && lista.indexOf(x) === indice)
+          .map((x) => <line key={`divisa-${x}`} x1={x} y1={caixa.minY} x2={x} y2={caixa.maxY} className="tec-area-divisa" strokeWidth={px(1.6)} strokeDasharray={`${px(6)} ${px(4)}`} />)}
+      </g>
+      {areas.map((area, indice) => {
+        const meioX = (area.x0 + area.x1) / 2, faixa = faixaDentroDaPeca(peca, meioX);
+        return faixa && <Texto key={`rotulo-${indice}`} x={meioX} y={faixa.y0 + Math.min(px(14), (faixa.y1 - faixa.y0) / 2)} tamanho={px(10)} className={`tec-area-rotulo ${area.tipo === 'WET' ? 'molhada' : 'seca'}`}>{NOME_AREA[area.tipo]} · {formatMeasure(area.comprimentoMm)}</Texto>;
+      })}
+    </g>}
     <polygon points={contorno} className="tec-contorno" strokeWidth={px(selecionada ? 2.6 : 1.6)} pointerEvents="none" />
 
     {recursos.map((recurso) => {

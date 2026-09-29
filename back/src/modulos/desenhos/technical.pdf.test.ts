@@ -61,7 +61,7 @@ describe('PDF técnico reproduz o que está no desenho', () => {
     expect(texts).toContain('2m44 × 65cm');
     expect(texts).toContain('Conferir caimento na cuba');
     expect(texts).toEqual(expect.arrayContaining(['Saia', '60cm', 'Lado 1 (2m44)']));
-    expect(texts).toContain('Escala 1:20 em A4 · medidas em metros (2m44 = 2,44 m)');
+    expect(texts).toContain('Escala 1:20 em A4');
   });
 
   it('imprime a medida de cada lado e o texto combinado no lugar do número', async () => {
@@ -95,6 +95,13 @@ describe('PDF técnico reproduz o que está no desenho', () => {
     expect(texts).toContain('Desenho técnico · Revisão 3 · Continuação');
     expect(texts).toContain(`Revisão 3 · Página ${pages} de ${pages}`);
     expect(texts).toContain('Peça 24');
+  });
+
+  it('marca a área seca e a molhada do balcão na planta, na legenda e na tabela', async () => {
+    const document = cozinhaCompleta();
+    document.pieces[0] = { ...document.pieces[0], wetDryZones: [{ kind: 'DRY', startMm: 0, endMm: 900 }, { kind: 'WET', startMm: 900, endMm: 1900 }, { kind: 'DRY', startMm: 2000, endMm: 2600 }] };
+    const { texts } = await render(document, 'desenho-tecnico-area-molhada');
+    expect(texts).toEqual(expect.arrayContaining(['Área seca 90cm', 'Área molhada 1m', 'Área seca 60cm', 'Área molhada', 'Área seca', 'Áreas seca e molhada', 'de 90cm a 1m90', 'de 2m a 2m60']));
   });
 
   it('não quebra quando não há peças', async () => {

@@ -24,6 +24,8 @@ await page.route('**/api/**', async route => {
   requests.push(`${request.method()} ${url.pathname}`);
   if (url.pathname === '/api/auth/me') return route.fulfill({ json: { user: { id: 'mobile-tabs-test', name: 'Teste', role: 'SELLER', maxDiscountPercent: 10 } } });
   if (url.pathname === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
+  // Desenhos técnicos do cliente (botão Desenho técnico do Novo orçamento).
+  if (/^\/api\/customers\/[^/]+\/designs$/.test(url.pathname)) return route.fulfill({ json: { designs: [] } });
   if (url.pathname === '/api/catalog') return route.fulfill({ json: {
     materials: [{ id: 'stone', name: 'Branco Dallas', billingUnit: 'SQUARE_METER', currentPrice: 600, category: 'Granito', images: [] }],
     services: [], productTypes: [{ id: 'counter', name: 'Bancada' }],

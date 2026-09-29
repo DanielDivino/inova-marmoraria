@@ -15,6 +15,11 @@ const serviceSchema = z.object({ name: z.string().min(2), category: z.string().m
 const materialInclude = { images: { orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }] }, prices: { orderBy: { validFrom: 'desc' as const }, take: 1 } };
 const toMaterial = (material: any) => ({ ...material, currentPrice: material.prices[0] ? Number(material.prices[0].amount) : null, prices: undefined });
 const toService = (service: any) => ({ ...service, currentPrice: Number(service.currentPrice) });
+/** Ajustes da empresa; sem a linha no banco valem os padrões (M² fechado ligado). */
+const ajustesEmpresa = async () => {
+  const ajustes = await prisma.companySetting.findUnique({ where: { id: 'empresa' } });
+  return { closedSquareMeter: ajustes?.closedSquareMeter ?? true };
+};
 
 export async function registrarRotasCatalogo(app: FastifyInstance) {
   await app.register(multipart, { limits: { files: 5, fileSize: 5 * 1024 * 1024 } });
@@ -30,7 +35,16 @@ export async function registrarRotasCatalogo(app: FastifyInstance) {
   });
   app.get('/', authenticated, async () => {
     const [productTypes, materials, services] = await Promise.all([prisma.productType.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }), prisma.material.findMany({ where: { isActive: true }, include: materialInclude, orderBy: { name: 'asc' } }), prisma.service.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } })]);
-    return { productTypes, materials: materials.map(toMaterial), services: services.map(toService) };
+    return { productTypes, materials: materials.map(toMaterial), services: services.map(toService), settings: await ajustesEmpresa() };
+  });
+  app.get('/settings', authenticated, ajustesEmpresa);
+  // M² fechado fica sempre marcado nos orçamentos; só o administrador desliga, aqui (Materiais e serviços → Serviços e acabamentos).
+  app.patch('/settings', superOnly, async (request) => {
+    const input = z.object({ closedSquareMeter: z.boolean() }).strict().parse(request.body);
+    const previous = await ajustesEmpresa();
+    const updated = await prisma.companySetting.upsert({ where: { id: 'empresa' }, update: input, create: { id: 'empresa', ...input } });
+    await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'COMPANY_SETTING', entityId: 'empresa', action: 'UPDATED', previous, current: input } });
+    return { closedSquareMeter: updated.closedSquareMeter };
   });
   app.get('/materials', authenticated, async (request) => {
     const query = z.object({ active: z.enum(['true', 'false', 'all']).default('true'), search: z.string().optional() }).parse(request.query);

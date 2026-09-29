@@ -1,0 +1,28 @@
+/* Desenho técnico dentro do Novo orçamento: botão, rascunhos do cliente e o editor em tela cheia. */
+.orc-desenho-botao { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; }
+.orc-desenho-botao b { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #b6811e; color: #fff; font-size: 11px; }
+.orc-desenho-ajuda, .orc-desenho-sem-cliente p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.orc-desenho-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.orc-desenho-acoes button, .orc-desenho-novo button { display: inline-flex; align-items: center; gap: 6px; }
+.orc-desenho-lista { display: grid; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
+.orc-desenho-lista li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); }
+.orc-desenho-lista li > div { min-width: 0; }
+.orc-desenho-lista strong, .orc-desenho-lista small { display: block; }
+.orc-desenho-lista small { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.orc-desenho-lista .no-orcamento { color: #7c5718; font-weight: 700; }
+.orc-desenho-novo { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.orc-desenho-novo label { display: grid; gap: 5px; font-size: 12px; font-weight: 700; color: var(--ink); }
+.orc-desenho-novo input { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface, #fff); color: var(--ink); }
+.orc-desenho-tela { position: fixed; inset: 0; z-index: 900; overflow: auto; background: var(--soft, #f6f4ef); }
+.orc-desenho-tela .tec-editor { padding-top: 12px; }
+.orc-desenho-carregando { min-height: 60vh; display: grid; place-items: center; color: var(--muted); }
+@media (max-width: 760px) {
+  .orc-desenho-novo { grid-template-columns: 1fr; }
+  .orc-desenho-tela .tec-editor { height: 100dvh; }
+}
+html.inova-dark .inova-theme .orc-desenho-tela { background: #171a18; }
+html.inova-dark .inova-theme .orc-desenho-lista li { background: #202522; }
+html.inova-dark .inova-theme .orc-desenho-lista .no-orcamento { color: var(--green); }
+.orc-desenho-aviso { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.orc-desenho-aviso .text-button { font-size: 18px; line-height: 1; }
+.orc-desenho-vinculo { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; }

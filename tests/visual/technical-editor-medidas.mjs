@@ -29,10 +29,13 @@ await page.route('**/api/**', async route => {
   const method = route.request().method();
   if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'visual-1', name: 'Administrador Inova', role: 'SUPER_ADMIN', maxDiscountPercent: 100 } } });
   if (path === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
+  // Desenhos técnicos do cliente (botão Desenho técnico do Novo orçamento).
+  if (/^\/api\/customers\/[^/]+\/designs$/.test(path)) return route.fulfill({ json: { designs: [] } });
   if (path === '/api/designs/design-1/draft' && method === 'GET') return route.fulfill({ json: { design: { id: 'design-1', name: 'Desenho técnico', project: { id: 'project-1', name: 'Cozinha Silva', job: { customer: { name: 'Maria Silva', phone: '' } } } }, draft: { id: 'draft-1', version, document: savedDocument, updatedAt: new Date().toISOString() }, diagnostics: [] } });
   if (path === '/api/designs/design-1' && method === 'GET') return route.fulfill({ json: { revisions: [] } });
   if (path === '/api/catalog/materials/visual') return route.fulfill({ json: [{ id: 'mat-1', name: 'Granito Branco Dallas', category: 'Granito', imageUrl: null }] });
-  if (path === '/api/catalog') return route.fulfill({ json: catalog });
+  // M² fechado desligado: aqui se confere a geometria (a área nova entra exata); o M² fechado tem roteiro próprio.
+  if (path === '/api/catalog') return route.fulfill({ json: { ...catalog, settings: { closedSquareMeter: false } } });
   if (path === '/api/designs/design-1/draft' && method === 'PUT') {
     savedDocument = technicalDocumentSchema.parse(route.request().postDataJSON().document); version += 1;
     return route.fulfill({ json: { id: 'draft-1', version, schemaVersion: 1, document: savedDocument, updatedAt: new Date().toISOString(), diagnostics: validateTechnicalDocument(savedDocument) } });
@@ -80,7 +83,7 @@ try {
   await botao('Cuba').click();
 
   // Estimativa: U + reta de Granito a R$ 600/m² e o recorte de cuba (R$ 180).
-  await page.getByText('Estimativa pelo desenho. O valor do orçamento não muda.').waitFor();
+  await page.getByText('Estimativa com as regras do orçamento. Não muda o valor de nenhum orçamento.').waitFor();
   const estimativa = page.locator('.tec-lateral-estimativa');
   const total = await estimativa.locator('.tec-totais div').first().locator('dd').innerText();
   await estimativa.getByLabel('Adicionar serviço do projeto').selectOption('s-montagem');

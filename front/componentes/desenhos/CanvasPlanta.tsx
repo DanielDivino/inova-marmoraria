@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, type PointerEvent as EventoPonteiro } from 'react';
-import { ajustarRecursosDeBorda, contornoValido, cotasDaPeca, snapPoint, updatePiece, type Point, type TechnicalDocument, type Vertex } from '@inova/domain/technical';
+import { useEffect, useRef, useState, type PointerEvent as EventoPonteiro } from 'react';
+import { ajustarRecursosDeBorda, contornoValido, cotasDaPeca, posicaoNoBalcao, snapPoint, updatePiece, type Piece, type Point, type TechnicalDocument, type Vertex } from '@inova/domain/technical';
 import { Icone } from '../filtros/Filtros';
+import { PreviaArea, type MarcacaoArea } from './AreaSecaMolhada';
 import { CotasLivres } from './CotasLivres';
 import { PecaSvg } from './PecaSvg';
 import { Texto, pontosSvg } from './svg';
@@ -23,6 +24,9 @@ type Props = {
   aoTraco: (pontos: Point[], ferramenta: 'TRACO_PECA' | 'TRACO_RECORTE') => void;
   aoCancelarTraco?: () => void;
   aoAviso?: (texto: string) => void;
+  /** Ferramenta "Seca / molhada": o trecho marcado (mm a partir da ponta esquerda) e o que espera o tipo. */
+  aoMarcarArea?: (pecaId: string, inicioMm: number, fimMm: number) => void;
+  areaPendente?: MarcacaoArea | null;
   substituir: (documento: TechnicalDocument) => void;
   concluirGesto: (antes: TechnicalDocument) => void;
 };
@@ -36,6 +40,7 @@ type Gesto =
   | (Base & { tipo: 'texto'; id: string; desvio: Point })
   | (Base & { tipo: 'toque'; aoTocar: () => void })
   | (Base & { tipo: 'traco'; pontos: Point[]; ferramenta: 'TRACO_PECA' | 'TRACO_RECORTE' })
+  | (Base & { tipo: 'area' })
   | { tipo: 'pinca'; distancia: number; centro: Point; camera: { x: number; y: number; escala: number } };
 const LIMIAR_ARRASTE_PX = 5;
 
@@ -53,6 +58,17 @@ export function CanvasPlanta(props: Props) {
   const gesto = useRef<Gesto | null>(null);
   const px = (valor: number) => valor / camera.escala;
   const desenhando = ferramenta === 'TRACO_PECA' || ferramenta === 'TRACO_RECORTE';
+  // Área seca/molhada em andamento: começo fixo e o fim acompanhando o ponteiro (mesmo sem botão apertado).
+  const [marcacao, setMarcacao] = useState<MarcacaoArea | null>(null);
+  const marcacaoAtual = useRef<MarcacaoArea | null>(null);
+  const mudarMarcacao = (proxima: MarcacaoArea | null) => { marcacaoAtual.current = proxima; setMarcacao(proxima); };
+  useEffect(() => { if (ferramenta !== 'AREA') mudarMarcacao(null); }, [ferramenta]);
+  const posicaoNaPeca = (peca: Piece, clienteX: number, clienteY: number) => posicaoNoBalcao(peca, mundoParaLocal(telaParaMundo(clienteX, clienteY), peca).x);
+  const fecharArea = (peca: Piece, inicio: number, fim: number) => {
+    mudarMarcacao(null);
+    if (Math.abs(fim - inicio) < 10) { props.aoAviso?.('Área muito curta: clique onde ela começa, puxe até o fim e clique de novo.'); return; }
+    props.aoMarcarArea?.(peca.id, inicio, fim);
+  };
 
   // Enquadra o desenho ao abrir e quando pedido (botão "Enquadrar").
   useEffect(() => { enquadrar(limitesDoDesenho(documento)); }, [props.pedidoEnquadrar, tamanho.largura > 1]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -90,6 +106,20 @@ export function CanvasPlanta(props: Props) {
     const dado = (nome: string) => alvo?.getAttribute(`data-${nome}`) ?? '';
     const tipo = alvo?.getAttribute('data-alvo');
     const peca = documento.pieces.find((entrada) => entrada.id === (dado('peca') || dado('id')));
+    if (ferramenta === 'AREA') {
+      // Segundo clique: fecha a área no ponto (dentro da mesma peça, no eixo dela).
+      const emAndamento = marcacaoAtual.current;
+      const pecaDaArea = emAndamento && documento.pieces.find((entrada) => entrada.id === emAndamento.pecaId);
+      if (emAndamento && pecaDaArea) { fecharArea(pecaDaArea, emAndamento.inicio, posicaoNaPeca(pecaDaArea, evento.clientX, evento.clientY)); gesto.current = { ...base, tipo: 'toque', aoTocar: () => undefined }; return; }
+      // Primeiro clique numa peça (na pedra, num lado ou num componente dela): marca o começo.
+      const alvoPeca = peca ?? documento.pieces.find((entrada) => entrada.id === documento.features.find((recurso) => recurso.id === dado('id'))?.pieceId);
+      if (alvoPeca) {
+        const inicio = posicaoNaPeca(alvoPeca, evento.clientX, evento.clientY);
+        mudarMarcacao({ pecaId: alvoPeca.id, inicio, fim: inicio });
+        gesto.current = { ...base, tipo: 'area' };
+        return;
+      }
+    }
     if (tipo === 'vertice' && peca && ferramenta === 'COTA') { gesto.current = { ...base, tipo: 'toque', aoTocar: () => props.aoTocarVertice(peca.id, dado('vertice')) }; return; }
     if (tipo === 'vertice' && peca) { gesto.current = { ...base, tipo: 'vertice', pecaId: peca.id, verticeId: dado('vertice') }; return; }
     if (tipo === 'cota' && peca) { gesto.current = { ...base, tipo: 'toque', aoTocar: () => props.aoTocarLado(peca.id, dado('lado')) }; return; }
@@ -127,6 +157,16 @@ export function CanvasPlanta(props: Props) {
   }
 
   function aoMover(evento: EventoPonteiro<HTMLDivElement>) {
+    // Área em andamento: o fim segue o ponteiro, com ou sem botão apertado (clicar-puxar-clicar ou arrastar-soltar).
+    const emAndamento = marcacaoAtual.current;
+    if (ferramenta === 'AREA' && emAndamento && ponteiros.current.size <= 1) {
+      const peca = documento.pieces.find((entrada) => entrada.id === emAndamento.pecaId);
+      const fim = peca ? posicaoNaPeca(peca, evento.clientX, evento.clientY) : emAndamento.fim;
+      if (fim !== emAndamento.fim) mudarMarcacao({ ...emAndamento, fim });
+      const atual = gesto.current;
+      if (atual?.tipo === 'area' && Math.hypot(evento.clientX - atual.inicio.x, evento.clientY - atual.inicio.y) >= LIMIAR_ARRASTE_PX) atual.moveu = true;
+      if (!ponteiros.current.has(evento.pointerId) || atual?.tipo === 'area') return;
+    }
     if (!ponteiros.current.has(evento.pointerId)) return;
     ponteiros.current.set(evento.pointerId, { x: evento.clientX, y: evento.clientY });
     const atual = gesto.current;
@@ -192,6 +232,7 @@ export function CanvasPlanta(props: Props) {
       props.substituir({ ...documento, features: documento.features.map((entrada) => entrada.id === recurso.id ? { ...entrada, x: arredondar(local.x - atual.desvio.x), y: arredondar(local.y - atual.desvio.y) } : entrada) });
       return;
     }
+    if (atual.tipo === 'area') return;
     props.substituir({ ...documento, annotations: documento.annotations.map((texto) => texto.id === atual.id ? { ...texto, x: arredondar(mundo.x - atual.desvio.x), y: arredondar(mundo.y - atual.desvio.y) } : texto) });
   }
 
@@ -201,6 +242,15 @@ export function CanvasPlanta(props: Props) {
     if (!atual) return;
     if (atual.tipo === 'pinca') { if (ponteiros.current.size === 0) gesto.current = null; return; }
     gesto.current = null;
+    if (atual.tipo === 'area') {
+      const emAndamento = marcacaoAtual.current;
+      const peca = emAndamento && documento.pieces.find((entrada) => entrada.id === emAndamento.pecaId);
+      if (!emAndamento || !peca || cancelado) { mudarMarcacao(null); return; }
+      // Arrastou e soltou: a área fecha aqui. Só clicou: segue o ponteiro até o próximo clique.
+      if (atual.moveu) fecharArea(peca, emAndamento.inicio, posicaoNaPeca(peca, evento.clientX, evento.clientY));
+      else props.aoAviso?.('Agora leve até o fim da área e clique (ou arraste e solte). Esc cancela.');
+      return;
+    }
     if (atual.tipo === 'traco') {
       desenharTracoVivo([]);
       if (!cancelado && atual.pontos.length > 2) props.aoTraco(atual.pontos, atual.ferramenta);
@@ -220,7 +270,9 @@ export function CanvasPlanta(props: Props) {
 
   const visivel = { x: camera.x - tamanho.largura / 2 / camera.escala, y: camera.y - tamanho.altura / 2 / camera.escala, largura: tamanho.largura / camera.escala, altura: tamanho.altura / camera.escala };
   const gradeFina = camera.escala * 100 >= 7;
-  return <div ref={recipiente} className={`tec-canvas${desenhando ? ' desenhando' : ''}${pendenteBorda ? ' escolhendo-lado' : ''}`}
+  const areaVisivel = marcacao ?? props.areaPendente ?? null;
+  const pecaDaAreaVisivel = areaVisivel && documento.pieces.find((entrada) => entrada.id === areaVisivel.pecaId);
+  return <div ref={recipiente} className={`tec-canvas${desenhando ? ' desenhando' : ''}${pendenteBorda ? ' escolhendo-lado' : ''}${ferramenta === 'AREA' ? ' marcando-area' : ''}`}
     onPointerDown={aoPressionar} onPointerMove={aoMover} onPointerUp={(evento) => aoSoltar(evento)} onPointerCancel={(evento) => aoSoltar(evento, true)}>
     <svg viewBox={viewBox} role="img" aria-label="Planta do desenho técnico" preserveAspectRatio="xMidYMid meet">
       <defs>
@@ -232,6 +284,7 @@ export function CanvasPlanta(props: Props) {
         <rect x={visivel.x} y={visivel.y} width={visivel.largura} height={visivel.altura} fill="url(#tec-grade)" pointerEvents="none" />
         {documento.pieces.map((peca) => <PecaSvg key={peca.id} peca={peca} recursos={documento.features.filter((recurso) => recurso.pieceId === peca.id)} escala={camera.escala} selecao={selecao} destacarLados={!!pendenteBorda}
           mostrarVertices={ferramenta === 'COTA'} verticeMarcado={props.cotaInicio?.pieceId === peca.id ? props.cotaInicio.vertexId : undefined} />)}
+        {areaVisivel && pecaDaAreaVisivel && <PreviaArea peca={pecaDaAreaVisivel} marcacao={areaVisivel} escala={camera.escala} />}
         <CotasLivres documento={documento} escala={camera.escala} />
         {documento.annotations.map((texto) => <Texto key={texto.id} x={texto.x} y={texto.y} tamanho={texto.fontSizeMm ?? FONTE_TEXTO_PADRAO_MM} data-alvo="texto" data-id={texto.id}
           className={`tec-texto${selecao?.tipo === 'texto' && selecao.id === texto.id ? ' selecionado' : ''}`}>{texto.text}</Texto>)}

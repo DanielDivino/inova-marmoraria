@@ -1,141 +1,142 @@
 import { calcularLinha, calcularLinhaServico, calcularTotalCartao, calcularTotalOrcamento, type BillingUnit } from '../calculos/quote-calculator.js';
-import { calcularSubtotalMaterial } from '../calculos/components.js';
+import { calcularAreaRetangularM2, medidaM2Fechado, somarAreasComponentes } from '../calculos/components.js';
 import { calcularAcabamentoBorda } from '../orcamentos/edge-finishes.js';
-import { contourArea } from './geometry.js';
-import type { Feature, Piece, TechnicalDocument } from './schema.js';
+import { formatMeasure, type Piece, type TechnicalDocument } from './schema.js';
+import { desenhoParaOrcamento, nomeDoRecurso, retangulosDaPeca, type ComponenteDoDesenho, type ItemDoDesenho, type OpcoesConversao } from './orcamento.js';
 
 /**
- * Estimativa de valor a partir do desenho técnico. Só é exibida: o valor do
- * orçamento nunca muda por causa do desenho. Usa as mesmas funções e regras do
- * orçamento (quote.service / montarItem):
- * - pedra: área × preço vigente do material (m²);
- * - rodabanca: peça da mesma pedra, área = extensão × altura;
- * - saia: acabamento de borda cobrado pela área (extensão × altura) no preço da pedra;
- * - acabamentos de borda: serviço por metro linear;
+ * Valor do desenho técnico, calculado sobre o mesmo projeto que vai para o
+ * orçamento (`desenhoParaOrcamento`) e com as mesmas contas do resumo do
+ * orçamento e da API (montarItem):
+ * - pedra: área de cada parte × preço vigente; com M² fechado, cada medida da
+ *   parte arredondada para cima de 5 em 5 cm (só a pedra; o resto usa a medida exata);
+ * - rodabanca: peça da mesma pedra (extensão × altura), com a mesma regra;
+ * - saia: borda "Saia", área (extensão × altura) no preço da pedra;
+ * - acabamento de borda: serviço por metro linear;
  * - cuba, recorte e furo: serviço por unidade (ou m²/fixo, conforme o catálogo);
- * - serviços gerais: calcularLinhaServico (com os incrementos de área do jateado/rebaixo);
+ * - serviços do projeto: calcularLinhaServico sobre a área exata de todas as peças;
  * - à vista (Pix) é o próprio total; no cartão, +10% (calcularTotalCartao).
+ * Só entra no orçamento quando o desenho é usado nele ("Usar no orçamento").
  */
 export type MaterialCatalogo = { id: string; name: string; billingUnit: BillingUnit; currentPrice: number | null };
 export type ServicoCatalogo = { id: string; name: string; billingUnit: BillingUnit; currentPrice: number };
 export type CatalogoEstimativa = { materials: MaterialCatalogo[]; services: ServicoCatalogo[] };
-export type OpcoesEstimativa = {
-  /** Serviço escolhido para um componente (cuba, furo, acabamento), no lugar do sugerido. */
-  servicoDoRecurso?: Record<string, string>;
-  /** Serviços do projeto inteiro (ex.: jateado, instalação). */
-  servicosGerais?: { serviceId: string; quantidade?: number }[];
+export type OpcoesEstimativa = OpcoesConversao & {
+  /** M² fechado da empresa (Materiais e serviços): arredonda as medidas das peças só para cobrar a pedra. */
+  m2Fechado?: boolean;
 };
 export type LinhaEstimativa = {
   id: string; pieceId?: string; grupo: 'PEDRA' | 'SERVICO';
   descricao: string; quantidade: number; unidade: 'm²' | 'm' | 'un' | 'serviço';
   precoUnitario: number | null; subtotal: number | null;
-  /** Por que a linha ficou sem preço (não entra no total). */
+  /** Partes da peça, retângulo cobrado ou M² fechado. */
+  detalhe?: string;
+  /** Por que a linha ficou sem preço (não entra no total e impede usar no orçamento). */
   semPreco?: string;
 };
-export type EstimativaDesenho = { areaTotalM2: number; linhas: LinhaEstimativa[]; total: number; totalPix: number; totalCartao: number; itensSemPreco: number };
+export type EstimativaDesenho = {
+  /** Área exata das peças e a cobrada pela pedra (com M² fechado, as medidas arredondadas; é a que o resumo do orçamento mostra). */
+  areaTotalM2: number; areaCobradaM2: number; linhas: LinhaEstimativa[]; total: number; totalPix: number; totalCartao: number; itensSemPreco: number;
+  /** O projeto que vai para o orçamento (mesmas peças, bordas, recortes e serviços destas linhas). */
+  item: ItemDoDesenho;
+  /** O que falta para o desenho poder ir para o orçamento. */
+  problemas: string[];
+};
 
 const arredondarArea = (m2: number) => Math.round(m2 * 1_000_000) / 1_000_000;
-/**
- * Área cobrada da peça: o contorno inteiro, sem descontar cubas e recortes — a
- * pedra é cortada da chapa inteira, como no orçamento (comprimento × largura).
- * Se a regra mudar (ex.: cobrar o retângulo que envolve a peça irregular), mude só aqui.
- */
-export const areaCobradaPecaM2 = (peca: Piece) => arredondarArea(contourArea(peca.contour) / 1_000_000);
-const areaFaixaM2 = (recurso: Feature) => arredondarArea(Math.max(0, recurso.extentMm) * Math.max(0, recurso.heightMm) / 1_000_000);
-const mmInteiro = (mm: number) => Math.max(1, Math.round(mm));
-
-const normalizarNome = (nome: string) => nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR').trim();
-/** Serviço sugerido para cada componente, pelos nomes usados no orçamento (o primeiro que existir). */
-const SUGESTOES: Record<string, string[]> = {
-  SINK: ['recorte de cuba', 'corte de cuba quadrado'], SINK_OVAL: ['corte de cuba oval', 'recorte de cuba'],
-  SCULPTED_SINK: ['cuba esculpida', 'cuba escupido'], HOLE: ['furo de torneira', 'furo de cuba'],
-  CUTOUT: ['corte para fogao', 'furo de cooktop/lixeira/torre'],
-  EDGE_SIMPLE: ['acabamento simples'], EDGE_MITER45: ['acabamento 45°', 'acabamento 45° — granito/marmore'],
-  EDGE_ROUND: ['acabamento boleado', 'acabamento meia cana'], EDGE_BEVEL: ['chanfro', 'acabamento chanfrado'],
-};
-export function servicoSugerido(recurso: Pick<Feature, 'type' | 'shape' | 'profile'>, servicos: ServicoCatalogo[]): ServicoCatalogo | undefined {
-  const chave = recurso.type === 'EDGE_FINISH' ? `EDGE_${recurso.profile}` : recurso.type === 'SINK' && recurso.shape === 'OVAL' ? 'SINK_OVAL' : recurso.type;
-  for (const nome of SUGESTOES[chave] ?? []) {
-    const encontrado = servicos.find((servico) => normalizarNome(servico.name) === normalizarNome(nome));
-    if (encontrado) return encontrado;
-  }
-  return undefined;
-}
+/** Área cobrada de uma parte (ou rodabanca), com o M² fechado quando ligado. */
+export const areaCobradaComponenteM2 = (componente: Pick<ComponenteDoDesenho, 'lengthMm' | 'widthMm'>, m2Fechado = false) => m2Fechado
+  ? calcularAreaRetangularM2(medidaM2Fechado(componente.lengthMm), medidaM2Fechado(componente.widthMm))
+  : calcularAreaRetangularM2(componente.lengthMm, componente.widthMm);
+/** Área cobrada da peça: as partes em esquadro (L, U) ou o retângulo que envolve a peça curva; cubas não descontam. */
+export const areaCobradaPecaM2 = (peca: Piece, m2Fechado = false) => arredondarArea(retangulosDaPeca(peca).retangulos
+  .reduce((soma, r) => soma + areaCobradaComponenteM2({ lengthMm: r.x1 - r.x0, widthMm: r.y1 - r.y0 }, m2Fechado), 0));
+const medidas = (componente: Pick<ComponenteDoDesenho, 'lengthMm' | 'widthMm'>) => `${formatMeasure(componente.lengthMm)} × ${formatMeasure(componente.widthMm)}`;
+const fechadas = (componente: Pick<ComponenteDoDesenho, 'lengthMm' | 'widthMm'>) => ({ lengthMm: medidaM2Fechado(componente.lengthMm), widthMm: medidaM2Fechado(componente.widthMm) });
 
 type PrecoPedra = { material: MaterialCatalogo; preco: number } | { semPreco: string };
-function precoDaPedra(peca: Piece, catalogo: CatalogoEstimativa): PrecoPedra {
-  const material = peca.material?.id ? catalogo.materials.find((entrada) => entrada.id === peca.material!.id) : undefined;
+function precoDaPedra(materialId: string | undefined, catalogo: CatalogoEstimativa): PrecoPedra {
+  const material = materialId ? catalogo.materials.find((entrada) => entrada.id === materialId) : undefined;
   if (!material) return { semPreco: 'Escolha a pedra da peça.' };
   if (material.currentPrice === null || !Number.isFinite(material.currentPrice)) return { semPreco: `${material.name} está sem preço vigente.` };
   if (material.billingUnit !== 'SQUARE_METER') return { semPreco: `${material.name} não é cobrado por m².` };
   return { material, preco: material.currentPrice };
 }
+const unidadeDe = (billingUnit: BillingUnit): LinhaEstimativa['unidade'] => billingUnit === 'SQUARE_METER' ? 'm²' : billingUnit === 'LINEAR_METER' ? 'm' : billingUnit === 'FIXED' ? 'serviço' : 'un';
 
 export function estimarDesenho(doc: TechnicalDocument, catalogo: CatalogoEstimativa, opcoes: OpcoesEstimativa = {}): EstimativaDesenho {
+  const item = desenhoParaOrcamento(doc, catalogo.services, opcoes);
+  const m2Fechado = !!opcoes.m2Fechado;
   const linhas: LinhaEstimativa[] = [];
-  let areaTotalM2 = 0;
-  const servicoDe = (recurso: Feature) => {
-    const escolhido = opcoes.servicoDoRecurso?.[recurso.id];
-    return escolhido ? catalogo.services.find((servico) => servico.id === escolhido) : servicoSugerido(recurso, catalogo.services);
-  };
+  const valorDaPedra = (componente: ComponenteDoDesenho, preco: number) => calcularLinha({ billingUnit: 'SQUARE_METER', unitPrice: preco, billedQuantity: areaCobradaComponenteM2(componente, m2Fechado) }).subtotal;
+  const notaFechado = (lista: ComponenteDoDesenho[]) => m2Fechado && lista.some((c) => medidaM2Fechado(c.lengthMm) !== c.lengthMm || medidaM2Fechado(c.widthMm) !== c.widthMm)
+    ? `m² fechado: ${lista.map((c) => medidas(fechadas(c))).join(' + ')}` : '';
 
   for (const peca of doc.pieces) {
-    const pedra = precoDaPedra(peca, catalogo);
-    const area = areaCobradaPecaM2(peca);
-    areaTotalM2 += area;
-    linhas.push({ id: peca.id, pieceId: peca.id, grupo: 'PEDRA', descricao: 'material' in pedra ? `${peca.name} · ${pedra.material.name}` : peca.name, quantidade: area, unidade: 'm²',
-      ...('material' in pedra ? { precoUnitario: pedra.preco, subtotal: calcularSubtotalMaterial(area, pedra.preco) } : { precoUnitario: null, subtotal: null, semPreco: pedra.semPreco }) });
+    const partes = item.componentes.filter((componente) => componente.pecaId === peca.id && componente.componentType === 'TOP');
+    const pedra = precoDaPedra(partes[0]?.materialId, catalogo);
+    const detalhe = [
+      partes.length > 1 ? `${partes.length} partes: ${partes.map(medidas).join(' + ')}` : partes[0]?.envolvente ? `Peça curva ou diagonal: cobrada pelo retângulo ${medidas(partes[0])}` : '',
+      notaFechado(partes),
+    ].filter(Boolean).join(' · ');
+    linhas.push({ id: peca.id, pieceId: peca.id, grupo: 'PEDRA', descricao: 'material' in pedra ? `${peca.name} · ${pedra.material.name}` : peca.name,
+      quantidade: arredondarArea(partes.reduce((soma, parte) => soma + areaCobradaComponenteM2(parte, m2Fechado), 0)), unidade: 'm²', ...(detalhe ? { detalhe } : {}),
+      ...('material' in pedra ? { precoUnitario: pedra.preco, subtotal: calcularTotalOrcamento(partes.map((parte) => valorDaPedra(parte, pedra.preco))) } : { precoUnitario: null, subtotal: null, semPreco: pedra.semPreco }) });
 
     for (const recurso of doc.features.filter((entrada) => entrada.pieceId === peca.id)) {
-      const base = { id: recurso.id, pieceId: peca.id };
+      const base = { id: recurso.id, pieceId: peca.id, grupo: 'SERVICO' as const };
       if (recurso.type === 'BACKSPLASH') {
-        // No orçamento a rodabanca é uma peça da mesma pedra (área = comprimento × altura).
-        const area = areaFaixaM2(recurso);
-        areaTotalM2 += area;
-        linhas.push({ ...base, grupo: 'PEDRA', descricao: `${recurso.name} · ${peca.name}`, quantidade: area, unidade: 'm²',
-          ...('material' in pedra ? { precoUnitario: pedra.preco, subtotal: calcularSubtotalMaterial(area, pedra.preco) } : { precoUnitario: null, subtotal: null, semPreco: pedra.semPreco }) });
+        const rodabanca = item.componentes.find((componente) => componente.recursoId === recurso.id);
+        if (!rodabanca) continue;
+        const nota = notaFechado([rodabanca]);
+        linhas.push({ ...base, grupo: 'PEDRA', descricao: `${nomeDoRecurso(recurso)} · ${peca.name}`, quantidade: areaCobradaComponenteM2(rodabanca, m2Fechado), unidade: 'm²', ...(nota ? { detalhe: nota } : {}),
+          ...('material' in pedra ? { precoUnitario: pedra.preco, subtotal: valorDaPedra(rodabanca, pedra.preco) } : { precoUnitario: null, subtotal: null, semPreco: pedra.semPreco }) });
         continue;
       }
-      if (recurso.type === 'SKIRT') {
-        const quantidade = areaFaixaM2(recurso);
-        if (!('material' in pedra)) { linhas.push({ ...base, grupo: 'SERVICO', descricao: `${recurso.name} · ${peca.name}`, quantidade, unidade: 'm²', precoUnitario: null, subtotal: null, semPreco: pedra.semPreco }); continue; }
-        const calculo = calcularAcabamentoBorda({ name: 'Saia', lengthMm: mmInteiro(recurso.extentMm), heightMm: mmInteiro(recurso.heightMm), quantity: 1, materialPrice: pedra.preco, servicePrice: 0 });
-        linhas.push({ ...base, grupo: 'SERVICO', descricao: `${recurso.name} · ${peca.name}`, quantidade: calculo.billedQuantity, unidade: 'm²', precoUnitario: calculo.unitPrice, subtotal: calculo.subtotal });
-        continue;
-      }
-      const servico = servicoDe(recurso);
-      if (recurso.type === 'EDGE_FINISH') {
-        const metros = Math.max(0, recurso.extentMm) / 1000;
-        if (!servico) { linhas.push({ ...base, grupo: 'SERVICO', descricao: `${recurso.name} · ${peca.name}`, quantidade: metros, unidade: 'm', precoUnitario: null, subtotal: null, semPreco: 'Escolha o serviço de acabamento.' }); continue; }
-        if (servico.billingUnit !== 'LINEAR_METER') { linhas.push({ ...base, grupo: 'SERVICO', descricao: `${servico.name} · ${peca.name}`, quantidade: metros, unidade: 'm', precoUnitario: null, subtotal: null, semPreco: 'Acabamento de borda precisa de serviço por metro linear.' }); continue; }
-        const calculo = calcularAcabamentoBorda({ name: servico.name, lengthMm: mmInteiro(recurso.extentMm), quantity: 1, materialPrice: 'material' in pedra ? pedra.preco : 0, servicePrice: servico.currentPrice });
-        linhas.push({ ...base, grupo: 'SERVICO', descricao: `${servico.name} · ${peca.name}`, quantidade: calculo.billedQuantity, unidade: calculo.billingUnit === 'SQUARE_METER' ? 'm²' : 'm', precoUnitario: calculo.unitPrice, subtotal: calculo.subtotal });
+      if (recurso.type === 'SKIRT' || recurso.type === 'EDGE_FINISH') {
+        const bordas = item.componentes.flatMap((componente) => componente.bordas.filter((borda) => borda.recursoId === recurso.id));
+        if (!bordas.length) continue;
+        const servico = catalogo.services.find((entrada) => entrada.id === bordas[0].serviceId);
+        const saia = recurso.type === 'SKIRT';
+        const metros = bordas.reduce((soma, borda) => soma + borda.lengthMm, 0) / 1000;
+        const semPreco = saia
+          ? (!servico ? 'Cadastre o serviço “Saia” (metro linear) em Materiais e serviços.' : !('material' in pedra) ? pedra.semPreco : '')
+          : (!servico ? 'Escolha o serviço de acabamento.' : servico.billingUnit !== 'LINEAR_METER' ? 'Acabamento de borda precisa de serviço por metro linear.' : '');
+        const descricao = `${saia ? nomeDoRecurso(recurso) : servico?.name ?? nomeDoRecurso(recurso)} · ${peca.name}`;
+        const partesTexto = bordas.length > 1 ? { detalhe: `${bordas.length} trechos: ${bordas.map((borda) => formatMeasure(borda.lengthMm)).join(' + ')}` } : {};
+        if (semPreco || !servico) { linhas.push({ ...base, descricao, quantidade: saia ? arredondarArea(bordas.reduce((soma, borda) => soma + borda.lengthMm * (borda.heightMm ?? 0), 0) / 1_000_000) : metros, unidade: saia ? 'm²' : 'm', precoUnitario: null, subtotal: null, semPreco: semPreco || 'Escolha o serviço.', ...partesTexto }); continue; }
+        const calculos = bordas.map((borda) => calcularAcabamentoBorda({ name: servico.name, lengthMm: borda.lengthMm, heightMm: borda.heightMm, quantity: 1, materialPrice: 'material' in pedra ? pedra.preco : 0, servicePrice: servico.currentPrice }));
+        linhas.push({ ...base, descricao, quantidade: arredondarArea(calculos.reduce((soma, calculo) => soma + calculo.billedQuantity, 0)), unidade: calculos[0].billingUnit === 'SQUARE_METER' ? 'm²' : 'm',
+          precoUnitario: calculos[0].unitPrice, subtotal: calcularTotalOrcamento(calculos.map((calculo) => calculo.subtotal)), ...partesTexto });
         continue;
       }
       // Cuba, cuba esculpida, recorte e furo: mesma regra dos recortes do orçamento.
-      const descricao = `${servico?.name ?? recurso.name} · ${peca.name}`;
-      if (!servico) { linhas.push({ ...base, grupo: 'SERVICO', descricao, quantidade: 1, unidade: 'un', precoUnitario: null, subtotal: null, semPreco: 'Escolha o serviço deste componente.' }); continue; }
-      if (servico.billingUnit === 'LINEAR_METER') { linhas.push({ ...base, grupo: 'SERVICO', descricao, quantidade: 1, unidade: 'un', precoUnitario: null, subtotal: null, semPreco: 'Recortes não usam serviço por metro linear.' }); continue; }
-      const largura = recurso.type === 'HOLE' ? recurso.diameterMm : recurso.widthMm, comprimento = recurso.type === 'HOLE' ? recurso.diameterMm : recurso.lengthMm;
-      const quantidade = servico.billingUnit === 'SQUARE_METER' ? arredondarArea(largura * comprimento / 1_000_000) : 1;
+      const recorte = item.recortes.find((entrada) => entrada.recursoId === recurso.id);
+      if (!recorte) continue;
+      const servico = catalogo.services.find((entrada) => entrada.id === recorte.serviceId);
+      const descricao = `${servico?.name ?? nomeDoRecurso(recurso)} · ${peca.name}`;
+      if (!servico) { linhas.push({ ...base, descricao, quantidade: 1, unidade: 'un', precoUnitario: null, subtotal: null, semPreco: 'Escolha o serviço deste componente.' }); continue; }
+      if (servico.billingUnit === 'LINEAR_METER') { linhas.push({ ...base, descricao, quantidade: 1, unidade: 'un', precoUnitario: null, subtotal: null, semPreco: 'Recortes não usam serviço por metro linear.' }); continue; }
+      const quantidade = servico.billingUnit === 'SQUARE_METER' ? calcularAreaRetangularM2(recorte.lengthMm, recorte.widthMm) : 1;
       const linha = calcularLinha({ billingUnit: servico.billingUnit, unitPrice: servico.currentPrice, billedQuantity: quantidade });
-      linhas.push({ ...base, grupo: 'SERVICO', descricao, quantidade: linha.billedQuantity, unidade: servico.billingUnit === 'SQUARE_METER' ? 'm²' : servico.billingUnit === 'FIXED' ? 'serviço' : 'un', precoUnitario: servico.currentPrice, subtotal: linha.subtotal });
+      linhas.push({ ...base, descricao, quantidade: linha.billedQuantity, unidade: unidadeDe(servico.billingUnit), precoUnitario: servico.currentPrice, subtotal: linha.subtotal });
     }
   }
 
-  areaTotalM2 = arredondarArea(areaTotalM2);
-  for (const [indice, geral] of (opcoes.servicosGerais ?? []).entries()) {
+  // Serviços do projeto: m² sobre a área exata de todas as peças (como a API), rebaixo italiano vezes a quantidade.
+  const areaTotalM2 = item.componentes.length ? arredondarArea(somarAreasComponentes(item.componentes.map((componente) => ({ ...componente, label: componente.label, quantity: 1 })))) : 0;
+  for (const geral of item.servicos) {
     const servico = catalogo.services.find((entrada) => entrada.id === geral.serviceId);
-    const id = `geral-${indice}`;
+    const id = `geral-${geral.serviceId}`;
     if (!servico) { linhas.push({ id, grupo: 'SERVICO', descricao: 'Serviço removido do catálogo', quantidade: 0, unidade: 'un', precoUnitario: null, subtotal: null, semPreco: 'Serviço não encontrado.' }); continue; }
-    // Como no orçamento: m² usa a área de todas as peças (rebaixo italiano vezes a quantidade); fixo vale 1.
-    const quantidade = servico.billingUnit === 'SQUARE_METER' ? areaTotalM2 * (/rebaixo italiano/i.test(servico.name) ? geral.quantidade ?? 1 : 1) : servico.billingUnit === 'FIXED' ? 1 : geral.quantidade ?? 1;
-    const unidade = servico.billingUnit === 'SQUARE_METER' ? 'm²' : servico.billingUnit === 'LINEAR_METER' ? 'm' : servico.billingUnit === 'FIXED' ? 'serviço' : 'un';
-    if (!(quantidade > 0)) { linhas.push({ id, grupo: 'SERVICO', descricao: servico.name, quantidade: 0, unidade, precoUnitario: servico.currentPrice, subtotal: null, semPreco: 'Informe a quantidade.' }); continue; }
+    const quantidade = servico.billingUnit === 'SQUARE_METER' ? areaTotalM2 * (/rebaixo italiano/i.test(servico.name) ? geral.quantidade : 1) : servico.billingUnit === 'FIXED' ? 1 : geral.quantidade;
+    if (!(quantidade > 0)) { linhas.push({ id, grupo: 'SERVICO', descricao: servico.name, quantidade: 0, unidade: unidadeDe(servico.billingUnit), precoUnitario: servico.currentPrice, subtotal: null, semPreco: 'Informe a quantidade.' }); continue; }
     const linha = calcularLinhaServico({ serviceName: servico.name, billingUnit: servico.billingUnit, unitPrice: servico.currentPrice, billedQuantity: quantidade });
-    linhas.push({ id, grupo: 'SERVICO', descricao: servico.name, quantidade: linha.billedQuantity, unidade, precoUnitario: servico.currentPrice, subtotal: linha.subtotal });
+    linhas.push({ id, grupo: 'SERVICO', descricao: servico.name, quantidade: linha.billedQuantity, unidade: unidadeDe(servico.billingUnit), precoUnitario: servico.currentPrice, subtotal: linha.subtotal });
   }
 
   const total = calcularTotalOrcamento(linhas.flatMap((linha) => linha.subtotal === null ? [] : [linha.subtotal]));
-  return { areaTotalM2, linhas, total, totalPix: total, totalCartao: calcularTotalCartao(total), itensSemPreco: linhas.filter((linha) => linha.subtotal === null).length };
+  const problemas = [...(doc.pieces.length ? [] : ['Desenhe ao menos uma peça.']), ...linhas.filter((linha) => linha.subtotal === null).map((linha) => `${linha.descricao}: ${linha.semPreco ?? 'sem preço'}`)];
+  const areaCobradaM2 = arredondarArea(item.componentes.reduce((soma, componente) => soma + areaCobradaComponenteM2(componente, m2Fechado), 0));
+  return { areaTotalM2, areaCobradaM2, linhas, total, totalPix: total, totalCartao: calcularTotalCartao(total), itensSemPreco: linhas.filter((linha) => linha.subtotal === null).length, item, problemas };
 }

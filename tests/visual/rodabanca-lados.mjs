@@ -13,6 +13,8 @@ await page.route('**/api/**', async route => {
   const path = new URL(route.request().url()).pathname;
   if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'backsplash-test', name: 'Teste', role: 'SUPER_ADMIN' } } });
   if (path === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
+  // Desenhos técnicos do cliente (botão Desenho técnico do Novo orçamento).
+  if (/^\/api\/customers\/[^/]+\/designs$/.test(path)) return route.fulfill({ json: { designs: [] } });
   if (path === '/api/catalog') return route.fulfill({ json: {
     materials: [{ id: 'stone', name: 'Branco Dallas', category: 'Granito', billingUnit: 'SQUARE_METER', currentPrice: 700, images: [] }],
     productTypes: [{ id: 'counter', name: 'Bancada' }],

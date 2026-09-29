@@ -1,5 +1,5 @@
 import { dataAtualEmpresa } from '@inova/domain';
-import { contourArea, distanciasAteBordas, edgeLength, formatMeasure, rotate, sampleContour, type Feature, type Piece, type TechnicalDocument } from '@inova/domain/technical';
+import { areasDaPeca, contourArea, distanciasAteBordas, edgeLength, formatMeasure, NOME_AREA, rotate, sampleContour, type Feature, type Piece, type TechnicalDocument } from '@inova/domain/technical';
 import { cabecalhoEmpresaPdf, CNPJ_EMPRESA, normalizarNomeMaterial, pdfDate } from '../orcamentos/pdf-layout.js';
 import { COR, ROTULO_RECURSO, centimetros, desenharPlanta, ehRecursoDeBorda, planejarPlanta } from './technical-planta.pdf.js';
 
@@ -168,6 +168,12 @@ export function renderizarPdfTecnico(pdf: PDFKit.PDFDocument, documento: Technic
         return [String(indice + 1).padStart(2, '0'), tipoDoRecurso(recurso), nomePeca(recurso.pieceId), onde, formatMeasure(recurso.extentMm),
           recurso.type === 'EDGE_FINISH' ? { fraco: '—' } : centimetros(recurso.heightMm), ROTULO_PERFIL[recurso.profile]];
       }));
+
+    // Área seca e molhada de cada balcão, da ponta esquerda da peça para a direita.
+    const secaMolhada = pecas.flatMap((peca) => areasDaPeca(peca).map((area) => ({ peca, area })));
+    if (secaMolhada.length) tabela('Áreas seca e molhada', [{ rotulo: 'Item', w: 34 }, { rotulo: 'Peça', w: 140 }, { rotulo: 'Área', w: 120 }, { rotulo: 'Tamanho', w: 80 }, { rotulo: 'Posição (da ponta esquerda)', w: 149 }],
+      secaMolhada.map(({ peca, area }, indice) => [String(indice + 1).padStart(2, '0'), peca.name, NOME_AREA[area.tipo], formatMeasure(area.comprimentoMm),
+        `de ${formatMeasure(area.inicioMm)} a ${formatMeasure(area.fimMm)}`]));
 
     const { notes, toleranceMm, minimumClearanceMm } = documento.manufacturing;
     const observacoes = [notes.trim(), toleranceMm !== null ? `Tolerância de fabricação: ${toleranceMm.toLocaleString('pt-BR')} mm.` : '', minimumClearanceMm !== null ? `Folga mínima entre peças: ${minimumClearanceMm.toLocaleString('pt-BR')} mm.` : ''].filter(Boolean);

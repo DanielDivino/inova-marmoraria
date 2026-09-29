@@ -1,11 +1,24 @@
-import { arredondarMoeda, centimetrosParaMilimetros, detalheDesenhoComponente, itemSalvoParaEntrada, type SavedQuoteItem } from '@inova/domain';
+import { arredondarMoeda, calcularAreaRetangularM2, calcularSubtotalMaterial, centimetrosParaMilimetros, detalheDesenhoComponente, itemSalvoParaEntrada, medidaM2Fechado, type SavedQuoteItem } from '@inova/domain';
 import type { DraftItem } from '../componentes/orcamento/types';
 
 const cm = (value?: number) => value === undefined ? undefined : String(value / 10);
 const price = (value?: number) => value === undefined ? undefined : value.toFixed(2).replace('.', ',');
+/**
+ * Projeto salvo com M² fechado: o valor da peça foi gravado como valor final.
+ * Se ele é exatamente o do arredondamento (pedra com as medidas fechadas + bordas),
+ * volta a ser calculado — mudar a medida muda o valor. Valor digitado à mão continua.
+ */
+function valorDoM2Fechado(component: SavedQuoteItem['components'][number], saved: SavedQuoteItem) {
+  if (!component.hasManualPriceOverride) return false;
+  const area = calcularAreaRetangularM2(medidaM2Fechado(component.lengthMm), medidaM2Fechado(component.widthMm), component.quantity);
+  const bordas = component.edges.reduce((soma, edge) => soma + Number(edge.appliedSubtotal), 0);
+  return Math.abs(arredondarMoeda(calcularSubtotalMaterial(area, Number(component.unitPriceSnapshot ?? saved.unitPriceSnapshot)) + bordas) - Number(component.appliedTotal)) < .005;
+}
 export function itemSalvoParaRascunho(saved: SavedQuoteItem): DraftItem {
   const input = itemSalvoParaEntrada(saved);
+  const m2Fechado = input.drawingData?.m2Fechado === true;
   return {
+    ...(m2Fechado ? { arredondarM2: true } : {}),
     id: saved.id, projectName: input.projectName ?? '',
     ...(input.drawingData ? { drawingData: input.drawingData } : {}),
     productTypeId: input.productTypeId, materialId: input.materialId, calculationMode: input.calculationMode,
@@ -22,7 +35,7 @@ export function itemSalvoParaRascunho(saved: SavedQuoteItem): DraftItem {
       sillBottomWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillBottomWidthMm),
       sillFinalWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillFinalWidthMm),
       sillOverlapCm: cm(detalheDesenhoComponente(input.drawingData, index).sillOverlapMm),
-      appliedTotal: price(component.appliedTotal), edges: component.edges.map((edge) => ({ ...edge, lengthCm: cm(edge.lengthMm), heightCm: cm(edge.heightMm), appliedTotal: price(edge.appliedSubtotal) })),
+      appliedTotal: m2Fechado && valorDoM2Fechado(saved.components[index], saved) ? undefined : price(component.appliedTotal), edges: component.edges.map((edge) => ({ ...edge, lengthCm: cm(edge.lengthMm), heightCm: cm(edge.heightMm), appliedTotal: price(edge.appliedSubtotal) })),
     })),
     cutouts: input.cutouts.map((cutout, index) => ({ ...cutout, id: saved.cutouts[index].id, lengthCm: cm(cutout.lengthMm), widthCm: cm(cutout.widthMm), diameterCm: cm(cutout.diameterMm), positionXCm: cm(cutout.positionX), positionYCm: cm(cutout.positionY), appliedTotal: price(cutout.appliedSubtotal) })),
     serviceIds: input.services.map((service) => service.serviceId),

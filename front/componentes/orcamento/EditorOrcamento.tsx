@@ -1,7 +1,7 @@
 'use client';
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type SetStateAction } from 'react';
-import { arredondarMoeda, valorAplicadoComponente, podeEditarOrcamento, type SavedQuoteItem, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularTotalOrcamento, centimetrosParaMilimetros, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
+import { arredondarMoeda, valorAplicadoComponente, podeEditarOrcamento, type SavedQuoteItem, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularTotalOrcamento, centimetrosParaMilimetros, calcularAreaRetangularM2, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
 import { EditorComponentes } from './ComponentEditor';
 import { DesenhoTecnico } from './TechnicalDrawing';
 import type { ComponentType, DraftComponent, DraftEdge, DraftItem } from './types';
@@ -15,7 +15,7 @@ import { TituloEtapaProjeto } from './ProjectStageHeading';
 import '../../app/project-builder.css';
 import { useSession } from '../ApplicationShell';
 import { EtapasProjeto } from './ProjectStepper';
-import { calcularTotalCartao, projetoTemDesenho, dadosEntradaProjeto, trocarModoEntrada, modoEntradaOrcamento, type QuoteEntryMode } from '@inova/domain';
+import { calcularTotalCartao, projetoTemDesenho, dadosEntradaProjeto, trocarModoEntrada, modoEntradaOrcamento, temPermissao, type QuoteEntryMode } from '@inova/domain';
 import { EditorOrcamentoRapido } from './QuickQuoteEditor';
 import { ResumoMovel } from './MobileQuoteSummary';
 import { criarId } from '../../utilitarios/id';
@@ -27,7 +27,9 @@ import { createPortal } from 'react-dom';
 import { Icone, useCelular } from '../filtros/Filtros';
 import { BarraAtendimento } from './BarraAtendimento';
 import { RecortesDaPeca } from './ProductionCutouts';
-import { OpcaoClienteRapido, contatoCliente, payloadCliente } from '../clientes/ClienteRapido';
+import { OpcaoSemCadastro, contatoCliente, payloadCliente } from '../clientes/SemCadastro';
+import { DesenhoTecnicoNoOrcamento, type DesenhoUsado } from './DesenhoTecnicoNoOrcamento';
+import { projetoDoDesenho, vinculoDesenho } from '../../utilitarios/desenho-orcamento';
 
 type BillingUnit = 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED';
 type MaterialImage = { id: string; url: string; alt?: string | null; isPrimary: boolean };
@@ -35,7 +37,7 @@ type Material = { id: string; name: string; category: string; billingUnit: Billi
 type Service = { id: string; name: string; category: string; billingUnit: BillingUnit; currentPrice: number };
 type ProductType = { id: string; name: string };
 type Customer = { id: string; name: string; phone: string | null; isQuick?: boolean; document?: string | null; email?: string | null; address?: string | null; neighborhood?: string | null; city?: string | null; postalCode?: string | null; complement?: string | null; notes?: string | null };
-type Catalog = { materials: Material[]; services: Service[]; productTypes: ProductType[] };
+type Catalog = { materials: Material[]; services: Service[]; productTypes: ProductType[]; settings?: { closedSquareMeter: boolean } };
 type ClientWorkspace = { id: string; customer: Customer | null; items: DraftItem[]; activeIndex: number; discount: string; validUntil: string; notes: string; parentQuote: QuoteLink | null };
 type CustomerTarget = { kind: 'WORKSPACE'; workspaceId: string } | { kind: 'NEW_WORKSPACE' };
 
@@ -83,12 +85,14 @@ export default function EditorOrcamento() {
   const [customerError, setCustomerError] = useState('');
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
-  /** Novo cadastro como cliente rápido: nenhum dado é exigido para já fazer os projetos. */
+  /** Novo cadastro como orçamento sem cadastro: nenhum dado é exigido para já fazer os projetos. */
   const [clienteRapido, setClienteRapido] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', document: '', email: '', address: '', neighborhood: '', city: '', postalCode: '', complement: '', notes: '' });
   const [summarySelection, setSummarySelection] = useState<number | 'TOTAL'>(0);
+  /** Aviso depois de usar um desenho técnico no orçamento. */
+  const [avisoDesenho, setAvisoDesenho] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [reviewedSteps, setReviewedSteps] = useState<number[]>([]);
@@ -289,7 +293,11 @@ export default function EditorOrcamento() {
   const activeServices = servicesFor(item);
   const drawingServices = editingQuote ? activeServices.filter((service) => service.billingUnit === 'LINEAR_METER') : linearServices;
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
-  const completedSteps = [(item.calculationMode === 'MANUAL_M2' ? !!materialFor(item) && decimal(item.manualM2) > 0 && !!item.manualJustification.trim() : item.components.length > 0 && item.components.every(component => !!materialFor(item, component) && !!calculateDraftComponent(component, item.arredondarM2))) ? 1 : 0, ...reviewedSteps].filter(Boolean);
+  // M² fechado é da empresa (Materiais e serviços → Serviços e acabamentos), sempre marcado nos
+  // orçamentos novos. Orçamento salvo mantém como foi salvo: o valor dele nunca muda ao editar.
+  const m2Fechado = catalog?.settings?.closedSquareMeter ?? true;
+  const arredondaM2 = (draft: DraftItem) => quoteId ? !!draft.arredondarM2 : m2Fechado;
+  const completedSteps = [(item.calculationMode === 'MANUAL_M2' ? !!materialFor(item) && decimal(item.manualM2) > 0 && !!item.manualJustification.trim() : item.components.length > 0 && item.components.every(component => !!materialFor(item, component) && !!calculateDraftComponent(component, arredondaM2(item)))) ? 1 : 0, ...reviewedSteps].filter(Boolean);
   const edgeCalculatedSubtotal = (draft: DraftItem, component: DraftComponent, edge: DraftEdge) => {
     const material = materialFor(draft, component);
     const savedEdge = snapshotFor(draft)?.components.flatMap((component) => component.edges).find((row) => row.id === edge.id && row.serviceId === edge.serviceId);
@@ -303,7 +311,7 @@ export default function EditorOrcamento() {
   };
   const componentCalculatedTotal = (draft: DraftItem, component: DraftComponent) => {
     const material = materialFor(draft, component);
-    const calculated = calculateDraftComponent(component, draft.arredondarM2);
+    const calculated = calculateDraftComponent(component, arredondaM2(draft));
     if (!calculated || !material) return 0;
     const materialValue = calcularLinha({ billingUnit: material.billingUnit, unitPrice: material.currentPrice, billedQuantity: calculated.billableArea }).subtotal;
     const edgeValue = calcularTotalOrcamento(component.edges.map(edge => edgeCalculatedSubtotal(draft, component, edge)));
@@ -320,19 +328,22 @@ export default function EditorOrcamento() {
     const service = savedCutout?.billingUnitSnapshot && savedCutout.unitPriceSnapshot != null ? { billingUnit: savedCutout.billingUnitSnapshot, currentPrice: Number(savedCutout.unitPriceSnapshot) }
       : savedCutout ? servicesFor(draft).find((entry) => entry.id === cutout.serviceId) : currentService;
     if (!service) return 0;
-    const quantity = service.billingUnit === 'SQUARE_METER'
-      ? decimal(cutout.lengthCm ?? '') / 100 * (decimal(cutout.widthCm ?? '') / 100) * cutout.quantity
-      : service.billingUnit === 'FIXED' ? 1 : cutout.quantity;
+    // Mesma conta da API: m² com as medidas em mm inteiros.
+    const areaRecorte = () => { try { return calcularAreaRetangularM2(centimetrosParaMilimetros(cutout.lengthCm ?? ''), centimetrosParaMilimetros(cutout.widthCm ?? ''), cutout.quantity); } catch { return 0; } };
+    const quantity = service.billingUnit === 'SQUARE_METER' ? areaRecorte() : service.billingUnit === 'FIXED' ? 1 : cutout.quantity;
     return quantity > 0 ? calcularLinha({ billingUnit: service.billingUnit, unitPrice: service.currentPrice, billedQuantity: quantity }).subtotal : 0;
   };
   const itemSummary = (draft: DraftItem) => {
     const material = materialFor(draft);
-    const components = draft.components.map(component => calculateDraftComponent(component, draft.arredondarM2)).filter(Boolean) as ReturnType<typeof calcularComponente>[];
+    const components = draft.components.map(component => calculateDraftComponent(component, arredondaM2(draft))).filter(Boolean) as ReturnType<typeof calcularComponente>[];
     const measuredArea = components.length ? somarAreasComponentes(components) : 0;
     const area = draft.calculationMode === 'MANUAL_M2' ? decimal(draft.manualM2) : measuredArea;
+    // Serviços por m² usam a área exata das peças, como a API: o M² fechado vale só para a pedra.
+    const exatos = draft.components.map(component => calculateDraftComponent(component)).filter(Boolean) as ReturnType<typeof calcularComponente>[];
+    const areaServicos = draft.calculationMode === 'MANUAL_M2' ? area : exatos.length ? somarAreasComponentes(exatos) : 0;
     const materialSubtotal = draft.calculationMode === 'MANUAL_M2'
       ? (material ? calcularLinha({ billingUnit: material.billingUnit, unitPrice: material.currentPrice, billedQuantity: area }).subtotal : 0)
-      : draft.components.reduce((sum, component) => { const selected = materialFor(draft, component); const measured = calculateDraftComponent(component, draft.arredondarM2); return sum + (selected && measured ? calcularLinha({ billingUnit: selected.billingUnit, unitPrice: selected.currentPrice, billedQuantity: measured.billableArea }).subtotal : 0); }, 0);
+      : draft.components.reduce((sum, component) => { const selected = materialFor(draft, component); const measured = calculateDraftComponent(component, arredondaM2(draft)); return sum + (selected && measured ? calcularLinha({ billingUnit: selected.billingUnit, unitPrice: selected.currentPrice, billedQuantity: measured.billableArea }).subtotal : 0); }, 0);
     let calculatedServices = 0;
     let serviceDiscounts = 0;
     const serviceBreakdown: Array<{ id: string; name: string; amount: number }> = [];
@@ -345,7 +356,7 @@ export default function EditorOrcamento() {
     };
     const draftServices = servicesFor(draft);
     const directServices = draftServices.filter((service) => draft.serviceIds.includes(service.id)).reduce((sum, service) => {
-      const quantity = billedServiceQuantity(service, area, draft.serviceQuantities);
+      const quantity = billedServiceQuantity(service, areaServicos, draft.serviceQuantities);
       const calculated = quantity > 0 ? calcularLinhaServico({ serviceName: service.name, billingUnit: service.billingUnit, unitPrice: service.currentPrice, billedQuantity: quantity }).subtotal : 0;
       const applied = draft.serviceAppliedValues[service.id] === undefined ? calculated : currencyDecimal(draft.serviceAppliedValues[service.id]);
       calculatedServices += calculated;
@@ -441,16 +452,17 @@ export default function EditorOrcamento() {
     if (summarySelection !== 'TOTAL' && summarySelection !== activeIndex) setSummarySelection(activeIndex);
   }, [activeIndex, summarySelection]);
 
-  const selectCustomer = (entry: Customer) => {
-    if (customerTarget?.kind === 'NEW_WORKSPACE') {
+  /** Coloca o cliente no atendimento de destino (novo, um atendimento aberto ou o atual). */
+  const selectCustomer = (entry: Customer, target: CustomerTarget | null = customerTarget) => {
+    if (target?.kind === 'NEW_WORKSPACE') {
       const fresh = newClientWorkspace();
       fresh.customer = entry;
       fresh.items = fresh.items.map(project => ({ ...project, productTypeId: catalog?.productTypes[0]?.id ?? '' }));
       setWorkspaces(current => [...current, fresh]);
       setActiveClientIndex(workspaces.length);
       setSummarySelection(0);
-    } else if (customerTarget?.kind === 'WORKSPACE') {
-      const targetWorkspaceId = customerTarget.workspaceId;
+    } else if (target?.kind === 'WORKSPACE') {
+      const targetWorkspaceId = target.workspaceId;
       const targetIndex = workspaces.findIndex(candidate => candidate.id === targetWorkspaceId);
       if (targetIndex >= 0) {
         setWorkspaces(current => current.map(candidate => candidate.id === targetWorkspaceId ? { ...candidate, customer: entry } : candidate));
@@ -458,7 +470,7 @@ export default function EditorOrcamento() {
         setSummarySelection(0);
       } else setCustomer(entry);
     } else setCustomer(entry);
-    if (customerTarget) { setReviewedSteps([]); setCurrentStep(1); }
+    if (target) { setReviewedSteps([]); setCurrentStep(1); }
     setCustomerTarget(null);
     setEditingCustomerId(null);
     setCustomerMode(null);
@@ -476,6 +488,18 @@ export default function EditorOrcamento() {
     const empty = workspaces.find(entry => !entry.customer && !entry.parentQuote && entry.items.every(project => !projetoPreenchido(project)));
     return empty ? { kind: 'WORKSPACE', workspaceId: empty.id } : { kind: 'NEW_WORKSPACE' };
   };
+  // "Orçamento sem cadastro" (menu do Cliente): cria o cliente sem nenhum dado e já seleciona, sem abrir o cadastro.
+  // Se o atendimento aberto já tem cliente, abre outro (como "+ Outro cliente"): os clientes abertos continuam
+  // na lista, cada um com os seus projetos, até serem salvos ou apagados.
+  async function orcamentoSemCadastro() {
+    if (savingCustomer) return;
+    const destino = customer ? customerTargetForNewTab() : null;
+    setSavingCustomer(true);
+    setError('');
+    try { selectCustomer(await api<Customer>('/customers', { method: 'POST', body: JSON.stringify({ quick: true }) }), destino); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível abrir o orçamento sem cadastro.'); }
+    finally { setSavingCustomer(false); }
+  }
   // "+ Outro cliente": escolhe (ou cadastra) o cliente e só então abre o novo atendimento.
   const adicionarOutroCliente = () => { setCustomerTarget(customerTargetForNewTab()); openCustomerSearch(); };
   async function salvarCliente(event: FormEvent) {
@@ -487,7 +511,7 @@ export default function EditorOrcamento() {
     catch (cause) { setCustomerError(cause instanceof Error ? cause.message : 'Não foi possível salvar o cliente.'); }
     finally { setSavingCustomer(false); }
   }
-  function adicionarProjeto() { setItems((current) => [...current, { ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '', ...(quickMode ? { drawingData: dadosEntradaProjeto(undefined, 'QUICK') } : {}) }]); setActiveIndex(items.length); setReviewedSteps([]); }
+  function adicionarProjeto() { setItems((current) => [...current, { ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '', arredondarM2: m2Fechado, ...(quickMode ? { drawingData: dadosEntradaProjeto(undefined, 'QUICK') } : {}) }]); setActiveIndex(items.length); setReviewedSteps([]); }
   function removerProjeto(index: number) {
     const project = items[index];
     const filled = projetoPreenchido(project);
@@ -540,7 +564,7 @@ export default function EditorOrcamento() {
     for (const [index, component] of draft.components.entries()) {
       const name = component.label.trim() || `Componente ${index + 1}`;
       if (!materialFor(draft, component)) return { componentId: component.id, message: `${name}: selecione o material dessa peça no campo Material.` };
-      if (!calculateDraftComponent(component, draft.arredondarM2)) return { componentId: component.id, message: `${name}: confira comprimento, largura/altura e quantidade. As medidas devem ser maiores que zero.` };
+      if (!calculateDraftComponent(component, arredondaM2(draft))) return { componentId: component.id, message: `${name}: confira comprimento, largura/altura e quantidade. As medidas devem ser maiores que zero.` };
       for (const edge of quickDraft ? [] : component.edges) {
         const service = servicesFor(draft).find(entry => entry.id === edge.serviceId);
         if (acabamentoBordaPedra(service?.name ?? '') && !(decimal(edge.heightCm ?? '') > 0)) return { componentId: component.id, message: `${name}: informe a altura/largura de ${service?.name}.` };
@@ -554,9 +578,25 @@ export default function EditorOrcamento() {
       && project.components.length <= 1 && !project.cutouts.length && !project.serviceIds.length
       && project.components.every(component => !component.label.trim() && !component.materialId && !component.lengthCm && !component.widthCm && component.quantity === 1 && component.componentType === 'TOP' && !component.edges.length && component.appliedTotal === undefined);
   };
+  // Desenho técnico usado no orçamento: vira o projeto dele no resumo (ou atualiza o que já veio dele),
+  // com as mesmas peças e o mesmo valor que o desenho mostrou. Projeto vazio aberto é aproveitado.
+  const usarDesenhoTecnico = (desenho: DesenhoUsado) => {
+    const existente = items.findIndex((projeto) => vinculoDesenho(projeto)?.designId === desenho.designId);
+    const alvo = existente >= 0 ? existente : items[activeIndex] && isEmptyQuickProject(items[activeIndex]) ? activeIndex : items.length;
+    const anterior = items[alvo];
+    const projeto = projetoDoDesenho(desenho.estimativa.item, {
+      id: anterior?.id ?? newId(), projectName: existente >= 0 && anterior.projectName.trim() ? anterior.projectName : desenho.nome,
+      productTypeId: anterior?.productTypeId || catalog?.productTypes[0]?.id || '', m2Fechado,
+      vinculo: { designId: desenho.designId, nome: desenho.nome, versao: desenho.versao, total: desenho.estimativa.total, aceitoEm: new Date().toISOString() },
+    });
+    setItems((current) => alvo < current.length ? current.map((entry, index) => index === alvo ? projeto : entry) : [...current, projeto]);
+    setActiveIndex(alvo); setSummarySelection(alvo); setReviewedSteps([]); setError('');
+    setAvisoDesenho(`${projeto.projectName}: ${formatarMoeda(desenho.estimativa.total)} do desenho técnico ${existente >= 0 ? 'atualizado' : 'adicionado'} no resumo do orçamento.`);
+  };
   const prepareDraftForSave = (draft: DraftItem) => {
     const prepared = prepararItemRapido(draft);
-    if (modoEntradaOrcamento(prepared.drawingData) !== 'QUICK') return prepared;
+    const rapido = modoEntradaOrcamento(prepared.drawingData) === 'QUICK';
+    const arredondar = prepared.calculationMode === 'DIMENSIONS' && arredondaM2(prepared);
     const draftServices = servicesFor(prepared);
     const omitted = new Set<string>();
     // "M² fechado": grava o valor de material calculado com a área arredondada como
@@ -565,16 +605,20 @@ export default function EditorOrcamento() {
     // como sobreposição antes de retornar o valor a gravar aqui). As medidas
     // (lengthCm/widthCm) nunca são alteradas — o desenho técnico e o PDF continuam
     // mostrando exatamente o que foi digitado.
+    // (vale nos dois modos: o Detalhado só divide as peças para produzir, o valor é o mesmo). A
+    // marca m2Fechado no projeto faz o valor voltar a ser calculado ao reabrir (itemSalvoParaRascunho).
     const components = prepared.components.map(component => ({ ...component,
-      appliedTotal: prepared.arredondarM2 ? componentAppliedTotal(prepared, component).toFixed(2).replace('.', ',') : component.appliedTotal,
-      edges: component.edges.filter(edge => {
+      appliedTotal: arredondar ? componentAppliedTotal(prepared, component).toFixed(2).replace('.', ',') : component.appliedTotal,
+      edges: rapido ? component.edges.filter(edge => {
       const service = draftServices.find(entry => entry.id === edge.serviceId);
       const stripWithoutMeasure = !!acabamentoBordaPedra(service?.name ?? '') && !(decimal(edge.heightCm ?? '') > 0);
       if (stripWithoutMeasure) omitted.add(edge.serviceId);
       return !stripWithoutMeasure;
-    }) }));
-    if (!omitted.size && !prepared.arredondarM2) return prepared;
-    return { ...prepared, components, serviceIds: [...new Set([...prepared.serviceIds, ...omitted])], serviceQuantities: { ...prepared.serviceQuantities, ...Object.fromEntries([...omitted].map(serviceId => [serviceId, prepared.serviceQuantities[serviceId] ?? '1'])) } };
+    }) : component.edges }));
+    const { m2Fechado: _marca, ...semMarca } = prepared.drawingData ?? {};
+    const drawingData = !prepared.drawingData ? undefined : arredondar ? { ...prepared.drawingData, m2Fechado: true } : 'm2Fechado' in prepared.drawingData ? semMarca : prepared.drawingData;
+    if (!omitted.size && !arredondar && drawingData === prepared.drawingData) return prepared;
+    return { ...prepared, components, drawingData, serviceIds: [...new Set([...prepared.serviceIds, ...omitted])], serviceQuantities: { ...prepared.serviceQuantities, ...Object.fromEntries([...omitted].map(serviceId => [serviceId, prepared.serviceQuantities[serviceId] ?? '1'])) } };
   };
   async function salvarOrcamento(openPdf = false) {
     setError('');
@@ -621,7 +665,7 @@ export default function EditorOrcamento() {
   const barraNoTopo = !celular && !!alvoCabecalho;
   const barraAtendimento = <BarraAtendimento clientes={quoteId ? [] : workspaces.map((entry) => ({ id: entry.id, nome: entry.customer?.name ?? null }))} clienteAtivo={activeClientIndex} clienteNome={customer?.name ?? null}
     projetos={items.map((draft, index) => ({ id: draft.id, nome: draft.projectName.trim() || `Projeto ${index + 1}` }))} projetoAtivo={activeIndex}
-    aoEscolherCliente={selecionarEspacoCliente} aoSelecionarCliente={openCustomerSearch} aoCadastrarCliente={openNewCustomer}
+    aoEscolherCliente={selecionarEspacoCliente} aoSelecionarCliente={openCustomerSearch} aoCadastrarCliente={openNewCustomer} aoSemCadastro={() => void orcamentoSemCadastro()}
     aoOutroCliente={quoteId ? undefined : adicionarOutroCliente}
     aoRemoverCliente={!quoteId && (workspaces.length > 1 || workspaceHasData(workspace)) ? () => removerEspacoCliente(activeClientIndex) : undefined}
     aoEditarCliente={customer ? editCustomer : undefined}
@@ -638,8 +682,8 @@ export default function EditorOrcamento() {
       <div className="customer-mode-tabs"><button type="button" disabled={savingCustomer} onClick={openCustomerSearch}>Selecionar cliente</button><button type="button" disabled={savingCustomer} onClick={openNewCustomer}>Novo cliente</button></div>
       {customerError && <p className="form-error" role="alert">{customerError}</p>}
       {customerMode === 'NEW' ? <><form className="inline-form customer-form" onSubmit={salvarCliente}>
-        {!editingCustomerId && <OpcaoClienteRapido ativo={clienteRapido} aoMudar={setClienteRapido} />}
-        {editandoClienteRapido && <p className="cliente-rapido-aviso">Cliente rápido: informe o telefone para completar o cadastro.</p>}
+        {!editingCustomerId && <OpcaoSemCadastro ativo={clienteRapido} aoMudar={setClienteRapido} />}
+        {editandoClienteRapido && <p className="cliente-rapido-aviso">Sem cadastro: informe o telefone para completar o cadastro.</p>}
         <input value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} placeholder={novoClienteRapido ? 'Nome (opcional)' : 'Nome'} aria-label="Nome" required={!novoClienteRapido} />
         <input value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} placeholder={novoClienteRapido || editandoClienteRapido ? 'Telefone (opcional)' : 'Telefone'} aria-label="Telefone" required={!novoClienteRapido && !editandoClienteRapido} />
         {!novoClienteRapido && <><input value={customerForm.document} onChange={(event) => setCustomerForm({ ...customerForm, document: event.target.value })} placeholder="CPF (opcional)" />
@@ -650,7 +694,7 @@ export default function EditorOrcamento() {
         <input value={customerForm.postalCode} onChange={(event) => setCustomerForm({ ...customerForm, postalCode: event.target.value })} placeholder="CEP" />
         <input value={customerForm.complement} onChange={(event) => setCustomerForm({ ...customerForm, complement: event.target.value })} placeholder="Complemento" />
         <textarea value={customerForm.notes} onChange={(event) => setCustomerForm({ ...customerForm, notes: event.target.value })} placeholder="Observações" /></>}
-        <button className="primary-button" disabled={savingCustomer}>{savingCustomer ? 'Salvando…' : editingCustomerId ? 'Salvar alterações' : novoClienteRapido ? 'Criar cliente rápido e selecionar' : 'Salvar e selecionar cliente'}</button>
+        <button className="primary-button" disabled={savingCustomer}>{savingCustomer ? 'Salvando…' : editingCustomerId ? 'Salvar alterações' : novoClienteRapido ? 'Criar sem cadastro e selecionar' : 'Salvar e selecionar cliente'}</button>
       </form><button type="button" className="text-button customer-back" disabled={savingCustomer} onClick={openCustomerSearch}>← Voltar para busca</button></> : <>
         <label className="customer-search-label">Buscar cliente existente<input className="search" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Digite nome, telefone ou CPF" autoFocus /></label>
         {customerSearch.trim().length < 2 ? <p className="customer-help">Comece digitando para localizar um cliente cadastrado.</p> : customers.length ? <div className="customer-results">{customers.map((entry) => <button className="customer-result" key={entry.id} onClick={() => selectCustomer(entry)}><strong>{entry.name}</strong><small>{contatoCliente(entry)}</small></button>)}</div> : <p className="customer-help">Nenhum cliente encontrado. <button type="button" className="text-button" onClick={openNewCustomer}>Cadastrar novo cliente</button></p>}
@@ -665,10 +709,14 @@ export default function EditorOrcamento() {
       <button type="button" className="modo-botao" aria-pressed={quickMode} aria-label="Orçamento Rápido" onClick={() => changeEntryMode('QUICK')}><Icone nome="raio" tamanho={16} />Rápido</button>
       <button type="button" className="modo-botao" aria-pressed={!quickMode} aria-label={`Orçamento com Desenho / Detalhado (${temDesenho ? 'desenho adicionado' : 'desenho pendente'})`} onClick={() => changeEntryMode('DETAILED')}><Icone nome="esquadro" tamanho={16} />Com desenho<span className={`modo-selo${temDesenho ? ' feito' : ''}`} title={temDesenho ? 'Desenho adicionado' : 'Desenho pendente'} aria-hidden="true">{temDesenho ? '✓' : '!'}</span></button>
     </div>
+    <DesenhoTecnicoNoOrcamento cliente={customer ? { id: customer.id, name: customer.name } : null} desenhosNoOrcamento={items.flatMap((projeto) => vinculoDesenho(projeto)?.designId ?? [])}
+      podeRevisar={!!currentUser && temPermissao(currentUser.role, 'technical')} aoEscolherCliente={openCustomerSearch} aoSemCadastro={() => void orcamentoSemCadastro()} aoUsar={usarDesenhoTecnico} />
     {!quickMode && <div className="project-navigation"><EtapasProjeto current={currentStep} completed={completedSteps} onSelect={navigateStep} /><button type="button" className="view-all-button" aria-pressed={showAll} onClick={() => setShowAll((value) => !value)}>{showAll ? 'Ver por etapas' : 'Ver tudo'}</button></div>}
     {!quickMode && !temDesenho && <button type="button" className="botao-contorno botao-contorno-destaque concluir-detalhamento" onClick={concluirDetalhamento}><Icone nome="marcado" />Concluir detalhamento</button>}
     </div>
-    {quickMode && <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={item.materialId ? materialFor(item) : materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={patch => updateItem({ ...patch, drawingData: alterouOrcamentoRapido(item, { ...item, ...patch }) ? dadosEntradaProjeto(item.drawingData, 'QUICK') : item.drawingData })} area={component => calculateDraftComponent(component, item.arredondarM2)?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
+    {avisoDesenho && <p className="catalog-notice orc-desenho-aviso" role="status">{avisoDesenho}<button type="button" className="text-button" aria-label="Fechar aviso" onClick={() => setAvisoDesenho('')}>×</button></p>}
+    {vinculoDesenho(item) && <p className="customer-help orc-desenho-vinculo"><Icone nome="esquadro" tamanho={14} />Este projeto veio do desenho técnico “{vinculoDesenho(item)!.nome}”. Para mudar as peças pelo desenho, abra-o em Desenho técnico e use de novo no orçamento.</p>}
+    {quickMode && <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={item.materialId ? materialFor(item) : materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={patch => updateItem({ ...patch, drawingData: alterouOrcamentoRapido(item, { ...item, ...patch }) ? dadosEntradaProjeto(item.drawingData, 'QUICK') : item.drawingData })} m2Fechado={arredondaM2(item)} area={component => calculateDraftComponent(component, arredondaM2(item))?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
     {!quickMode && <>
     <div className="project-stage-group project-setup-grid" hidden={quickMode || (!showAll && currentStep !== 1)}>
     <section className="section measurements-card" id="project-step-1" tabIndex={-1} onFocusCapture={() => setCurrentStep(1)}>

@@ -10,7 +10,7 @@ export const customerSchema = z.object({
   address: z.string().max(500).optional().nullable(), neighborhood: z.string().max(120).optional().nullable(), city: z.string().max(120).optional().nullable(),
   postalCode: z.string().max(20).optional().nullable(), complement: z.string().max(200).optional().nullable(), notes: z.string().max(2000).optional().nullable(),
 });
-/** Cliente rápido: nenhum dado é obrigatório; sem nome, o sistema numera ("Cliente rápido 3"). */
+/** Orçamento sem cadastro (cliente rápido): nenhum dado é obrigatório; sem nome, o sistema numera ("Sem cadastro 3"). */
 export const quickCustomerSchema = customerSchema.extend({
   name: z.preprocess(semVazio, z.string().trim().max(160).optional()),
   phone: z.preprocess(semVazio, telefone.optional()),

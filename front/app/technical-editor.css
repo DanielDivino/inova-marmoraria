@@ -218,3 +218,36 @@ html.inova-dark .inova-theme .tec-resumo-estimativa small { background: #3c3219;
 .tec-campo-metros > input { box-sizing: border-box; width: 100%; padding-right: 26px !important; }
 .tec-campo-metros > i { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-style: normal; font-size: 13px; pointer-events: none; }
 .tec-referencia .tec-campo-metros > input { min-height: 46px; padding: 0 30px 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 17px; }
+/* Linhas do valor: partes da peça, retângulo cobrado e M² fechado. */
+.tec-estimativa li .tec-detalhe { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+/* Aberto do Novo orçamento: voltar e usar no orçamento. */
+.tec-voltar { display: inline-block; padding: 0; font-weight: 700; }
+.tec-usar { white-space: nowrap; }
+/* Área seca e molhada do balcão: a molhada tingida de azul, a seca de bege, divisas tracejadas. */
+.tec-area-molhada { fill: rgba(58, 128, 196, .22); }
+.tec-area-seca { fill: rgba(176, 140, 72, .14); }
+.tec-area-divisa { stroke: #2f6fa8; fill: none; }
+/* Marcando: mira no canvas e a faixa que acompanha o ponteiro, com o tamanho. */
+.tec-canvas.marcando-area { cursor: crosshair; }
+.tec-area-previa-faixa { fill: rgba(58, 128, 196, .3); }
+.tec-area-previa-marca { stroke: #1f5f99; }
+.tec-area-previa-rotulo { fill: #174a78; font-weight: 800; paint-order: stroke; stroke: rgba(255, 255, 255, .9); stroke-width: .25em; }
+html.inova-dark .inova-theme .tec-area-seca { fill: rgba(224, 196, 141, .12); }
+html.inova-dark .inova-theme .tec-area-previa-faixa { fill: rgba(96, 164, 230, .32); }
+html.inova-dark .inova-theme .tec-area-previa-rotulo { fill: #d6ebff; stroke: rgba(20, 23, 21, .9); }
+.tec-botao-molhada { background: #2f6fa8 !important; border-color: #2f6fa8 !important; }
+.tec-area-rotulo { font-weight: 700; }
+.tec-area-rotulo.molhada { fill: #255a8a; }
+.tec-area-rotulo.seca { fill: #7a6539; }
+html.inova-dark .inova-theme .tec-area-molhada { fill: rgba(96, 164, 230, .25); }
+html.inova-dark .inova-theme .tec-area-divisa { stroke: #8cc1f0; }
+html.inova-dark .inova-theme .tec-area-rotulo.molhada { fill: #a9d2f5; }
+html.inova-dark .inova-theme .tec-area-rotulo.seca { fill: #e0c48d; }
+.tec-areas { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.tec-area-linha { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-left: 4px solid #c9b58a; border-radius: 10px; }
+.tec-area-linha.molhada { border-left-color: #3a80c4; background: rgba(58, 128, 196, .07); }
+.tec-area-linha strong, .tec-area-linha small { display: block; }
+.tec-area-linha small { margin-top: 2px; color: var(--muted); font-size: 11px; }
+.tec-area-linha .botao-contorno { min-height: 32px; padding: 4px 10px; font-size: 12px; }
+.tec-area-linha .text-button { font-size: 18px; padding: 6px; }
+.tec-dividir-areas { justify-self: start; }

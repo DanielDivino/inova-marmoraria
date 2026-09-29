@@ -49,14 +49,15 @@ export function useDocumentoTecnico(designId: string) {
     setRevisoes(desenho.revisions);
   }, [designId]);
 
-  const salvar = useCallback(async (proximo = atual.current) => {
+  /** Salva o rascunho; devolve a versão salva (ou false). */
+  const salvar = useCallback(async (proximo = atual.current): Promise<number | false> => {
     if (!proximo || salvamento === 'saving') return false;
     setSalvamento('saving'); setMensagem('');
     try {
       const resultado = await api<{ version: number; diagnostics: Diagnostic[] }>(`/designs/${designId}/draft`, { method: 'PUT', body: JSON.stringify({ baseVersion: versao, document: proximo }) });
       setVersao(resultado.version); setDiagnosticos(resultado.diagnostics); setAlterado(false); setSalvamento('saved');
       window.setTimeout(() => setSalvamento((estado) => estado === 'saved' ? 'idle' : estado), 1800);
-      return true;
+      return resultado.version;
     } catch (causa) {
       setSalvamento('error');
       const texto = causa instanceof Error ? causa.message : 'Não foi possível salvar o desenho.';
@@ -107,7 +108,7 @@ export function useDocumentoTecnico(designId: string) {
   }, [desfazer, refazer]);
 
   return {
-    dados, documento, diagnosticos, revisoes, materiais, salvamento, conflito, mensagem, setMensagem,
+    dados, documento, versao, alterado, diagnosticos, revisoes, materiais, salvamento, conflito, mensagem, setMensagem,
     podeDesfazer: passado.current.length > 0, podeRefazer: futuro.current.length > 0,
     carregar, recarregarRevisoes, salvar, mudar, substituir, concluirGesto, desfazer, refazer,
   };
