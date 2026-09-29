@@ -307,10 +307,25 @@ describe('Desenho de um único projeto', () => {
     pdf.end();
     await finished;
     const texts = printed.mock.calls.map(([text]) => String(text));
-    expect(texts).toContain('2. Banheiro · Bancada');
+    expect(texts).toContain('2. Banheiro');
     expect(texts.some((text) => text.includes('Cozinha'))).toBe(false);
     expect(texts).not.toContain('À VISTA');
     // A primeira folha do documento já é a folha de desenho.
     expect(pages.mock.calls).toHaveLength(0);
+  });
+  it('não imprime o tipo de produto interno ("Bancada") em projeto que só tem soleira', async () => {
+    const soleira = { id: 'soleira', label: '', componentType: 'THRESHOLD', lengthMm: 1250, widthMm: 150, quantity: 3, billableArea: .5625, edges: [] };
+    const detalhado = { drawingData: { entryMode: 'DETAILED', detailingStatus: 'COMPLETED' } };
+    for (const projectName of ['SOLEIRAS', '']) {
+      const pdf = new PDFDocument({ margin: 36 });
+      const printed = vi.spyOn(pdf, 'text');
+      const finished = new Promise<void>((resolve) => { pdf.on('data', () => undefined); pdf.on('end', resolve); });
+      renderizarPdfDesenhoProjeto(pdf, { number: 'SET-1', customerNameSnapshot: 'Cliente', items: [{ ...item, ...detalhado, id: 'soleiras', projectName, components: [soleira] }] }, 'soleiras');
+      pdf.end();
+      await finished;
+      const texts = printed.mock.calls.map(([text]) => String(text));
+      expect(texts).toContain(projectName ? '1. SOLEIRAS' : '1. Soleira');
+      expect(texts.some((text) => /bancada/i.test(text))).toBe(false);
+    }
   });
 });

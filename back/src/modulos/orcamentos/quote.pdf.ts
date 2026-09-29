@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import { cabecalhoEmpresaPdf as header, assinaturasPdf, normalizarNomeMaterial, pdfDate } from './pdf-layout.js';
 import { montarLinhasPdf, type QuotePdfLine } from './quote.pdf-lines.js';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
-import { projetoTemDesenho, calcularTotalCartao, planoDeProducao } from '@inova/domain';
+import { projetoTemDesenho, calcularTotalCartao, planoDeProducao, nomeProjeto } from '@inova/domain';
 import { formatoRecorte, detalheDesenhoComponente, descricaoProducaoComponente, descricaoProducaoRecorte, tituloComponenteProducao, escalasDesenhoTecnico, isMiterFinish, miterJointPath, posicaoMarcadorMeiaEsquadria, acabamentoBordaPedra, faixasBordaPedra, rotuloMedidaDesenho, posicaoMedidaFaixa, type ManufacturingLine } from '@inova/domain';
 
 type PdfDocument = InstanceType<typeof PDFDocument>;
@@ -583,7 +583,8 @@ function renderizarFolhasDesenho(pdf: PdfDocument, quote: any, deliveryLabel: st
       const details = Math.max(0, ...descriptions.slice(index, index + 2).map((description: { rows: DescriptionRow[] }) => description.rows.reduce((sum, row) => sum + row.height, 8)));
       return drawings + details <= 580 ? drawings + details : drawings + Math.min(details, 60);
     };
-    const itemTitle = `${itemIndex + 1}. ${item.projectName ? normalizarNomeMaterial(item.projectName) + ' · ' : ''}${item.productType.name}${components.length ? '' : ` · ${normalizarNomeMaterial(item.materialNameSnapshot)}`}`;
+    // Só o nome do projeto (ou as peças que ele tem): o tipo de produto é interno e sempre "Bancada".
+    const itemTitle = `${itemIndex + 1}. ${normalizarNomeMaterial(nomeProjeto(item))}${components.length ? '' : ` · ${normalizarNomeMaterial(item.materialNameSnapshot)}`}`;
     const titleHeight = pdf.font('Helvetica-Bold').fontSize(10).heightOfString(itemTitle, { width: 523 }) + 8;
     ensureSpace(titleHeight + rowReservation(0));
     pdf.fillColor('#b6811e').font('Helvetica-Bold').fontSize(10).text(itemTitle, 36, y, { width: 523 }); y += titleHeight;
