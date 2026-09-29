@@ -22,7 +22,12 @@
     "test:all": "npm test && node tests/run-isolated.mjs all",
     "db:deploy": "npm run prisma:deploy --workspace=@inova/api",
     "check": "npm run build --workspace=@inova/domain && tsc --noEmit --noUnusedLocals --noUnusedParameters -p back/tsconfig.json && tsc --noEmit --noUnusedLocals --noUnusedParameters -p front/tsconfig.json",
-    "dev": "node scripts/desenvolvimento.mjs"
+    "dev": "node scripts/desenvolvimento.mjs",
+    "producao:instalar": "node scripts/producao.mjs instalar",
+    "producao:atualizar": "node scripts/producao.mjs atualizar",
+    "producao:voltar": "node scripts/producao.mjs voltar",
+    "producao:status": "node scripts/producao.mjs status",
+    "producao:logs": "node scripts/producao.mjs logs"
   },
   "engines": {
     "node": ">=22"
