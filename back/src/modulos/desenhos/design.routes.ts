@@ -146,8 +146,8 @@ export async function registrarRotasDesenhos(app: FastifyInstance) {
     const { id } = idSchema.parse(request.params);
     const revision = await prisma.designRevision.findUnique({ where: { id }, include: { design: { include: { project: { include: { job: { include: { customer: true } } } } } } } });
     if (!revision) throw new AppError(404, 'Revisão não encontrada.', 'REVISION_NOT_FOUND');
-    const pdf = new PDFDocument({ size: 'A4', margin: 40 });
-    renderizarPdfTecnico(pdf, technicalDocumentSchema.parse(revision.document), { customer: revision.design.project.job.customer.name, project: revision.design.project.name, design: revision.design.name, revision: revision.number, hash: revision.contentHash });
+    const pdf = new PDFDocument({ size: 'A4', margin: 36, bufferPages: true });
+    renderizarPdfTecnico(pdf, technicalDocumentSchema.parse(revision.document), { customer: revision.design.project.job.customer.name, project: revision.design.project.name, design: revision.design.name, revision: revision.number, hash: revision.contentHash, status: revision.status, createdAt: revision.createdAt });
     pdf.end();
     return reply.type('application/pdf').header('Content-Disposition', `inline; filename="desenho-tecnico-r${revision.number}.pdf"`).send(pdf);
   });
