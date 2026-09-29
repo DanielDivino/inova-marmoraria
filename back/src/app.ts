@@ -10,6 +10,7 @@ import { registrarRotasCatalogo } from './modulos/catalogo/catalog.routes.js';
 import { registrarRotasClientes } from './modulos/clientes/customer.routes.js';
 import { registrarRotasUsuarios } from './modulos/usuarios/user.routes.js';
 import { registrarRotasOrcamentos } from './modulos/orcamentos/quote.routes.js';
+import { registrarRotasRascunhoOrcamento } from './modulos/orcamentos/quote-draft.routes.js';
 import { registrarRotasAuditoria } from './modulos/auditoria/audit.routes.js';
 import { registrarRotasNotificacoes } from './modulos/notificacoes/notification.routes.js';
 import { registrarRotasDesenhos } from './modulos/desenhos/design.routes.js';
@@ -30,6 +31,7 @@ export async function criarAplicacao() {
   app.register(registrarRotasCatalogo, { prefix: '/catalog' });
   app.register(registrarRotasClientes, { prefix: '/customers' });
   app.register(registrarRotasOrcamentos, { prefix: '/quotes' });
+  app.register(registrarRotasRascunhoOrcamento, { prefix: '/quote-draft' });
   app.register(registrarRotasRemontagem, { prefix: '/quotes' });
   app.register(registrarRotasEntregas, { prefix: '/quotes' });
   app.register(registrarRotasUsuarios, { prefix: '/users' });

@@ -30,6 +30,8 @@ let saved;
 await page.route('**/api/**', async route => {
   const path = new URL(route.request().url()).pathname;
   if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'visual-project', name: 'Administrador Inova', role: 'SUPER_ADMIN' } } });
+  // Rascunho do Novo orçamento no servidor (vazio: vale o deste navegador).
+  if (path === '/api/quote-draft') return route.fulfill({ json: route.request().method() === 'GET' ? { version: null } : { saved: true, version: 1 } });
   if (path === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
   // Desenhos técnicos do cliente (botão Desenho técnico do Novo orçamento).
   if (/^\/api\/customers\/[^/]+\/designs$/.test(path)) return route.fulfill({ json: { designs: [] } });

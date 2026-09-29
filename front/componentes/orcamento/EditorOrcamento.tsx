@@ -30,6 +30,7 @@ import { RecortesDaPeca } from './ProductionCutouts';
 import { OpcaoSemCadastro, contatoCliente, payloadCliente } from '../clientes/SemCadastro';
 import { DesenhoTecnicoNoOrcamento, type DesenhoUsado } from './DesenhoTecnicoNoOrcamento';
 import { projetoDoDesenho, vinculoDesenho } from '../../utilitarios/desenho-orcamento';
+import { useRascunhoServidor } from './useRascunhoServidor';
 
 type BillingUnit = 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED';
 type MaterialImage = { id: string; url: string; alt?: string | null; isPrimary: boolean };
@@ -57,6 +58,10 @@ const blankComponent = (componentType: ComponentType): DraftComponent => ({ id: 
 // detalhado a qualquer momento sem criar outro orçamento.
 const newItem = (): DraftItem => ({ id: newId(), projectName: '', productTypeId: '', materialId: '', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [blankComponent('TOP')], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {}, drawingData: dadosEntradaProjeto(undefined, 'QUICK') });
 const newClientWorkspace = (): ClientWorkspace => ({ id: newId(), customer: null, items: [newItem()], activeIndex: 0, discount: '0', validUntil: '', notes: '', parentQuote: null });
+const workspaceHasData = (entry: ClientWorkspace) => !!entry.customer || entry.items.some((project) => projetoPreenchido(project));
+const normalizarProjetos = (entries: DraftItem[] | undefined, componentNamesVersion?: number) => entries?.length ? restaurarNomesComponentes(entries, componentNamesVersion).map((entry) => ({ ...entry, projectName: entry.projectName ?? '', components: normalizarPedrasDasPecas(entry, entry.components), serviceAppliedValues: entry.serviceAppliedValues ?? {} })) : [newItem()];
+/** Atendimentos guardados (neste aparelho ou no servidor) no formato atual do editor. */
+const normalizarAtendimentos = (entries: Partial<ClientWorkspace>[], componentNamesVersion = 1): ClientWorkspace[] => entries.map((entry) => ({ ...newClientWorkspace(), ...entry, id: entry.id ?? newId(), customer: entry.customer ?? null, items: normalizarProjetos(entry.items, componentNamesVersion), activeIndex: Math.min(Math.max(0, entry.activeIndex ?? 0), Math.max(0, (entry.items?.length ?? 1) - 1)), discount: entry.discount ?? '0', validUntil: entry.validUntil ?? '', notes: entry.notes ?? '', parentQuote: entry.parentQuote ?? null }));
 // roundUp (Orçamento Rápido, "M² fechado") só afeta o m² usado para calcular o
 // valor do material — as medidas exibidas, o desenho técnico e o que é salvo no
 // orçamento/PDF sempre usam component.lengthCm/widthCm exatos, sem passar por aqui.
@@ -75,6 +80,8 @@ export default function EditorOrcamento() {
   const [editingQuote, setEditingQuote] = useState<EditingQuote | null>(null);
   const [workspaces, setWorkspaces] = useState<ClientWorkspace[]>(() => [newClientWorkspace()]);
   const [activeClientIndex, setActiveClientIndex] = useState(0);
+  const workspacesAtuais = useRef(workspaces);
+  workspacesAtuais.current = workspaces;
   // No computador, a barra do atendimento vai para a barra de cima (ao lado do sino); no celular fica na página.
   const celular = useCelular();
   const [alvoCabecalho, setAlvoCabecalho] = useState<HTMLElement | null>(null);
@@ -169,9 +176,9 @@ export default function EditorOrcamento() {
       const stored = localStorage.getItem(quoteDraftStorageKey) ?? (currentUser?.role === 'SUPER_ADMIN' ? localStorage.getItem(legacyQuoteDraftStorageKey) : null);
       if (stored) {
         const draft = JSON.parse(stored) as Partial<{ customer: Customer | null; customerMode: 'NEW' | 'EXISTING' | null; customerForm: typeof customerForm; items: DraftItem[]; activeIndex: number; discount: string; validUntil: string; notes: string; parentQuote: QuoteLink | null; componentNamesVersion: number; workspaces: Partial<ClientWorkspace>[]; activeClientIndex: number }>;
-        const normalizeItems = (entries: DraftItem[] | undefined) => entries?.length ? restaurarNomesComponentes(entries, draft.componentNamesVersion).map((entry) => ({ ...entry, projectName: entry.projectName ?? '', components: normalizarPedrasDasPecas(entry, entry.components), serviceAppliedValues: entry.serviceAppliedValues ?? {} })) : [newItem()];
+        const normalizeItems = (entries: DraftItem[] | undefined) => normalizarProjetos(entries, draft.componentNamesVersion);
         if (Array.isArray(draft.workspaces) && draft.workspaces.length) {
-          setWorkspaces(draft.workspaces.map((entry) => ({ ...newClientWorkspace(), ...entry, id: entry.id ?? newId(), customer: entry.customer ?? null, items: normalizeItems(entry.items), activeIndex: Math.min(Math.max(0, entry.activeIndex ?? 0), Math.max(0, (entry.items?.length ?? 1) - 1)), discount: entry.discount ?? '0', validUntil: entry.validUntil ?? '', notes: entry.notes ?? '', parentQuote: entry.parentQuote ?? null })));
+          setWorkspaces(normalizarAtendimentos(draft.workspaces, draft.componentNamesVersion));
           if (typeof draft.activeClientIndex === 'number') setActiveClientIndex(Math.min(Math.max(0, draft.activeClientIndex), draft.workspaces.length - 1));
         } else {
           if (Array.isArray(draft.items)) draft.items = restaurarNomesComponentes(draft.items, draft.componentNamesVersion);
@@ -201,6 +208,23 @@ export default function EditorOrcamento() {
     return () => window.clearTimeout(timer);
   }, [quoteDraftStorageKey, draftHydrated, workspaces, activeClientIndex, customerMode, customerForm, componentNamesVersion]);
   latestDraft.current = JSON.stringify({ customer, customerMode, customerForm, items, activeIndex, discount, validUntil, notes, parentQuote, componentNamesVersion, workspaces, activeClientIndex, expectedUpdatedAt: editingQuote?.updatedAt });
+  // Clientes abertos e os seus projetos ficam também no servidor: iguais no celular e no computador.
+  // Cada aparelho só escolhe qual cliente e qual projeto estão abertos na tela.
+  const rascunhoServidor = useRascunhoServidor({
+    chave: `${quoteDraftStorageKey}:sincronia`, ativo: !quoteId && draftHydrated && !!currentUser?.id, espacos: workspaces, temDados: workspaceHasData,
+    normalizar: (entradas) => normalizarAtendimentos(entradas),
+    receber: (recebidos) => {
+      const abertoId = workspace.id;
+      setWorkspaces((current) => {
+        const projetoAberto = new Map(current.map((entry) => [entry.id, entry.activeIndex]));
+        const lista = recebidos.map((entry) => ({ ...entry, activeIndex: Math.min(projetoAberto.get(entry.id) ?? 0, entry.items.length - 1) }));
+        return lista.length ? lista : [current.find((entry) => !workspaceHasData(entry)) ?? newClientWorkspace()];
+      });
+      const aberto = recebidos.findIndex((entry) => entry.id === abertoId);
+      setActiveClientIndex(Math.max(0, aberto));
+      if (aberto < 0) { setSummarySelection(0); setReviewedSteps([]); setCurrentStep(1); }
+    },
+  });
   useEffect(() => {
     const flush = () => { if (draftHydrated && !savedRef.current) { try { localStorage.setItem(quoteDraftStorageKey, latestDraft.current); } catch {} } };
     window.addEventListener('pagehide', flush);
@@ -454,21 +478,24 @@ export default function EditorOrcamento() {
 
   /** Coloca o cliente no atendimento de destino (novo, um atendimento aberto ou o atual). */
   const selectCustomer = (entry: Customer, target: CustomerTarget | null = customerTarget) => {
+    // Pode ser chamado depois de esperar a API: vale a lista de atendimentos mais recente. Se o atendimento
+    // de destino saiu enquanto isso (ex.: veio o rascunho de outro aparelho), o cliente vai para um novo,
+    // nunca para o de outro cliente.
+    const abertos = workspacesAtuais.current;
+    const destinoId = target?.kind === 'WORKSPACE' ? target.workspaceId : null;
+    if (destinoId && !abertos.some(candidate => candidate.id === destinoId)) target = { kind: 'NEW_WORKSPACE' };
     if (target?.kind === 'NEW_WORKSPACE') {
       const fresh = newClientWorkspace();
       fresh.customer = entry;
       fresh.items = fresh.items.map(project => ({ ...project, productTypeId: catalog?.productTypes[0]?.id ?? '' }));
       setWorkspaces(current => [...current, fresh]);
-      setActiveClientIndex(workspaces.length);
+      setActiveClientIndex(abertos.length);
       setSummarySelection(0);
     } else if (target?.kind === 'WORKSPACE') {
       const targetWorkspaceId = target.workspaceId;
-      const targetIndex = workspaces.findIndex(candidate => candidate.id === targetWorkspaceId);
-      if (targetIndex >= 0) {
-        setWorkspaces(current => current.map(candidate => candidate.id === targetWorkspaceId ? { ...candidate, customer: entry } : candidate));
-        setActiveClientIndex(targetIndex);
-        setSummarySelection(0);
-      } else setCustomer(entry);
+      setWorkspaces(current => current.map(candidate => candidate.id === targetWorkspaceId ? { ...candidate, customer: entry } : candidate));
+      setActiveClientIndex(abertos.findIndex(candidate => candidate.id === targetWorkspaceId));
+      setSummarySelection(0);
     } else setCustomer(entry);
     if (target) { setReviewedSteps([]); setCurrentStep(1); }
     setCustomerTarget(null);
@@ -493,7 +520,7 @@ export default function EditorOrcamento() {
   // na lista, cada um com os seus projetos, até serem salvos ou apagados.
   async function orcamentoSemCadastro() {
     if (savingCustomer) return;
-    const destino = customer ? customerTargetForNewTab() : null;
+    const destino: CustomerTarget = customer ? customerTargetForNewTab() : { kind: 'WORKSPACE', workspaceId: workspace.id };
     setSavingCustomer(true);
     setError('');
     try { selectCustomer(await api<Customer>('/customers', { method: 'POST', body: JSON.stringify({ quick: true }) }), destino); }
@@ -524,11 +551,11 @@ export default function EditorOrcamento() {
     }
     setReviewedSteps([]);
   }
-  const workspaceHasData = (entry: ClientWorkspace) => !!entry.customer || entry.items.some((project) => projetoPreenchido(project));
   function removerEspacoCliente(index: number, confirmed = false) {
     const entry = workspaces[index];
     if (!entry) return;
     if (!confirmed && workspaceHasData(entry) && !window.confirm(`Excluir ${entry.customer?.name || 'Cliente ' + (index + 1)} e todos os seus projetos?`)) return;
+    rascunhoServidor.marcarRemovido(entry.id);
     if (workspaces.length === 1) {
       const fresh = newClientWorkspace();
       fresh.items = [{ ...fresh.items[0], productTypeId: catalog?.productTypes[0]?.id ?? '' }];
@@ -652,7 +679,8 @@ export default function EditorOrcamento() {
       if (!quoteId) await api(`/quotes/${saved.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'SENT' }) });
       savedRef.current = true;
       if (!quoteId) {
-        const remaining = workspaces.filter((_, index) => index !== activeClientIndex);
+        // O cliente salvo sai do atendimento também nos outros aparelhos.
+        const remaining = await rascunhoServidor.concluirAtendimento(activeWorkspace.id, workspaces.filter((_, index) => index !== activeClientIndex));
         if (remaining.length) localStorage.setItem(quoteDraftStorageKey, JSON.stringify({ workspaces: remaining, activeClientIndex: 0, componentNamesVersion: 1 }));
         else localStorage.removeItem(quoteDraftStorageKey);
       } else localStorage.removeItem(quoteDraftStorageKey);
@@ -745,7 +773,7 @@ export default function EditorOrcamento() {
     <div className="project-stage-actions" hidden={quickMode}><button type="button" className="secondary-button" onClick={() => navigateStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>← Voltar</button><span>{`Etapa ${currentStep} de 2`}</span>{currentStep < 2 ? <button type="button" className="save-quote-button" onClick={nextStep}>Conferir produção <span aria-hidden="true">→</span></button> : <button type="button" className="save-quote-button" onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'} <span aria-hidden="true">✓</span></button>}</div>
     </>}
     </div>
-<aside id="quote-summary-card" className="quote-summary-card" aria-label="Resumo do orçamento"><div className="quote-visual-card"><p>Projetos únicos<br />para espaços<br />incríveis.</p><i /></div><strong>Resumo do orçamento</strong><label className="summary-project-select">Projeto em edição<select aria-label="Projeto em edição" value={summarySelection} onChange={(event) => { const value = event.target.value; if (value === 'TOTAL') { setSummarySelection('TOTAL'); return; } selectProject(Number(value)); }}>{items.map((draft, index) => <option key={draft.id} value={index}>{draft.projectName || `Projeto ${index + 1}`}</option>)}<option value="TOTAL">Total</option></select></label>{summaryIsTotal ? <div className="summary-project-totals">{items.map((draft, index) => <span key={draft.id}><span>{draft.projectName || `Projeto ${index + 1}`}</span><b>{formatarMoeda(summaries[index]?.total ?? 0)}</b></span>)}<span className="summary-grand-total"><span>Total dos projetos</span><b>{formatarMoeda(gross)}</b></span></div> : <><span>Projetos adicionados <b>{items.length}</b></span><span>Área total <b>{(selectedSummary?.area ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²</b></span>{selectedComponentBreakdown.length ? selectedComponentBreakdown.map((component) => <span key={component.id}>{component.name} <b>{formatarMoeda(component.amount)}</b></span>) : <span>Material <b>{formatarMoeda(selectedSummary?.materialSubtotal ?? 0)}</b></span>}{selectedServiceBreakdown.length ? selectedServiceBreakdown.map((service) => <span key={service.id}>{service.name} <b>{formatarMoeda(service.amount)}</b></span>) : <span>Serviços, recortes e cubas <b>{formatarMoeda(0)}</b></span>}<span>Descontos individuais <b>{formatarMoeda(selectedSummary?.individualDiscountTotal ?? 0)}</b></span><span className="summary-grand-total">Total do projeto <b>{formatarMoeda(selectedSummary?.total ?? 0)}</b></span></>}<label className="quote-validity-field">Validade do orçamento<input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></label><section className="summary-notes"><label htmlFor="quote-notes">Observações do orçamento</label><textarea id="quote-notes" rows={4} maxLength={3000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ex.: conferir medidas no local e alinhar os veios das peças." aria-describedby="quote-notes-help" /><p id="quote-notes-help">Estas observações aparecem no PDF do orçamento.</p></section>{!quoteId && <VincularOrcamento value={parentQuote} onChange={(quote) => { setParentQuote(quote); if (quote) selectCustomer(quote.customer); }} />}<small className="quote-summary-note">As medidas e os acabamentos atualizam o orçamento automaticamente.</small>{quickMode && <label>Desconto autorizado (R$)<input aria-label="Desconto geral rápido" inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>}{quickMode && <><span>Total no Pix (10% de desconto) <b>{formatarMoeda(total)}</b></span><span>No cartão (+10%) <b>{formatarMoeda(calcularTotalCartao(total))}</b></span></>}<div className="quote-summary-actions">{quickMode && <><label className="quick-pdf-pricing"><span>PDF do orçamento</span><select aria-label="Valores no PDF" value={pdfIndividualPrices ? 'individual' : 'total'} onChange={event => setPdfIndividualPrices(event.target.value === 'individual')}><option value="total">Sem valores individuais (totais por projeto)</option><option value="individual">Com valores discriminados</option></select></label><button type="button" className="save-quote-button" disabled={saving} onClick={() => salvarOrcamento(true)}>Salvar e abrir PDF</button><button type="button" className="save-draft-button" onClick={() => changeEntryMode('DETAILED')}>Adicionar desenhos</button></>}{!quickMode && currentStep < 3 && <button type="button" className="save-quote-button" onClick={nextStep}>Continuar <span aria-hidden="true">→</span></button>}<button type="button" className={currentStep < 3 ? 'save-draft-button' : 'save-quote-button'} onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'}</button><small>Seu preenchimento é mantido neste navegador.</small></div></aside>
+<aside id="quote-summary-card" className="quote-summary-card" aria-label="Resumo do orçamento"><div className="quote-visual-card"><p>Projetos únicos<br />para espaços<br />incríveis.</p><i /></div><strong>Resumo do orçamento</strong><label className="summary-project-select">Projeto em edição<select aria-label="Projeto em edição" value={summarySelection} onChange={(event) => { const value = event.target.value; if (value === 'TOTAL') { setSummarySelection('TOTAL'); return; } selectProject(Number(value)); }}>{items.map((draft, index) => <option key={draft.id} value={index}>{draft.projectName || `Projeto ${index + 1}`}</option>)}<option value="TOTAL">Total</option></select></label>{summaryIsTotal ? <div className="summary-project-totals">{items.map((draft, index) => <span key={draft.id}><span>{draft.projectName || `Projeto ${index + 1}`}</span><b>{formatarMoeda(summaries[index]?.total ?? 0)}</b></span>)}<span className="summary-grand-total"><span>Total dos projetos</span><b>{formatarMoeda(gross)}</b></span></div> : <><span>Projetos adicionados <b>{items.length}</b></span><span>Área total <b>{(selectedSummary?.area ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²</b></span>{selectedComponentBreakdown.length ? selectedComponentBreakdown.map((component) => <span key={component.id}>{component.name} <b>{formatarMoeda(component.amount)}</b></span>) : <span>Material <b>{formatarMoeda(selectedSummary?.materialSubtotal ?? 0)}</b></span>}{selectedServiceBreakdown.length ? selectedServiceBreakdown.map((service) => <span key={service.id}>{service.name} <b>{formatarMoeda(service.amount)}</b></span>) : <span>Serviços, recortes e cubas <b>{formatarMoeda(0)}</b></span>}<span>Descontos individuais <b>{formatarMoeda(selectedSummary?.individualDiscountTotal ?? 0)}</b></span><span className="summary-grand-total">Total do projeto <b>{formatarMoeda(selectedSummary?.total ?? 0)}</b></span></>}<label className="quote-validity-field">Validade do orçamento<input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></label><section className="summary-notes"><label htmlFor="quote-notes">Observações do orçamento</label><textarea id="quote-notes" rows={4} maxLength={3000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ex.: conferir medidas no local e alinhar os veios das peças." aria-describedby="quote-notes-help" /><p id="quote-notes-help">Estas observações aparecem no PDF do orçamento.</p></section>{!quoteId && <VincularOrcamento value={parentQuote} onChange={(quote) => { setParentQuote(quote); if (quote) selectCustomer(quote.customer); }} />}<small className="quote-summary-note">As medidas e os acabamentos atualizam o orçamento automaticamente.</small>{quickMode && <label>Desconto autorizado (R$)<input aria-label="Desconto geral rápido" inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>}{quickMode && <><span>Total no Pix (10% de desconto) <b>{formatarMoeda(total)}</b></span><span>No cartão (+10%) <b>{formatarMoeda(calcularTotalCartao(total))}</b></span></>}<div className="quote-summary-actions">{quickMode && <><label className="quick-pdf-pricing"><span>PDF do orçamento</span><select aria-label="Valores no PDF" value={pdfIndividualPrices ? 'individual' : 'total'} onChange={event => setPdfIndividualPrices(event.target.value === 'individual')}><option value="total">Sem valores individuais (totais por projeto)</option><option value="individual">Com valores discriminados</option></select></label><button type="button" className="save-quote-button" disabled={saving} onClick={() => salvarOrcamento(true)}>Salvar e abrir PDF</button><button type="button" className="save-draft-button" onClick={() => changeEntryMode('DETAILED')}>Adicionar desenhos</button></>}{!quickMode && currentStep < 3 && <button type="button" className="save-quote-button" onClick={nextStep}>Continuar <span aria-hidden="true">→</span></button>}<button type="button" className={currentStep < 3 ? 'save-draft-button' : 'save-quote-button'} onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'}</button><small>{quoteId ? 'Seu preenchimento é mantido neste navegador.' : 'Seu preenchimento fica guardado e aparece também no celular e no computador.'}</small></div></aside>
     </div>
   </main>;
 }

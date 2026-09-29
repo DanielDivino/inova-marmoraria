@@ -48,6 +48,8 @@ await page.route('**/api/**', async route => {
   const url = new URL(route.request().url());
   const path = url.pathname, method = route.request().method();
   if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'vendedor', name: 'Vendedor Inova', role: 'SELLER', maxDiscountPercent: 10 } } });
+  // Rascunho do Novo orçamento no servidor (vazio: vale o deste navegador).
+  if (path === '/api/quote-draft') return route.fulfill({ json: route.request().method() === 'GET' ? { version: null } : { saved: true, version: 1 } });
   if (path === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
   if (path === '/api/catalog') return route.fulfill({ json: catalogo });
   if (path === '/api/catalog/materials/visual') return route.fulfill({ json: [{ id: catalogo.materials[0].id, name: 'Branco Dallas', category: 'Granitos', description: null, imageUrl: null }] });
