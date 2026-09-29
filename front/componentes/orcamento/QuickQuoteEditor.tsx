@@ -17,7 +17,9 @@ import { CampoMetros } from './CampoMetros';
 
 type Service = { id: string; name: string; category: string; billingUnit: 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED'; currentPrice: number };
 type Props = { item: DraftItem; materials: ComponentMaterial[]; material?: ComponentMaterial; services: Service[];
-  title?: string; showAssembly?: boolean; showRounding?: boolean; renderComponentInfo?: (component: DraftComponent) => ReactNode;
+  title?: string; showAssembly?: boolean; showRounding?: boolean;
+  /** M² fechado vale para este projeto (ajuste da empresa; aqui só é mostrado, travado). */
+  m2Fechado?: boolean; renderComponentInfo?: (component: DraftComponent) => ReactNode;
   onChange: (patch: Partial<DraftItem>) => void; area: (component: DraftComponent) => number;
   value: (component: DraftComponent) => number; calculateCutout: (cutout: DraftCutout) => number;
   onCreateService?: (input: { name: string; billingUnit: Service['billingUnit']; currentPrice: number }) => Promise<Service>;
@@ -44,7 +46,7 @@ function GrupoPeca({ id, numero, ordenavel, recolhido, children }: { id: string;
     style={{ transform: CSS.Translate.toString(transform && { ...transform, x: 0 }), transition }}>{children(alca)}</tbody>;
 }
 
-export function EditorOrcamentoRapido({ item, materials, material, services, onChange, area, value, calculateCutout, onCreateService, title = 'Orçamento Rápido', showAssembly = true, showRounding = true, renderComponentInfo }: Props) {
+export function EditorOrcamentoRapido({ item, materials, material, services, onChange, area, value, calculateCutout, onCreateService, title = 'Orçamento Rápido', showAssembly = true, showRounding = true, m2Fechado = false, renderComponentInfo }: Props) {
   const [mobileExpanded, setMobileExpanded] = useState<Set<string>>(() => new Set(item.components.slice(-1).map(component => component.id)));
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(() => new Set());
   const [serviceModalComponentId, setServiceModalComponentId] = useState<string | null>(null);
@@ -143,7 +145,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
     <div className="quick-project-setup">
     <div className="quick-heading">
       <div><h2>{title}</h2><small><span className="quick-desktop-help">Medidas em metros · Enter avança e adiciona linhas · Tab e Shift + Tab navegam</span><span className="quick-mobile-help">Medidas em metros. Ex.: 1,20 × 0,60.</span></small></div>
-      {showRounding && <label className="quick-round-toggle" title="Calcula o valor do material como se cada peça fosse arredondada para cima, ao múltiplo de 5 cm mais próximo (vender sempre m² fechado). A medida exibida, o desenho e o PDF continuam mostrando a medida exata."><input type="checkbox" checked={!!item.arredondarM2} onChange={event => { const enabled = event.target.checked; onChange({ arredondarM2: enabled, ...(enabled ? { components: item.components.map(component => ({ ...component, appliedTotal: undefined })) } : {}) }); }} /> M² fechado</label>}
+      {showRounding && m2Fechado && <label className="quick-round-toggle travado" title="Sempre marcado: o valor da pedra é calculado com cada peça arredondada para cima, de 5 em 5 cm (a medida exibida, o desenho e o PDF continuam exatos). Só dá para desligar em Materiais e serviços → Serviços e acabamentos."><input type="checkbox" checked disabled readOnly /> M² fechado</label>}
     </div>
     <div className="quick-project-fields"><label>Nome do projeto<input id="project-name" value={item.projectName} onChange={event => onChange({ projectName: event.target.value })} placeholder="Ex.: Cozinha" /></label>
       <SeletorMaterialComponente materials={materials.filter(entry => entry.billingUnit === 'SQUARE_METER')} selected={material} onSelect={materialId => onChange(aplicarMaterialProjeto(item, materialId))} />

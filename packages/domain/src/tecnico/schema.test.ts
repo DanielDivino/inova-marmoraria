@@ -52,7 +52,7 @@ describe('compatibilidade dos rascunhos já salvos', () => {
   };
   it('continua válido e ganha os padrões dos campos novos', () => {
     const documento = technicalDocumentSchema.parse(antigo);
-    expect(documento.pieces[0]).toMatchObject({ dimensionLabels: {}, lockedEdges: [] });
+    expect(documento.pieces[0]).toMatchObject({ dimensionLabels: {}, lockedEdges: [], wetDryZones: [] });
     expect(documento.annotations[0].fontSizeMm).toBeUndefined();
     expect(documento.pieces[0].parameters).toEqual(antigo.pieces[0].parameters);
     expect(validateTechnicalDocument(documento).filter((diagnostico) => diagnostico.severity === 'STRUCTURAL')).toEqual([]);

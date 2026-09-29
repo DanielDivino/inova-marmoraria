@@ -24,6 +24,8 @@ await page.route('**/api/**', async route => {
   const method = route.request().method();
   if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'visual-1', name: 'Administrador Inova', role: 'SUPER_ADMIN', maxDiscountPercent: 100 } } });
   if (path === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
+  // Desenhos técnicos do cliente (botão Desenho técnico do Novo orçamento).
+  if (/^\/api\/customers\/[^/]+\/designs$/.test(path)) return route.fulfill({ json: { designs: [] } });
   if (path === '/api/designs/design-1/draft' && method === 'GET') return route.fulfill({ json: { design: { id: 'design-1', name: 'Desenho técnico', project: { id: 'project-1', name: 'Cozinha Silva', job: { customer: { name: 'Maria Silva', phone: '' } } } }, draft: { id: 'draft-1', version, document: savedDocument, updatedAt: new Date().toISOString() }, diagnostics: [] } });
   if (path === '/api/designs/design-1' && method === 'GET') return route.fulfill({ json: { revisions: [] } });
   if (path === '/api/catalog/materials/visual') return route.fulfill({ json: [] });

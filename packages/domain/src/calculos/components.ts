@@ -40,6 +40,14 @@ export function calcularAreaRetangularM2(lengthMm: number, widthMm: number, quan
   return (inteiroPositivo(lengthMm, 'Comprimento') * inteiroPositivo(widthMm, 'Largura') * inteiroPositivo(quantity, 'Quantidade')) / 1_000_000;
 }
 
+/**
+ * M² fechado: a medida (mm) arredondada para cima, ao múltiplo de 5 cm. Só
+ * para calcular o valor da pedra; a medida exibida e salva continua a exata.
+ */
+export function medidaM2Fechado(mm: number): number {
+  return Math.ceil(mm / 50) * 50;
+}
+
 export function calcularComponente(component: ComponentDimensions): CalculatedComponent {
   const quantity = component.quantity ?? 1;
   return { ...component, shape: component.shape ?? 'RECTANGLE', quantity, billableArea: calcularAreaRetangularM2(component.lengthMm, component.widthMm, quantity) };

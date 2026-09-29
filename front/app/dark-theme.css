@@ -320,4 +320,6 @@
   html.inova-dark .inova-theme .cliente-rapido-opcao { background: #252a27; border-color: #766548; }
   html.inova-dark .inova-theme .cliente-rapido-opcao.ativo { background: #343a35; border-color: var(--green); }
   html.inova-dark .inova-theme .cliente-rapido-aviso { color: var(--green); }
+  html.inova-dark .inova-theme .catalog-ajuste { background: #252a27; border-color: #766548; }
+  html.inova-dark .inova-theme .catalog-ajuste-chave { color: var(--green); }
 }

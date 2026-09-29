@@ -6,3 +6,5 @@ export * from './freehand.js';
 export * from './lados.js';
 export * from './estimate.js';
 export * from './cotas.js';
+export * from './orcamento.js';
+export * from './areas.js';

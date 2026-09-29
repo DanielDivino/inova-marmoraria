@@ -3,6 +3,22 @@ import { z } from 'zod';
 const n = z.number().finite().min(-1e6).max(1e6);
 const id = z.string().min(1).max(100);
 const point = z.object({ id, x: n, y: n, bulge: z.number().finite().min(-10).max(10).default(0) }).strict();
+/**
+ * Área seca/molhada gravada no primeiro formato (só o tamanho de cada área, em
+ * sequência a partir da ponta esquerda): vira início e fim, no mesmo lugar.
+ */
+function zonasDoFormatoAntigo(valor: unknown) {
+  if (!Array.isArray(valor) || !valor.some((zona) => zona && typeof zona === 'object' && 'lengthMm' in zona)) return valor;
+  let inicio = 0;
+  return valor.flatMap((zona: { kind?: unknown; lengthMm?: unknown; startMm?: unknown; endMm?: unknown }) => {
+    if (zona && typeof zona === 'object' && 'startMm' in zona) return [zona];
+    const tamanho = Number(zona?.lengthMm);
+    if (!(tamanho > 0)) return [];
+    const convertida = { kind: zona.kind, startMm: inicio, endMm: inicio + tamanho };
+    inicio += tamanho;
+    return [convertida];
+  });
+}
 const visual = z.object({ id: z.string().optional(), name: z.string().max(160).optional(), imageUrl: z.string().regex(/^\/uploads\/materials\/[a-zA-Z0-9._-]+$/).optional(), textureScaleMm: z.number().positive().max(100000).default(600), veinRotationDeg: n.default(0), roughness: z.number().min(0).max(1).default(.25) }).strict();
 export const pieceSchema = z.object({
   id, name: z.string().trim().min(1).max(160), contour: z.array(point).min(3).max(1000), thicknessMm: n,
@@ -17,6 +33,12 @@ export const pieceSchema = z.object({
   dimensionLabels: z.record(id, z.string().trim().max(120)).default({}),
   /** Lados com cadeado: não mudam quando outro lado é redimensionado. */
   lockedEdges: z.array(id).max(1000).default([]),
+  /**
+   * Área seca e área molhada do balcão: trechos ao longo do comprimento (eixo x
+   * da peça), em mm a partir da ponta esquerda. O que não foi marcado fica sem área.
+   */
+  wetDryZones: z.preprocess(zonasDoFormatoAntigo, z.array(z.object({ kind: z.enum(['DRY', 'WET']), startMm: z.number().finite().min(0).max(1e6), endMm: z.number().finite().positive().max(1e6) }).strict()
+    .refine((zona) => zona.endMm > zona.startMm, 'A área termina antes de começar.')).max(20).default([])),
 }).strict();
 export const featureSchema = z.object({
   id, type: z.enum(['SINK', 'SCULPTED_SINK', 'CUTOUT', 'HOLE', 'SKIRT', 'BACKSPLASH', 'EDGE_FINISH']), pieceId: id,
@@ -44,6 +66,7 @@ export type Piece = TechnicalDocument['pieces'][number];
 export type Feature = TechnicalDocument['features'][number];
 export type Vertex = Piece['contour'][number];
 export type Annotation = TechnicalDocument['annotations'][number];
+export type ZonaSecaMolhada = Piece['wetDryZones'][number];
 export type PieceShape = NonNullable<Piece['parameters']>['shape'];
 export type PieceParameters = NonNullable<Piece['parameters']>;
 export type Point = { x: number; y: number };

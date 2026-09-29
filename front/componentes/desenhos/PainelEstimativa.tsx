@@ -17,13 +17,14 @@ export function ResumoEstimativa({ estimativa, aberto, aoAlternar }: { estimativ
 }
 
 /**
- * Estimativa de valor pelo desenho, com as regras do orçamento (domínio
- * `estimarDesenho`). Linhas por peça e serviço, "sem preço" quando falta e o
- * total à vista (Pix) e no cartão. Nunca muda o valor do orçamento.
+ * Valor pelo desenho, com as regras do orçamento (domínio `estimarDesenho`,
+ * sobre o mesmo projeto que vai para o orçamento). Linhas por peça e serviço,
+ * "sem preço" quando falta e o total à vista (Pix) e no cartão. Aberto do Novo
+ * orçamento, é esse o valor que vai para o resumo ao usar o desenho.
  */
-export function PainelEstimativa({ documento, catalogo, estimativa, opcoes, erro, aoMudarOpcoes }: {
+export function PainelEstimativa({ documento, catalogo, estimativa, opcoes, erro, aoMudarOpcoes, m2Fechado = false, noOrcamento = false }: {
   documento: TechnicalDocument; catalogo: CatalogoEstimativa | null; estimativa: EstimativaDesenho | null; opcoes: OpcoesEstimativa; erro: string;
-  aoMudarOpcoes: (opcoes: OpcoesEstimativa) => void;
+  aoMudarOpcoes: (opcoes: OpcoesEstimativa) => void; m2Fechado?: boolean; noOrcamento?: boolean;
 }) {
   if (erro) return <section className="tec-estimativa"><p className="tec-aviso">{erro}</p></section>;
   if (!catalogo || !estimativa) return <section className="tec-estimativa"><p className="tec-dica">Calculando a estimativa…</p></section>;
@@ -42,7 +43,7 @@ export function PainelEstimativa({ documento, catalogo, estimativa, opcoes, erro
     </select>;
   };
   const linhaHtml = (linha: LinhaEstimativa) => <li key={linha.id} className={linha.subtotal === null ? 'sem-preco' : undefined}>
-    <div><span>{linha.descricao}</span><small>{quantidade(linha)}{linha.precoUnitario !== null ? ` × ${formatarMoeda(linha.precoUnitario)}` : ''}</small>{seletor(linha)}</div>
+    <div><span>{linha.descricao}</span><small>{quantidade(linha)}{linha.precoUnitario !== null ? ` × ${formatarMoeda(linha.precoUnitario)}` : ''}</small>{linha.detalhe && <small className="tec-detalhe">{linha.detalhe}</small>}{seletor(linha)}</div>
     <strong>{linha.subtotal === null ? 'sem preço' : formatarMoeda(linha.subtotal)}</strong>
     {linha.semPreco && <small className="tec-motivo">{linha.semPreco}</small>}
   </li>;
@@ -50,22 +51,28 @@ export function PainelEstimativa({ documento, catalogo, estimativa, opcoes, erro
   const linhasGerais = estimativa.linhas.filter((linha) => !linha.pieceId);
 
   return <section className="tec-estimativa" aria-label="Estimativa de valor">
-    <p className="tec-dica">Estimativa pelo desenho. O valor do orçamento não muda.</p>
-    <p className="tec-area-total">Área total <strong>{numero(estimativa.areaTotalM2, 3)} m²</strong></p>
+    <p className="tec-dica">{noOrcamento ? 'Valor com as regras do orçamento. Vai para o resumo quando você usar o desenho no orçamento.' : 'Estimativa com as regras do orçamento. Não muda o valor de nenhum orçamento.'}{m2Fechado ? ' Pedra com M² fechado (medidas arredondadas de 5 em 5 cm).' : ''}</p>
+    <p className="tec-area-total">Área total <strong>{numero(estimativa.areaTotalM2, 3)} m²</strong>{estimativa.areaCobradaM2 !== estimativa.areaTotalM2 && <> · cobrada <strong>{numero(estimativa.areaCobradaM2, 3)} m²</strong> (M² fechado)</>}</p>
     {porPeca.map(({ peca, linhas }) => <div key={peca.id} className="tec-estimativa-grupo"><h4>{peca.name}</h4><ul>{linhas.map(linhaHtml)}</ul></div>)}
     <div className="tec-estimativa-grupo">
       <h4>Serviços do projeto</h4>
-      {linhasGerais.length > 0 && <ul>{linhasGerais.map((linha, indice) => <li key={linha.id} className={linha.subtotal === null ? 'sem-preco' : undefined}>
-        <div><span>{linha.descricao}</span><small>{quantidade(linha)}</small>
-          {catalogo.services.find((servico) => servico.id === gerais[indice]?.serviceId)?.billingUnit === 'UNIT' && <input type="number" min="1" inputMode="numeric" aria-label={`Quantidade de ${linha.descricao}`} value={gerais[indice].quantidade ?? 1}
-            onChange={(evento) => aoMudarOpcoes({ ...opcoes, servicosGerais: gerais.map((geral, i) => i === indice ? { ...geral, quantidade: Math.max(1, Number(evento.target.value) || 1) } : geral) })} />}
-        </div>
-        <strong>{linha.subtotal === null ? 'sem preço' : formatarMoeda(linha.subtotal)}</strong>
-        <button type="button" className="text-button" aria-label={`Tirar ${linha.descricao}`} onClick={() => aoMudarOpcoes({ ...opcoes, servicosGerais: gerais.filter((_, i) => i !== indice) })}>tirar</button>
-      </li>)}</ul>}
+      {linhasGerais.length > 0 && <ul>{linhasGerais.map((linha) => {
+        // Um serviço por projeto, como no orçamento: a linha é do serviço (geral-<id>).
+        const serviceId = linha.id.slice('geral-'.length);
+        const servico = catalogo.services.find((entrada) => entrada.id === serviceId);
+        const quantidadeAtual = estimativa.item.servicos.find((entrada) => entrada.serviceId === serviceId)?.quantidade ?? 1;
+        return <li key={linha.id} className={linha.subtotal === null ? 'sem-preco' : undefined}>
+          <div><span>{linha.descricao}</span><small>{quantidade(linha)}</small>
+            {servico?.billingUnit === 'UNIT' && <input type="number" min="1" inputMode="numeric" aria-label={`Quantidade de ${linha.descricao}`} value={quantidadeAtual}
+              onChange={(evento) => aoMudarOpcoes({ ...opcoes, servicosGerais: [...gerais.filter((geral) => geral.serviceId !== serviceId), { serviceId, quantidade: Math.max(1, Number(evento.target.value) || 1) }] })} />}
+          </div>
+          <strong>{linha.subtotal === null ? 'sem preço' : formatarMoeda(linha.subtotal)}</strong>
+          <button type="button" className="text-button" aria-label={`Tirar ${linha.descricao}`} onClick={() => aoMudarOpcoes({ ...opcoes, servicosGerais: gerais.filter((geral) => geral.serviceId !== serviceId) })}>tirar</button>
+        </li>;
+      })}</ul>}
       <select aria-label="Adicionar serviço do projeto" value="" onChange={(evento) => { if (evento.target.value) aoMudarOpcoes({ ...opcoes, servicosGerais: [...gerais, { serviceId: evento.target.value, quantidade: 1 }] }); }}>
         <option value="">+ Serviço (jateado, instalação…)</option>
-        {servicosDoProjeto(catalogo).map((servico) => <option key={servico.id} value={servico.id}>{servico.name} · {formatarMoeda(servico.currentPrice)}</option>)}
+        {servicosDoProjeto(catalogo).filter((servico) => !gerais.some((geral) => geral.serviceId === servico.id)).map((servico) => <option key={servico.id} value={servico.id}>{servico.name} · {formatarMoeda(servico.currentPrice)}</option>)}
       </select>
     </div>
     {estimativa.itensSemPreco > 0 && <p className="tec-aviso">{estimativa.itensSemPreco === 1 ? '1 item sem preço não entra' : `${estimativa.itensSemPreco} itens sem preço não entram`} no total.</p>}

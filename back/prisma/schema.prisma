@@ -218,6 +218,14 @@ model ProductType {
   quoteItems QuoteItem[]
 }
 
+/// Ajustes da empresa usados nos orçamentos (uma única linha, id "empresa").
+model CompanySetting {
+  id                String   @id @default("empresa")
+  /// M² fechado: o valor da pedra é calculado com as peças arredondadas para cima, de 5 em 5 cm.
+  closedSquareMeter Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+}
+
 model Service {
   id          String          @id @default(cuid())
   name        String          @unique

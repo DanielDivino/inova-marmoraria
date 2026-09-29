@@ -1,7 +1,8 @@
-import { exigirPermissao } from '../../compartilhado/acesso.js';
+import { escopoClientes, escopoOrcamentos, exigirPermissao } from '../../compartilhado/acesso.js';
 import { createHash } from 'node:crypto';
 import PDFDocument from 'pdfkit';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { temPermissao } from '@inova/domain';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
@@ -31,8 +32,63 @@ async function getDesign(id: string) {
   return design;
 }
 
+/** Atendimento onde ficam os desenhos feitos de dentro do Novo orçamento (um por cliente). */
+const ATENDIMENTO_DESENHOS = 'Desenhos técnicos';
+const podeDesenhar = (request: FastifyRequest) => temPermissao(request.user.role, 'technical') || temPermissao(request.user.role, 'commercial');
+/**
+ * Desenho do cliente feito de dentro do Novo orçamento: a equipe técnica abre
+ * qualquer um; o vendedor, só os dos próprios clientes. Conferência, liberação
+ * e o desenho técnico independente continuam só com a equipe técnica.
+ */
+async function exigirClienteDoDesenho(request: FastifyRequest) {
+  if (!podeDesenhar(request)) throw new AppError(403, 'Você não possui permissão para esta ação.', 'FORBIDDEN');
+  const { id } = idSchema.parse(request.params);
+  if (!await prisma.customer.findFirst({ where: { id, ...escopoClientes(request.user) }, select: { id: true } })) throw new AppError(404, 'Cliente não encontrado.', 'NOT_FOUND');
+}
+async function exigirDesenhoAcessivel(request: FastifyRequest) {
+  if (temPermissao(request.user.role, 'technical')) return;
+  if (!podeDesenhar(request)) throw new AppError(403, 'Você não possui permissão para esta ação.', 'FORBIDDEN');
+  const { id } = idSchema.parse(request.params);
+  if (!await prisma.design.findFirst({ where: { id, project: { job: { customer: escopoClientes(request.user) } } }, select: { id: true } })) throw new AppError(404, 'Desenho técnico não encontrado.', 'DESIGN_NOT_FOUND');
+}
+
 export async function registrarRotasDesenhos(app: FastifyInstance) {
   const authenticated = { preHandler: [app.authenticate, exigirPermissao('technical')] };
+  const doCliente = { preHandler: [app.authenticate, exigirClienteDoDesenho] };
+  const desenhoAcessivel = { preHandler: [app.authenticate, exigirDesenhoAcessivel] };
+
+  // Rascunhos de desenho do cliente, com os orçamentos em que já foram usados.
+  app.get('/customers/:id/designs', doCliente, async (request) => {
+    const { id } = idSchema.parse(request.params);
+    const [designs, itens] = await Promise.all([
+      prisma.design.findMany({ where: { project: { job: { customerId: id } } }, include: { project: { select: { name: true } }, activeDraft: { select: { document: true, updatedAt: true } } }, orderBy: { updatedAt: 'desc' } }),
+      prisma.quoteItem.findMany({ where: { quote: { customerId: id, ...escopoOrcamentos(request.user) } }, select: { drawingData: true, quote: { select: { id: true, number: true } } } }),
+    ]);
+    const usos = (designId: string) => [...new Map(itens.filter((item) => (item.drawingData as { desenhoTecnico?: { designId?: string } } | null)?.desenhoTecnico?.designId === designId)
+      .map((item) => [item.quote.id, { quoteId: item.quote.id, number: item.quote.number }])).values()];
+    return { designs: designs.map((design) => {
+      const pieces = (design.activeDraft?.document as { pieces?: unknown[] } | null)?.pieces;
+      return { id: design.id, nome: design.project.name, atualizadoEm: design.activeDraft?.updatedAt ?? design.updatedAt, pecas: Array.isArray(pieces) ? pieces.length : 0, usadoEm: usos(design.id) };
+    }) };
+  });
+
+  // Novo desenho do cliente (rascunho), no atendimento "Desenhos técnicos" dele.
+  app.post('/customers/:id/designs', doCliente, async (request, reply) => {
+    const { id } = idSchema.parse(request.params);
+    const { name } = z.object({ name: z.string().trim().min(1).max(120).optional() }).strict().parse(request.body ?? {});
+    const criado = await prisma.$transaction(async tx => {
+      const job = await tx.job.findFirst({ where: { customerId: id, name: ATENDIMENTO_DESENHOS }, orderBy: { createdAt: 'asc' } })
+        ?? await tx.job.create({ data: { customerId: id, name: ATENDIMENTO_DESENHOS, createdById: request.user.id } });
+      const total = await tx.project.count({ where: { job: { customerId: id } } });
+      const project = await tx.project.create({ data: { jobId: job.id, name: name ?? `Desenho ${total + 1}` } });
+      const design = await tx.design.create({ data: { projectId: project.id, name: 'Desenho técnico' } });
+      const draft = await tx.designDraft.create({ data: { designId: design.id, document: emptyTechnicalDocument() as Prisma.InputJsonValue, updatedById: request.user.id } });
+      await tx.design.update({ where: { id: design.id }, data: { activeDraftId: draft.id } });
+      return { project, design };
+    });
+    await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'DESIGN', entityId: criado.design.id, action: 'CREATED_FOR_CUSTOMER', current: { customerId: id, projectId: criado.project.id, name: criado.project.name } } });
+    return reply.status(201).send({ designId: criado.design.id, projectId: criado.project.id, name: criado.project.name });
+  });
 
   app.post('/jobs', authenticated, async (request, reply) => {
     const input = createJobSchema.parse(request.body);
@@ -73,15 +129,15 @@ export async function registrarRotasDesenhos(app: FastifyInstance) {
     return reply.status(201).send(serializeDesign(design));
   });
 
-  app.get('/designs/:id', authenticated, async (request) => serializeDesign(await getDesign(idSchema.parse(request.params).id)));
-  app.get('/designs/:id/draft', authenticated, async (request) => {
+  app.get('/designs/:id', desenhoAcessivel, async (request) => serializeDesign(await getDesign(idSchema.parse(request.params).id)));
+  app.get('/designs/:id/draft', desenhoAcessivel, async (request) => {
     const design = await getDesign(idSchema.parse(request.params).id);
     const draft = design.activeDraft!;
     const document = technicalDocumentSchema.parse(draft.document);
     return { design: { id: design.id, name: design.name, project: design.project }, draft: { id: draft.id, version: draft.version, schemaVersion: draft.schemaVersion, document, updatedAt: draft.updatedAt }, diagnostics: validateTechnicalDocument(document) };
   });
 
-  app.put('/designs/:id/draft', authenticated, async (request, reply) => {
+  app.put('/designs/:id/draft', desenhoAcessivel, async (request, reply) => {
     const { id } = idSchema.parse(request.params); const input = updateDraftSchema.parse(request.body); const diagnostics = validateTechnicalDocument(input.document);
     if (diagnostics.some(diagnostic => diagnostic.severity === 'STRUCTURAL')) throw new AppError(422, diagnostics[0].message, 'INVALID_TECHNICAL_DOCUMENT');
     const design = await getDesign(id);
@@ -96,7 +152,7 @@ export async function registrarRotasDesenhos(app: FastifyInstance) {
     return reply.send({ id: result.id, version: result.version, schemaVersion: result.schemaVersion, document: input.document, updatedAt: result.updatedAt, diagnostics });
   });
 
-  app.post('/designs/:id/validate', authenticated, async (request) => {
+  app.post('/designs/:id/validate', desenhoAcessivel, async (request) => {
     const document = technicalDocumentSchema.parse(z.object({ document: technicalDocumentSchema }).parse(request.body).document);
     return { diagnostics: validateTechnicalDocument(document) };
   });

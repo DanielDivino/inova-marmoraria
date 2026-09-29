@@ -56,13 +56,25 @@ export default function AdministrationPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [imageBusy, setImageBusy] = useState(false);
+  /** M² fechado da empresa: sempre marcado nos orçamentos, só se desliga aqui. */
+  const [m2Fechado, setM2Fechado] = useState<boolean | null>(null);
+  const [salvandoAjuste, setSalvandoAjuste] = useState(false);
   const requestVersion = useRef(0);
 
+  async function alternarM2Fechado(ligado: boolean) {
+    setSalvandoAjuste(true); setError(''); setNotice('');
+    try {
+      const salvo = await api<{ closedSquareMeter: boolean }>('/catalog/settings', { method: 'PATCH', body: JSON.stringify({ closedSquareMeter: ligado }) });
+      setM2Fechado(salvo.closedSquareMeter);
+      setNotice(salvo.closedSquareMeter ? 'M² fechado ligado: os orçamentos novos arredondam as peças de 5 em 5 cm.' : 'M² fechado desligado: os orçamentos novos usam a medida exata.');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o M² fechado.'); }
+    finally { setSalvandoAjuste(false); }
+  }
   const load = async () => {
     const version = ++requestVersion.current;
     try {
-      const [loadedMaterials, loadedServices] = await Promise.all([api<Material[]>('/catalog/materials?active=all'), api<Service[]>('/catalog/services')]);
-      if (version === requestVersion.current) { setMaterials(loadedMaterials); setServices(loadedServices); }
+      const [loadedMaterials, loadedServices, ajustes] = await Promise.all([api<Material[]>('/catalog/materials?active=all'), api<Service[]>('/catalog/services'), api<{ closedSquareMeter: boolean }>('/catalog/settings')]);
+      if (version === requestVersion.current) { setMaterials(loadedMaterials); setServices(loadedServices); setM2Fechado(ajustes.closedSquareMeter); }
     } catch (cause) {
       if (version === requestVersion.current) setError(cause instanceof Error ? cause.message : 'Acesso administrativo não disponível.');
     }
@@ -207,10 +219,13 @@ export default function AdministrationPage() {
         <div className="material-admin-copy"><strong>{material.name}</strong><small>{material.category} · {unitLabel[material.billingUnit]}</small><b>{formatarMoeda(material.currentPrice)} / {material.billingUnit === 'SQUARE_METER' ? 'm²' : unitLabel[material.billingUnit]}</b><button className="text-button" type="button" onClick={() => edit(material)}>Editar material</button></div>
       </article>)}
       {!rows.length && <p className="catalog-empty">Nenhum material encontrado para este filtro.</p>}
-    </div> : <div className="admin-rows">
+    </div> : <><section className="catalog-ajuste" aria-label="M² fechado">
+      <div><strong>M² fechado</strong><small>O valor da pedra é calculado com cada peça arredondada para cima, de 5 em 5 cm; as medidas, o desenho e o PDF continuam exatos. Fica sempre marcado nos orçamentos e só pode ser desligado aqui.</small></div>
+      <label className="catalog-ajuste-chave"><input type="checkbox" role="switch" aria-label="M² fechado nos orçamentos" checked={!!m2Fechado} disabled={m2Fechado === null || salvandoAjuste} onChange={event => void alternarM2Fechado(event.target.checked)} /><span>{m2Fechado === null ? '…' : m2Fechado ? 'Ligado' : 'Desligado'}</span></label>
+    </section><div className="admin-rows">
       {(rows as Service[]).map(service => <article key={service.id}><div><strong>{service.name}</strong><small>{service.category} · {unitLabel[service.billingUnit]} · {service.isActive ? 'Ativo' : 'Inativo'}</small></div><b>{formatarMoeda(service.currentPrice)}</b><button className="text-button" type="button" onClick={() => edit(service)}>Editar</button></article>)}
       {!rows.length && <p className="catalog-empty">Nenhum serviço encontrado.</p>}
-    </div>}
+    </div></>}
 
     {editing !== null && <div className="catalog-modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) closeForm(); }}>
       <section className="catalog-modal" role="dialog" aria-modal="true" aria-label={tab === 'materials' ? 'Editar material' : 'Editar serviço'}>

@@ -9,9 +9,11 @@ import { PainelRecurso } from './PainelRecurso';
 import { FONTE_TEXTO_PADRAO_MM, type MaterialVisual, type Selecao } from './tipos';
 
 /** Painel de propriedades: o que estiver selecionado (peça, componente, vértice ou texto) e a conferência do desenho. */
-export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoMudar, aoSelecionar, aoAbrirLado }: {
+export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoMudar, aoSelecionar, aoAbrirLado, aoMarcarArea }: {
   documento: TechnicalDocument; selecao: Selecao; materiais: MaterialVisual[]; diagnosticos: Diagnostic[];
   aoMudar: (documento: TechnicalDocument) => void; aoSelecionar: (selecao: Selecao) => void; aoAbrirLado: (pecaId: string, ladoId: string) => void;
+  /** Liga a ferramenta de marcar área seca/molhada no desenho. */
+  aoMarcarArea?: () => void;
 }) {
   const peca = selecao?.tipo === 'peca' ? documento.pieces.find((entrada) => entrada.id === selecao.id) : undefined;
   const recurso = selecao?.tipo === 'recurso' ? documento.features.find((entrada) => entrada.id === selecao.id) : undefined;
@@ -24,7 +26,7 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
   const mudarContorno = (contour: NonNullable<typeof pecaDoVertice>['contour']) => pecaDoVertice && aoMudar(updatePiece(documento, pecaDoVertice.id, { contour, geometryMode: 'FREE', parameters: undefined }));
 
   return <div className="tec-painel">
-    {peca && <PainelPeca key={peca.id} documento={documento} peca={peca} materiais={materiais} aoMudar={aoMudar} aoAbrirLado={(ladoId) => aoAbrirLado(peca.id, ladoId)}
+    {peca && <PainelPeca key={peca.id} documento={documento} peca={peca} materiais={materiais} aoMudar={aoMudar} aoAbrirLado={(ladoId) => aoAbrirLado(peca.id, ladoId)} aoMarcarArea={aoMarcarArea}
       aoDuplicar={() => { const id = criarId(); aoMudar(duplicatePiece(documento, peca.id, id)); aoSelecionar({ tipo: 'peca', id }); }}
       aoExcluir={() => { if (window.confirm(`Excluir ${peca.name}? Cubas, recortes e faixas dela também saem.`)) { aoMudar(deletePiece(documento, peca.id)); aoSelecionar(null); } }} />}
     {recurso && paiDoRecurso && <PainelRecurso key={recurso.id} recurso={recurso} peca={paiDoRecurso} aoMudar={(patch) => mudarRecurso(recurso.id, patch)}
@@ -47,7 +49,7 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
       <button type="button" className="botao-contorno tec-perigo" onClick={() => { aoMudar({ ...documento, annotations: documento.annotations.filter((entrada) => entrada.id !== texto.id) }); aoSelecionar(null); }}>Excluir texto</button>
     </section>}
     {!peca && !recurso && !vertice && !texto && <section className="tec-painel-secao">
-      <p className="tec-dica">Arraste um lado para esticar ou encolher a peça (os lados vizinhos acompanham). Toque num lado ou na medida para digitar outra; toque numa cuba ou num texto para editar.</p>
+      <p className="tec-dica">Arraste um lado para esticar ou encolher a peça (os lados vizinhos acompanham). Toque num lado ou na medida para digitar outra; toque numa cuba ou num texto para editar. Com uma peça selecionada, Delete apaga (Ctrl+Z desfaz).</p>
       {documento.pieces.length > 0 && <div className="tec-lista-pecas">{documento.pieces.map((entrada) => <button type="button" key={entrada.id} className="botao-contorno" onClick={() => aoSelecionar({ tipo: 'peca', id: entrada.id })}>{entrada.locked ? '🔒 ' : ''}{entrada.name}</button>)}</div>}
     </section>}
     {documento.dimensions.length > 0 && <section className="tec-painel-secao" aria-label="Cotas livres">

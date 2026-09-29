@@ -1,4 +1,4 @@
-import { cotasDaPeca, distanciasAteBordas, edgeLength, edgePoint, featureContour, formatMeasure, rotate, sampleContour, type CotaLado, type Feature, type Piece, type Point, type TechnicalDocument } from '@inova/domain/technical';
+import { areasDaPeca, cotasDaPeca, distanciasAteBordas, faixaDentroDaPeca, NOME_AREA, edgeLength, edgePoint, featureContour, formatMeasure, rotate, sampleContour, type CotaLado, type Feature, type Piece, type Point, type TechnicalDocument } from '@inova/domain/technical';
 
 type Pdf = PDFKit.PDFDocument;
 
@@ -13,6 +13,10 @@ export const ehRecursoDeBorda = (recurso: Feature): recurso is Feature & { type:
 /** Espessuras e alturas em centímetros, com decimal quando houver ("2cm", "2,5cm"). */
 export const centimetros = (mm: number) => `${(mm / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}cm`;
 
+/** Área molhada do balcão (área seca e molhada). */
+const AREA_MOLHADA = { fundo: '#dbe8f4', traco: '#2f6fa8', texto: '#255a8a' };
+/** Área seca: tom de pedra um pouco mais forte, para aparecer marcada. */
+const AREA_SECA = { fundo: '#f3e7cc' };
 const LARGURA = 523;
 /** Espaço dentro do quadro, em volta do desenho, para as cotas dos lados. */
 const FOLGA = 44;
@@ -139,6 +143,18 @@ function lugarDoNome(contorno: Point[], recortes: Point[][], pontos: Point[], me
   return { ponto: melhor, folga };
 }
 
+/** Trecho de pedra na altura y que contém x (coordenadas da peça). */
+function trechoHorizontal(peca: Piece, y: number, x: number): { x0: number; x1: number } | null {
+  const pontos = sampleContour(peca.contour, 2);
+  const xs = pontos.flatMap((a, i) => {
+    const b = pontos[(i + 1) % pontos.length];
+    if ((a.y - y) * (b.y - y) >= 0 && !(a.y === y && b.y !== y)) return [];
+    return [a.x + (b.x - a.x) * (y - a.y) / (b.y - a.y)];
+  }).sort((a, b) => a - b);
+  for (let i = 0; i + 1 < xs.length; i += 2) if (xs[i] <= x && x <= xs[i + 1]) return { x0: xs[i], x1: xs[i + 1] };
+  return null;
+}
+
 /**
  * Planta dentro de um quadro de 523 pt a partir de `topo`: pedras, saias,
  * rodabancas e acabamentos, recortes tracejados com a distância até as bordas,
@@ -168,6 +184,35 @@ export function desenharPlanta(pdf: Pdf, documento: TechnicalDocument, planta: P
     .map(({ de, ate, distancia }) => ({ peca, de: naPagina(de, peca), ate: naPagina(ate, peca), distancia })));
 
   for (const { contorno } of pecas) caminho(contorno).lineWidth(1.2).fillAndStroke(COR.pedra, COR.dourado);
+
+  // Área seca e molhada: a molhada tingida de azul e as divisas tracejadas, só dentro da pedra.
+  const rotulosAreas: { texto: string; curto: string; centro: Point; molhada: boolean; largura: number }[] = [];
+  for (const { peca, contorno } of pecas) {
+    const areas = areasDaPeca(peca);
+    if (!areas.length) continue;
+    const ys = sampleContour(peca.contour, 2).map((p) => p.y), [minY, maxY] = [Math.min(...ys), Math.max(...ys)];
+    pdf.save();
+    caminho(contorno).clip();
+    for (const area of areas) caminho([{ x: area.x0, y: minY }, { x: area.x1, y: minY }, { x: area.x1, y: maxY }, { x: area.x0, y: maxY }].map((p) => naPagina(p, peca))).fill(area.tipo === 'WET' ? AREA_MOLHADA.fundo : AREA_SECA.fundo);
+    // Divisas nas duas pontas de cada área (menos nas pontas da peça).
+    const xsPeca = sampleContour(peca.contour, 2).map((p) => p.x), [minXPeca, maxXPeca] = [Math.min(...xsPeca), Math.max(...xsPeca)];
+    for (const x of [...new Set(areas.flatMap((area) => [area.x0, area.x1]))].filter((x) => x > minXPeca + .5 && x < maxXPeca - .5)) {
+      const [a, b] = [naPagina({ x, y: minY }, peca), naPagina({ x, y: maxY }, peca)];
+      pdf.save().dash(3, { space: 2 }).lineWidth(.7).moveTo(a.x, a.y).lineTo(b.x, b.y).stroke(AREA_MOLHADA.traco).undash().restore();
+    }
+    pdf.restore();
+    caminho(contorno).lineWidth(1.2).stroke(COR.dourado);
+    for (const area of areas) {
+      const meioX = (area.x0 + area.x1) / 2, faixa = faixaDentroDaPeca(peca, meioX);
+      if (!faixa) continue;
+      const y = faixa.y0 + Math.min(9, (faixa.y1 - faixa.y0) * escala / 2) / escala;
+      // Espaço de verdade na altura do nome: a área, mas só onde há pedra (o braço de um U é mais estreito que a área).
+      const trecho = trechoHorizontal(peca, y, meioX);
+      const [de, ate] = [Math.max(area.x0, trecho?.x0 ?? area.x0), Math.min(area.x1, trecho?.x1 ?? area.x1)];
+      rotulosAreas.push({ texto: `${NOME_AREA[area.tipo]} ${formatMeasure(area.comprimentoMm)}`, curto: formatMeasure(area.comprimentoMm), molhada: area.tipo === 'WET',
+        centro: naPagina({ x: (de + ate) / 2, y }, peca), largura: (ate - de) * escala });
+    }
+  }
 
   // Saia e rodabanca: faixa do lado de fora do trecho; acabamento: o próprio lado reforçado. Lado curvo: linha grossa no arco.
   for (const recurso of documento.features) {
@@ -232,8 +277,14 @@ export function desenharPlanta(pdf: Pdf, documento: TechnicalDocument, planta: P
     rotulo(pdf, cota.livre ? cota.texto : `arco ${cota.texto}`, { x: meio.x + n.x * 12, y: meio.y + n.y * 12 }, 0, estilo);
   }
 
-  // Cotas livres e textos também ficam no caminho do nome das peças.
+  // Cotas livres, textos e os nomes das áreas também ficam no caminho do nome das peças.
   const ocupados: Segmento[] = [];
+  for (const rotuloArea of rotulosAreas) {
+    pdf.font('Helvetica-Bold').fontSize(6.5);
+    const texto = pdf.widthOfString(rotuloArea.texto) + 4 <= rotuloArea.largura ? rotuloArea.texto : rotuloArea.curto;
+    rotulo(pdf, texto, rotuloArea.centro, 0, { fonte: 'Helvetica-Bold', tamanho: 6.5, cor: rotuloArea.molhada ? AREA_MOLHADA.texto : COR.ouro });
+    ocupados.push(...caixaDoTexto(rotuloArea.centro, { x: 1, y: 0 }, pdf.widthOfString(texto) / 2 + 1, 3.5));
+  }
   for (const cota of documento.dimensions) {
     const livre = cotaLivre(documento, cota);
     if (!livre) continue;
@@ -284,18 +335,26 @@ function legenda(pdf: Pdf, documento: TechnicalDocument, planta: Planta, topo: n
   const y = topo + 7;
   const tipos = new Set(documento.features.map((recurso) => recurso.type));
   const itens: [string, (x: number) => void][] = [];
+  if (documento.pieces.some((peca) => peca.wetDryZones.some((zona) => zona.kind === 'WET')))
+    itens.push(['Área molhada', (x) => pdf.lineWidth(.6).rect(x, y, 12, 6).fillAndStroke(AREA_MOLHADA.fundo, AREA_MOLHADA.traco)]);
+  if (documento.pieces.some((peca) => peca.wetDryZones.some((zona) => zona.kind === 'DRY')))
+    itens.push(['Área seca', (x) => pdf.lineWidth(.6).rect(x, y, 12, 6).fillAndStroke(AREA_SECA.fundo, COR.ouro)]);
   if (comNumero) itens.push(['Nº do item na tabela de peças', (x) => { pdf.lineWidth(.7).circle(x + 6, y + 3, 4).fillAndStroke('#ffffff', COR.dourado); }]);
   for (const tipo of ['SKIRT', 'BACKSPLASH'] as const) if (tipos.has(tipo))
     itens.push([ROTULO_RECURSO[tipo], (x) => pdf.lineWidth(.6).rect(x, y + 1, 12, 4).fillAndStroke(BORDA[tipo].fundo, BORDA[tipo].traco)]);
   if (tipos.has('EDGE_FINISH')) itens.push([ROTULO_RECURSO.EDGE_FINISH, (x) => pdf.lineWidth(2.2).moveTo(x, y + 3).lineTo(x + 12, y + 3).stroke(COR.dourado)]);
   if (documento.features.some((recurso) => !ehRecursoDeBorda(recurso)))
     itens.push(['Cuba / recorte (tracejado)', (x) => { pdf.save().dash(2, { space: 1.5 }).lineWidth(.8).rect(x, y, 12, 6).stroke(COR.recorte).undash().restore(); }]);
+  // A escala fica à direita; a legenda usa o resto da linha (letra menor se não couber).
+  const escala = planta.proporcao ? `Escala 1:${planta.proporcao} em A4` : 'Sem escala';
+  const larguraEscala = pdf.font('Helvetica').fontSize(7).widthOfString(escala);
+  const espaco = 36 + LARGURA - 10 - larguraEscala - 14 - 46;
+  const tamanho = itens.reduce((soma, [texto]) => soma + 30 + pdf.font('Helvetica').fontSize(7).widthOfString(texto), 0) > espaco ? 6 : 7;
   let x = 46;
   for (const [texto, amostra] of itens) {
     amostra(x);
-    pdf.font('Helvetica').fontSize(7).fillColor(COR.rotulo).text(texto, x + 16, y, { lineBreak: false });
-    x += 16 + pdf.widthOfString(texto) + 14;
+    pdf.font('Helvetica').fontSize(tamanho).fillColor(COR.rotulo).text(texto, x + 16, y, { lineBreak: false });
+    x += 16 + pdf.widthOfString(texto) + (tamanho === 7 ? 14 : 9);
   }
-  const escala = planta.proporcao ? `Escala 1:${planta.proporcao} em A4` : 'Sem escala';
-  pdf.font('Helvetica').fontSize(7).fillColor(COR.rotulo).text(`${escala} · medidas em metros (2m44 = 2,44 m)`, 300, y, { width: 249, align: 'right', lineBreak: false });
+  pdf.font('Helvetica').fontSize(7).fillColor(COR.rotulo).text(escala, 36 + LARGURA - 10 - larguraEscala, y, { lineBreak: false });
 }

@@ -73,7 +73,7 @@ describe('Clientes, validações e histórico', () => {
     expect(vazio.statusCode, vazio.body).toBe(201);
     const rapido = vazio.json();
     expect(rapido).toMatchObject({ isQuick: true, phone: null });
-    expect(rapido.name).toMatch(/^Cliente rápido \d+$/);
+    expect(rapido.name).toMatch(/^Sem cadastro \d+$/);
     const segundo = (await request('POST', '/customers', { quick: true })).json();
     expect(Number(segundo.name.split(' ').pop())).toBe(Number(rapido.name.split(' ').pop()) + 1);
     const orcamento = await request('POST', '/quotes', { customerId: rapido.id, items: [item()] });
@@ -90,6 +90,17 @@ describe('Clientes, validações e histórico', () => {
   it('cliente comum continua exigindo nome e telefone', async () => {
     expect((await request('POST', '/customers', { name: 'Sem telefone' })).statusCode).toBe(422);
     expect((await request('POST', '/customers', { quick: false, phone: '92912340002' })).statusCode).toBe(422);
+  });
+});
+
+describe('Ajustes da empresa', () => {
+  it('M² fechado vem ligado no catálogo e só o administrador desliga', async () => {
+    expect((await request('GET', '/catalog')).json().settings).toEqual({ closedSquareMeter: true });
+    expect((await request('PATCH', '/catalog/settings', { closedSquareMeter: false }, attendant)).statusCode).toBe(403);
+    const desligado = await request('PATCH', '/catalog/settings', { closedSquareMeter: false });
+    expect(desligado.statusCode, desligado.body).toBe(200);
+    expect((await request('GET', '/catalog/settings', undefined, attendant)).json()).toEqual({ closedSquareMeter: false });
+    expect((await request('PATCH', '/catalog/settings', { closedSquareMeter: true })).json()).toEqual({ closedSquareMeter: true });
   });
 });
 

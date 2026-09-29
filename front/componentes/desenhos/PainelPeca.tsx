@@ -1,6 +1,6 @@
 'use client';
 
-import { bounds, bracosU, contornoDosParametros, edgeLength, formatMeasure, problemaParametros, updatePiece, type Piece, type PieceParameters, type PieceShape, type TechnicalDocument } from '@inova/domain/technical';
+import { areasDaPeca, bounds, bracosU, contornoDosParametros, edgeLength, formatMeasure, NOME_AREA, problemaParametros, tirarArea, trocarTipoArea, updatePiece, type Piece, type PieceParameters, type PieceShape, type TechnicalDocument } from '@inova/domain/technical';
 import { useState } from 'react';
 import { CampoMedida } from './CampoMedida';
 import type { MaterialVisual } from './tipos';
@@ -9,10 +9,11 @@ const FORMAS: { valor: PieceShape; rotulo: string }[] = [
   { valor: 'RECTANGLE', rotulo: 'Reta' }, { valor: 'L', rotulo: 'Em L' }, { valor: 'U', rotulo: 'Em U' }, { valor: 'CIRCLE', rotulo: 'Circular' }, { valor: 'ROUNDED', rotulo: 'Cantos arredondados' },
 ];
 
-/** Propriedades da peça: forma e medidas (inclusive U), lados, espessura, giro, pedra e ações. */
-export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, aoDuplicar, aoExcluir }: {
+/** Propriedades da peça: forma e medidas (inclusive U), lados, área seca/molhada, espessura, giro, pedra e ações. */
+export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, aoDuplicar, aoExcluir, aoMarcarArea }: {
   documento: TechnicalDocument; peca: Piece; materiais: MaterialVisual[];
   aoMudar: (documento: TechnicalDocument) => void; aoAbrirLado: (ladoId: string) => void; aoDuplicar: () => void; aoExcluir: () => void;
+  aoMarcarArea?: () => void;
 }) {
   const [aviso, setAviso] = useState('');
   const atualizar = (patch: Partial<Piece>) => aoMudar(updatePiece(documento, peca.id, patch));
@@ -33,6 +34,9 @@ export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, a
     atualizar({ geometryMode: 'PARAMETRIC', parameters: proximos, contour: contornoDosParametros(peca.id, proximos) });
   };
   const bracos = parametros?.shape === 'U' ? bracosU(parametros.arm, parametros) : null;
+  // Área seca e molhada: marcadas no desenho (clicar, puxar e clicar); aqui só troca o tipo ou tira.
+  const areas = areasDaPeca(peca);
+  const mudarAreas = (wetDryZones: Piece['wetDryZones']) => atualizar({ wetDryZones });
 
   return <section className="tec-painel-secao" aria-label={`Peça ${peca.name}`}>
     {peca.locked && <p className="tec-aviso">Peça travada: destrave para mudar medidas ou posição.</p>}
@@ -65,6 +69,17 @@ export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, a
         <span>Lado {indice + 1}</span><strong>{peca.dimensionLabels[vertice.id] || formatMeasure(edgeLength(peca, vertice.id))}</strong>{peca.lockedEdges.includes(vertice.id) && <i aria-label="travado">🔒</i>}
       </button>)}
     </div>
+
+    <h3>Área seca e molhada <small>marcadas no desenho</small></h3>
+    {!areas.length && <p className="tec-dica">Clique em 💧 Seca / molhada, clique no balcão onde a área começa, puxe até onde termina e clique de novo; depois escolha seca ou molhada.</p>}
+    {areas.length > 0 && <ul className="tec-areas" aria-label="Áreas do balcão">
+      {areas.map((area) => <li key={area.indice} className={`tec-area-linha ${area.tipo === 'WET' ? 'molhada' : 'seca'}`}>
+        <div><strong>{NOME_AREA[area.tipo]} · {formatMeasure(area.comprimentoMm)}</strong><small>de {formatMeasure(area.inicioMm)} a {formatMeasure(area.fimMm)} da ponta esquerda</small></div>
+        <button type="button" className="botao-contorno" onClick={() => mudarAreas(trocarTipoArea(peca, area.indice))}>Trocar para {area.tipo === 'WET' ? 'seca' : 'molhada'}</button>
+        <button type="button" className="text-button" aria-label={`Tirar ${NOME_AREA[area.tipo].toLowerCase()} de ${formatMeasure(area.comprimentoMm)}`} onClick={() => mudarAreas(tirarArea(peca, area.indice))}>×</button>
+      </li>)}
+    </ul>}
+    {aoMarcarArea && <button type="button" className="botao-contorno tec-dividir-areas" onClick={aoMarcarArea}>💧 Marcar área no desenho</button>}
 
     <div className="tec-grade-campos">
       <CampoMedida rotulo="Posição X" minimo={-100000} valorMm={peca.x} onChange={(x) => atualizar({ x })} />

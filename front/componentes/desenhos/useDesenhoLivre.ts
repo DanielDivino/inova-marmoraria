@@ -65,7 +65,7 @@ export function useDesenhoLivre({ documento, mudar, aoSelecionar, aoMensagem, pa
     if (pontos.length < 3 || !contornoValido(contorno)) return 'Com essa medida o contorno fica inválido. Confira a medida ou desenhe de novo.';
     const origem = traco.pontos[0];
     mudar(inserirPeca(documento, { id, name: `Peça ${documento.pieces.length + 1}`, contour: contorno, thicknessMm: 20, x: Math.round(origem.x), y: Math.round(origem.y), z: 0, rotationDeg: 0, tiltDeg: 0,
-      locked: false, layerId: 'pieces', geometryMode: 'FREE', dimensionLabels: {}, lockedEdges: [] }));
+      locked: false, layerId: 'pieces', geometryMode: 'FREE', dimensionLabels: {}, lockedEdges: [], wetDryZones: [] }));
     setDesenhados((lista) => [...lista, id]); setTraco(null); aoSelecionar({ tipo: 'peca', id });
     aoMensagem('Peça criada. Toque nos lados para ajustar as outras medidas.');
     return null;

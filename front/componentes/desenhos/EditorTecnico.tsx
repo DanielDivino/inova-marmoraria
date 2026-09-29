@@ -2,10 +2,12 @@
 
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { ajustarRecursosDeBorda, alterarMedidaLado, updatePiece, type Piece, type PieceShape, type Point, type TechnicalDocument } from '@inova/domain/technical';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ajustarRecursosDeBorda, alterarMedidaLado, deletePiece, formatMeasure, marcarArea, NOME_AREA, updatePiece, type EstimativaDesenho, type Piece, type PieceShape, type Point, type TechnicalDocument } from '@inova/domain/technical';
 import { api } from '../../utilitarios/api';
+import { formatarMoeda } from '../../utilitarios/formatadores';
 import { criarId } from '../../utilitarios/id';
+import { JanelaArea, type MarcacaoArea } from './AreaSecaMolhada';
 import { BarraFerramentas } from './BarraFerramentas';
 import { CanvasPlanta } from './CanvasPlanta';
 import { EditorLado } from './EditorLado';
@@ -25,12 +27,22 @@ type Visao = '2D' | '3D' | 'AMBOS';
 // three.js só no navegador e só quando a vista 3D é aberta.
 const Vista3D = dynamic(() => import('./Vista3D'), { ssr: false, loading: () => <p className="tec-3d-vazio">Carregando a vista 3D…</p> });
 
+/** Desenho aberto de dentro do Novo orçamento. */
+export type DesenhoNoOrcamento = {
+  /** Equipe técnica: envia para conferência e vê as revisões; o vendedor só desenha. */
+  podeRevisar: boolean;
+  aoVoltar: () => void;
+  /** "Usar no orçamento": o rascunho já foi salvo nesta versão e a estimativa não tem pendências. */
+  aoUsar: (dados: { designId: string; nome: string; versao: number; estimativa: EstimativaDesenho }) => void;
+};
+
 /**
  * Editor do desenho técnico. O documento (TechnicalDocument, em mm) é o mesmo
- * de antes: rascunho com versão, revisões, PDF técnico e DXF. O valor do
- * orçamento nunca muda por causa do desenho.
+ * de antes: rascunho com versão, revisões, PDF técnico e DXF. Sozinho, não
+ * muda o valor de nenhum orçamento; aberto do Novo orçamento (`noOrcamento`),
+ * o valor dele vai para o resumo só quando o desenho é usado no orçamento.
  */
-export default function EditorTecnico({ designId }: { designId: string }) {
+export default function EditorTecnico({ designId, noOrcamento }: { designId: string; noOrcamento?: DesenhoNoOrcamento }) {
   const tecnico = useDocumentoTecnico(designId);
   const { documento, dados } = tecnico;
   const [ferramenta, setFerramenta] = useState<Ferramenta>('SELECIONAR');
@@ -44,6 +56,15 @@ export default function EditorTecnico({ designId }: { designId: string }) {
   const [passoMm, setPassoMm] = useState(10);
   const [visao, setVisao] = useState<Visao>('2D');
   const [estimativaAberta, setEstimativaAberta] = useState(true);
+  /** Área marcada no balcão esperando a escolha: seca ou molhada. */
+  const [areaPendente, setAreaPendente] = useState<MarcacaoArea | null>(null);
+  // Teclado: Delete apaga o que está selecionado; Esc cancela a área. A função muda a cada render (ref).
+  const atalhos = useRef<(evento: KeyboardEvent) => void>(() => undefined);
+  useEffect(() => {
+    const aoTeclar = (evento: KeyboardEvent) => atalhos.current(evento);
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, []);
   const valor = useEstimativa(designId, documento);
   const livre = useDesenhoLivre({ documento, mudar: tecnico.mudar, aoSelecionar: setSelecao, aoMensagem: tecnico.setMensagem, passoMm });
   // O modo escolhido fica lembrado neste aparelho (conveniência; sem ele, começa no manual).
@@ -66,8 +87,48 @@ export default function EditorTecnico({ designId }: { designId: string }) {
 
   // No celular a folha aberta cobriria o desenho: ferramenta de desenho fecha a folha.
   const escolherFerramenta = (proxima: Ferramenta) => {
-    setFerramenta(proxima); setPendenteBorda(null); setCotaInicio(null); if (proxima !== 'SELECIONAR') setFolha(null);
-    tecnico.setMensagem(proxima === 'TEXTO' ? 'Toque no desenho onde vai o texto.' : proxima === 'COTA' ? 'Toque no primeiro ponto da cota (um vértice de qualquer peça).' : '');
+    setFerramenta(proxima); setPendenteBorda(null); setCotaInicio(null); setAreaPendente(null); if (proxima !== 'SELECIONAR') setFolha(null);
+    tecnico.setMensagem(proxima === 'TEXTO' ? 'Toque no desenho onde vai o texto.' : proxima === 'COTA' ? 'Toque no primeiro ponto da cota (um vértice de qualquer peça).'
+      : proxima === 'AREA' ? 'Clique no balcão onde a área começa, puxe até onde ela termina e clique de novo (ou arraste e solte). Depois escolha seca ou molhada.' : '');
+  };
+  // Delete (ou Backspace) apaga a peça, o componente ou o texto selecionado; Ctrl+Z desfaz.
+  const apagarSelecionado = () => {
+    if (selecao?.tipo === 'peca') {
+      const peca = documento.pieces.find((entrada) => entrada.id === selecao.id);
+      if (!peca) return false;
+      if (peca.locked) { tecnico.setMensagem(`${peca.name} está travada: destrave para excluir.`); return true; }
+      mudar(deletePiece(documento, peca.id)); setSelecao(null); tecnico.setMensagem(`${peca.name} excluída. Ctrl+Z desfaz.`);
+      return true;
+    }
+    if (selecao?.tipo === 'recurso') {
+      const recurso = documento.features.find((entrada) => entrada.id === selecao.id);
+      if (!recurso) return false;
+      mudar({ ...documento, features: documento.features.filter((entrada) => entrada.id !== recurso.id) }); setSelecao(null); tecnico.setMensagem(`${recurso.name} excluído. Ctrl+Z desfaz.`);
+      return true;
+    }
+    if (selecao?.tipo === 'texto') {
+      mudar({ ...documento, annotations: documento.annotations.filter((entrada) => entrada.id !== selecao.id) }); setSelecao(null); tecnico.setMensagem('Texto excluído. Ctrl+Z desfaz.');
+      return true;
+    }
+    return false;
+  };
+  atalhos.current = (evento) => {
+    const alvo = evento.target as HTMLElement | null;
+    if (alvo && (/^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName) || alvo.isContentEditable)) return;
+    if (document.querySelector('dialog[open]')) return;
+    if (evento.key === 'Escape') {
+      if (areaPendente) { setAreaPendente(null); tecnico.setMensagem(''); } else if (ferramenta === 'AREA') escolherFerramenta('SELECIONAR');
+      return;
+    }
+    if ((evento.key === 'Delete' || evento.key === 'Backspace') && apagarSelecionado()) evento.preventDefault();
+  };
+  const escolherTipoArea = (tipo: 'DRY' | 'WET') => {
+    const peca = areaPendente && documento.pieces.find((entrada) => entrada.id === areaPendente.pecaId);
+    if (!areaPendente || !peca) return;
+    setAreaPendente(null);
+    if (peca.locked) { tecnico.setMensagem(`${peca.name} está travada: destrave para marcar áreas.`); return; }
+    mudar(updatePiece(documento, peca.id, { wetDryZones: marcarArea(peca, areaPendente.inicio, areaPendente.fim, tipo) }));
+    tecnico.setMensagem(`${NOME_AREA[tipo]} de ${formatMeasure(Math.abs(areaPendente.fim - areaPendente.inicio))} marcada em ${peca.name}. Marque outra ou volte a Selecionar.`);
   };
   const tocarVertice = (pieceId: string, vertexId: string) => {
     if (!cotaInicio) { setCotaInicio({ pieceId, vertexId }); tecnico.setMensagem('Agora toque no segundo ponto da cota.'); return; }
@@ -108,6 +169,23 @@ export default function EditorTecnico({ designId }: { designId: string }) {
     mudar({ ...documento, annotations: [...documento.annotations, { id, text: 'Texto', x: Math.round(ponto.x), y: Math.round(ponto.y), layerId: 'annotations' }] });
     setSelecao({ tipo: 'texto', id }); setFerramenta('SELECIONAR'); setFolha('medidas'); tecnico.setMensagem('');
   };
+  const revisa = !noOrcamento || noOrcamento.podeRevisar;
+  const voltar = async () => {
+    if (!noOrcamento) return;
+    if (tecnico.alterado && !(await tecnico.salvar()) && !window.confirm('O desenho não foi salvo. Voltar ao orçamento mesmo assim?')) return;
+    noOrcamento.aoVoltar();
+  };
+  const usarNoOrcamento = async () => {
+    if (!noOrcamento || !valor.estimativa) return;
+    if (valor.estimativa.problemas.length) {
+      setFolha('valor');
+      tecnico.setMensagem(`Para usar no orçamento, resolva: ${valor.estimativa.problemas.slice(0, 3).join(' · ')}${valor.estimativa.problemas.length > 3 ? ' …' : ''}`);
+      return;
+    }
+    const versao = await tecnico.salvar();
+    if (versao === false) return;
+    noOrcamento.aoUsar({ designId, nome: dados.design.project.name, versao, estimativa: valor.estimativa });
+  };
   const enviarRevisao = async () => {
     if (!(await tecnico.salvar(documento))) return;
     try { await api(`/designs/${designId}/revisions`, { method: 'POST' }); await tecnico.recarregarRevisoes(); tecnico.setMensagem('Revisão enviada para conferência.'); }
@@ -123,11 +201,14 @@ export default function EditorTecnico({ designId }: { designId: string }) {
 
   return <main className="tec-editor" data-folha={folha ?? undefined}>
     <header className="tec-cabecalho">
-      <div><Link href="/orcamentos">← Orçamentos</Link><p>{dados.design.project.job.customer.name}</p><h1>{dados.design.project.name}</h1></div>
+      <div>{noOrcamento ? <button type="button" className="text-button tec-voltar" onClick={() => void voltar()}>← Voltar ao orçamento</button> : <Link href="/orcamentos">← Orçamentos</Link>}<p>{dados.design.project.job.customer.name}</p><h1>{dados.design.project.name}</h1></div>
       <div className="tec-salvar">
         <span className={`tec-estado ${tecnico.salvamento}`}>{salvamento}</span>
         <button type="button" className="botao-contorno" onClick={() => void tecnico.salvar()}>Salvar agora</button>
-        <button type="button" className="botao-destaque" onClick={() => void enviarRevisao()}>Enviar para conferência</button>
+        {revisa && <button type="button" className={noOrcamento ? 'botao-contorno' : 'botao-destaque'} onClick={() => void enviarRevisao()}>Enviar para conferência</button>}
+        {noOrcamento && <button type="button" className="botao-destaque tec-usar" disabled={!valor.estimativa || tecnico.salvamento === 'saving'} onClick={() => void usarNoOrcamento()}>
+          Usar no orçamento{valor.estimativa ? ` · ${formatarMoeda(valor.estimativa.total)}` : ''}
+        </button>}
       </div>
     </header>
     {tecnico.conflito && <p className="tec-alerta" role="alert">Este desenho foi alterado em outra sessão. Suas mudanças não foram salvas por cima. <button type="button" className="text-button" onClick={() => void tecnico.carregar()}>Recarregar o desenho salvo</button></p>}
@@ -142,10 +223,10 @@ export default function EditorTecnico({ designId }: { designId: string }) {
         <button type="button" aria-pressed={visao === '3D'} onClick={() => { setVisao('3D'); setPedidoEnquadrar((n) => n + 1); }}>3D</button>
         <button type="button" className="tec-so-desktop" aria-pressed={visao === 'AMBOS'} onClick={() => { setVisao('AMBOS'); setPedidoEnquadrar((n) => n + 1); }}>Lado a lado</button>
       </div>
-      <span className="tec-regra">As alterações deste desenho não alteram o valor do orçamento.</span>
+      <span className="tec-regra">{noOrcamento ? 'O valor só vai para o orçamento quando você clicar em Usar no orçamento; até lá, fica como rascunho do cliente.' : 'As alterações deste desenho não alteram o valor do orçamento.'}</span>
       <div className="tec-folhas" role="group" aria-label="Painéis">
         <button type="button" aria-pressed={folha === 'medidas'} onClick={() => setFolha((atual) => atual === 'medidas' ? null : 'medidas')}>Medidas</button>
-        <button type="button" aria-pressed={folha === 'revisoes'} onClick={() => setFolha((atual) => atual === 'revisoes' ? null : 'revisoes')}>Revisões</button>
+        {revisa && <button type="button" aria-pressed={folha === 'revisoes'} onClick={() => setFolha((atual) => atual === 'revisoes' ? null : 'revisoes')}>Revisões</button>}
       </div>
     </div>
     <div className="tec-area">
@@ -157,7 +238,10 @@ export default function EditorTecnico({ designId }: { designId: string }) {
         <CanvasPlanta documento={documento} selecao={selecao} ferramenta={ferramenta} pendenteBorda={pendenteBorda} pedidoEnquadrar={pedidoEnquadrar}
           tracoPendente={livre.traco && { pontos: livre.traco.pontos, fechado: livre.traco.fechado, ladoReferencia: livre.traco.ladoReferencia }}
           aoSelecionar={setSelecao} aoTocarLado={tocarLado} aoCriarTexto={criarTexto} aoTocarVertice={tocarVertice} cotaInicio={cotaInicio} aoTraco={livre.aoTraco} aoCancelarTraco={() => tecnico.setMensagem('Traço cancelado: dois dedos na tela mexem na vista.')} aoAviso={tecnico.setMensagem}
+          aoMarcarArea={(pecaId, inicio, fim) => { setAreaPendente({ pecaId, inicio, fim }); tecnico.setMensagem(''); }} areaPendente={areaPendente}
           substituir={tecnico.substituir} concluirGesto={tecnico.concluirGesto} />
+        <JanelaArea peca={areaPendente ? documento.pieces.find((entrada) => entrada.id === areaPendente.pecaId) : undefined} marcacao={areaPendente}
+          aoEscolher={escolherTipoArea} aoCancelar={() => { setAreaPendente(null); tecnico.setMensagem(''); }} />
         <JanelaTraco traco={livre.traco} recorte={livre.recorte} aoFechar={livre.fechar} aoTrocarLado={livre.trocarLado} aoDescartar={livre.descartar}
           aoCriarPeca={(mm) => { const erro = livre.criarPeca(mm); if (!erro) setFerramenta('SELECIONAR'); return erro; }} aoCriarRecorte={livre.criarRecorte} />
         </div>}
@@ -167,20 +251,20 @@ export default function EditorTecnico({ designId }: { designId: string }) {
         <button type="button" className="tec-fechar-folha" aria-label="Fechar painel" onClick={() => setFolha(null)}>×</button>
         <div className={`tec-lateral-medidas${folha && folha !== 'medidas' ? ' tec-so-desktop' : ''}`}>
           <PainelMedidas documento={documento} selecao={selecao} materiais={tecnico.materiais} diagnosticos={tecnico.diagnosticos}
-            aoMudar={mudar} aoSelecionar={setSelecao} aoAbrirLado={(pecaId, ladoId) => setLado({ pecaId, ladoId })} />
+            aoMudar={mudar} aoSelecionar={setSelecao} aoAbrirLado={(pecaId, ladoId) => setLado({ pecaId, ladoId })} aoMarcarArea={() => escolherFerramenta('AREA')} />
         </div>
-        {folha === 'revisoes' && <div className="tec-so-celular"><PainelRevisoes revisoes={tecnico.revisoes} aoAtualizar={tecnico.recarregarRevisoes} aoMensagem={tecnico.setMensagem} /></div>}
+        {revisa && folha === 'revisoes' && <div className="tec-so-celular"><PainelRevisoes revisoes={tecnico.revisoes} aoAtualizar={tecnico.recarregarRevisoes} aoMensagem={tecnico.setMensagem} /></div>}
         {/* Estimativa: fixa no rodapé do painel no desktop (recolhível); no celular abre pela barra de baixo. */}
         <div className="tec-lateral-estimativa">
           <div className="tec-so-desktop"><ResumoEstimativa estimativa={valor.estimativa} aberto={estimativaAberta} aoAlternar={() => setEstimativaAberta((aberta) => !aberta)} /></div>
           {(estimativaAberta || folha === 'valor') && <div className={`tec-estimativa-corpo${estimativaAberta && folha === 'valor' ? '' : estimativaAberta ? ' tec-so-desktop' : ' tec-so-celular'}`}>
-            <PainelEstimativa documento={documento} catalogo={valor.catalogo} estimativa={valor.estimativa} opcoes={valor.opcoes} erro={valor.erro} aoMudarOpcoes={valor.mudarOpcoes} />
+            <PainelEstimativa documento={documento} catalogo={valor.catalogo} estimativa={valor.estimativa} opcoes={valor.opcoes} erro={valor.erro} aoMudarOpcoes={valor.mudarOpcoes} m2Fechado={valor.m2Fechado} noOrcamento={!!noOrcamento} />
           </div>}
         </div>
       </aside>
     </div>
     <div className="tec-so-celular tec-barra-estimativa"><ResumoEstimativa estimativa={valor.estimativa} aberto={folha === 'valor'} aoAlternar={() => setFolha((atual) => atual === 'valor' ? null : 'valor')} /></div>
-    <div className="tec-so-desktop"><PainelRevisoes revisoes={tecnico.revisoes} aoAtualizar={tecnico.recarregarRevisoes} aoMensagem={tecnico.setMensagem} /></div>
+    {revisa && <div className="tec-so-desktop"><PainelRevisoes revisoes={tecnico.revisoes} aoAtualizar={tecnico.recarregarRevisoes} aoMensagem={tecnico.setMensagem} /></div>}
     <EditorLado peca={pecaDoLado} ladoId={lado?.ladoId ?? null} aoFechar={() => setLado(null)}
       aoMudarMedida={(mm) => {
         if (!pecaDoLado || !lado) return null;
