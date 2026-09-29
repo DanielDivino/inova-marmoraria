@@ -57,3 +57,6 @@ export function pecaNoPonto(doc: TechnicalDocument, p: Point): Piece | undefined
   }
   return undefined;
 }
+
+/** Fotos enviadas ficam na API (`/uploads/...`), que o front acessa por `/api`. */
+export const urlImagem = (url?: string | null) => !url ? undefined : url.startsWith('/uploads/') ? `/api${url}` : url;

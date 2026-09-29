@@ -2,6 +2,7 @@ import { cotasDaPeca, edgeLength, edgePoint, sampleContour, type Feature, type P
 import { CotasPeca } from './CotasPeca';
 import { anguloLegivel, pontosSvg, Texto } from './svg';
 import { ROTULO_PERFIL, type Selecao } from './tipos';
+import { urlImagem } from './operacoes';
 
 type Props = { peca: Piece; recursos: Feature[]; escala: number; selecao: Selecao; destacarLados: boolean };
 const pontosDoLado = (peca: Piece, ladoId: string, inicio = 0, extensao = edgeLength(peca, ladoId)) =>
@@ -18,7 +19,7 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados }: Prop
   const selecionada = (selecao?.tipo === 'peca' && selecao.id === peca.id) || (selecao?.tipo === 'vertice' && selecao.pecaId === peca.id)
     || (selecao?.tipo === 'recurso' && recursos.some((recurso) => recurso.id === selecao.id));
   const normais = new Map(cotasDaPeca(peca).map((cota) => [cota.ladoId, cota.normal]));
-  const imagem = peca.material?.imageUrl;
+  const imagem = urlImagem(peca.material?.imageUrl);
   const textura = peca.material?.textureScaleMm ?? 600;
   const contorno = pontosSvg(sampleContour(peca.contour, Math.max(1, px(1.5))));
   const recursoSelecionado = (id: string) => selecao?.tipo === 'recurso' && selecao.id === id;
@@ -34,7 +35,8 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados }: Prop
     {imagem && <defs><pattern id={`pedra-${peca.id}`} width={textura} height={textura} patternUnits="userSpaceOnUse" patternTransform={`rotate(${peca.material?.veinRotationDeg ?? 0})`}>
       <image href={imagem} width={textura} height={textura} preserveAspectRatio="xMidYMid slice" />
     </pattern></defs>}
-    <polygon points={contorno} className="tec-pedra" fill={imagem ? `url(#pedra-${peca.id})` : undefined} data-alvo="peca" data-id={peca.id} />
+    {/* Estilo inline: a regra de CSS da cor neutra venceria o atributo fill. */}
+    <polygon points={contorno} className="tec-pedra" style={imagem ? { fill: `url(#pedra-${peca.id})` } : undefined} data-alvo="peca" data-id={peca.id} />
     <polygon points={contorno} className="tec-contorno" strokeWidth={px(selecionada ? 2.6 : 1.6)} pointerEvents="none" />
 
     {recursos.map((recurso) => {

@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { ajustarRecursosDeBorda, alterarMedidaLado, updatePiece, type Piece, type PieceShape, type Point, type TechnicalDocument } from '@inova/domain/technical';
@@ -18,6 +19,9 @@ import { useDocumentoTecnico } from './useDocumentoTecnico';
 import '../../app/technical-editor.css';
 
 type Folha = 'medidas' | 'valor' | 'revisoes' | null;
+type Visao = '2D' | '3D' | 'AMBOS';
+// three.js só no navegador e só quando a vista 3D é aberta.
+const Vista3D = dynamic(() => import('./Vista3D'), { ssr: false, loading: () => <p className="tec-3d-vazio">Carregando a vista 3D…</p> });
 
 /**
  * Editor do desenho técnico. O documento (TechnicalDocument, em mm) é o mesmo
@@ -35,6 +39,7 @@ export default function EditorTecnico({ designId }: { designId: string }) {
   const [pedidoEnquadrar, setPedidoEnquadrar] = useState(0);
   const [modo, setModo] = useState<Modo>('MANUAL');
   const [passoMm, setPassoMm] = useState(10);
+  const [visao, setVisao] = useState<Visao>('2D');
   const livre = useDesenhoLivre({ documento, mudar: tecnico.mudar, aoSelecionar: setSelecao, aoMensagem: tecnico.setMensagem, passoMm });
   // O modo escolhido fica lembrado neste aparelho (conveniência; sem ele, começa no manual).
   useEffect(() => { try { const salvo = window.localStorage.getItem('inova-desenho-modo'); if (salvo === 'LIVRE') { setModo('LIVRE'); setFerramenta('TRACO_PECA'); } } catch { /* sem armazenamento local */ } }, []);
@@ -118,6 +123,11 @@ export default function EditorTecnico({ designId }: { designId: string }) {
         <button type="button" aria-pressed={modo === 'LIVRE'} onClick={() => trocarModo('LIVRE')}>✍ Desenho livre</button>
         <button type="button" aria-pressed={modo === 'MANUAL'} onClick={() => trocarModo('MANUAL')}>📐 Manual</button>
       </div>
+      <div className="tec-vista-abas" role="group" aria-label="Vista">
+        <button type="button" aria-pressed={visao === '2D'} onClick={() => { setVisao('2D'); setPedidoEnquadrar((n) => n + 1); }}>Planta 2D</button>
+        <button type="button" aria-pressed={visao === '3D'} onClick={() => { setVisao('3D'); setPedidoEnquadrar((n) => n + 1); }}>3D</button>
+        <button type="button" className="tec-so-desktop" aria-pressed={visao === 'AMBOS'} onClick={() => { setVisao('AMBOS'); setPedidoEnquadrar((n) => n + 1); }}>Lado a lado</button>
+      </div>
       <span className="tec-regra">As alterações deste desenho não alteram o valor do orçamento.</span>
       <div className="tec-folhas" role="group" aria-label="Painéis">
         <button type="button" aria-pressed={folha === 'medidas'} onClick={() => setFolha((atual) => atual === 'medidas' ? null : 'medidas')}>Medidas</button>
@@ -128,13 +138,16 @@ export default function EditorTecnico({ designId }: { designId: string }) {
       <BarraFerramentas modo={modo} ferramenta={ferramenta} pendenteBorda={pendenteBorda} temPeca={!!pecaAtiva || documento.pieces.length > 0} podeDesfazer={tecnico.podeDesfazer} podeRefazer={tecnico.podeRefazer}
         temTraco={livre.temTraco} passoMm={passoMm} aoPasso={setPassoMm} aoDesfazerTraco={() => livre.temTraco ? livre.descartar() : tecnico.desfazer()} aoLimpar={livre.limpar}
         aoFerramenta={escolherFerramenta} aoAdicionarForma={adicionarForma} aoAdicionarCorpo={adicionarCorpo} aoEscolherBorda={escolherBorda} aoDesfazer={tecnico.desfazer} aoRefazer={tecnico.refazer} />
-      <div className="tec-vistas">
+      <div className={`tec-vistas${visao === 'AMBOS' ? ' lado-a-lado' : ''}`}>
+        {visao !== '3D' && <div className="tec-vista">
         <CanvasPlanta documento={documento} selecao={selecao} ferramenta={ferramenta} pendenteBorda={pendenteBorda} pedidoEnquadrar={pedidoEnquadrar}
           tracoPendente={livre.traco && { pontos: livre.traco.pontos, fechado: livre.traco.fechado, ladoReferencia: livre.traco.ladoReferencia }}
           aoSelecionar={setSelecao} aoTocarLado={tocarLado} aoCriarTexto={criarTexto} aoTraco={livre.aoTraco} aoCancelarTraco={() => tecnico.setMensagem('Traço cancelado: dois dedos na tela mexem na vista.')}
           substituir={tecnico.substituir} concluirGesto={tecnico.concluirGesto} />
         <JanelaTraco traco={livre.traco} recorte={livre.recorte} aoFechar={livre.fechar} aoTrocarLado={livre.trocarLado} aoDescartar={livre.descartar}
           aoCriarPeca={(mm) => { const erro = livre.criarPeca(mm); if (!erro) setFerramenta('SELECIONAR'); return erro; }} aoCriarRecorte={livre.criarRecorte} />
+        </div>}
+        {visao !== '2D' && <div className="tec-vista"><Vista3D documento={documento} /></div>}
       </div>
       <aside className="tec-lateral" aria-label="Propriedades">
         <button type="button" className="tec-fechar-folha" aria-label="Fechar painel" onClick={() => setFolha(null)}>×</button>
