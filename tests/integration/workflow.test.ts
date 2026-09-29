@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarAplicacao } from '../../back/src/app.js';
 import { prisma } from '../../back/src/config/prisma.js';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { itemSalvoParaEntrada } from '@inova/domain';
 
 if (!/^inova_test_[a-f0-9]{32}$/.test(process.env.INOVA_TEST_SCHEMA ?? '') || new URL(process.env.DATABASE_URL!).searchParams.get('schema') !== process.env.INOVA_TEST_SCHEMA) throw new Error('Banco de testes isolado obrigatório.');
@@ -13,12 +17,14 @@ async function login(email: string, password = process.env.SEED_PASSWORD!) {
   expect(response.statusCode, response.body).toBe(200);
   return { authorization: `Bearer ${response.json().accessToken}` };
 }
-const item = (projectName: string) => ({ projectName, productTypeId: catalog.productTypes[0].id, materialId: catalog.materials[0].id, components: [{ label: 'Tampo', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 1000, widthMm: 600, quantity: 1 }] });
-/** Aprova e inicia a execução: só orçamentos em andamento entram no quadro. */
-async function approvedQuote(auth: Auth, projects: string[], executionStatus = 'IN_PROGRESS') {
+type Peca = { label: string; componentType: string; quantity: number };
+const item = (projectName: string, pecas: Peca[] = [{ label: 'Tampo', componentType: 'TOP', quantity: 1 }]) => ({ projectName, productTypeId: catalog.productTypes[0].id, materialId: catalog.materials[0].id,
+  components: pecas.map((peca) => ({ ...peca, orientation: 'HORIZONTAL', lengthMm: 1000, widthMm: 600 })) });
+/** Aprova e inicia a execução: só orçamentos em andamento entram no quadro. Projetos com peças próprias vêm como [nome, peças]. */
+async function approvedQuote(auth: Auth, projects: (string | [string, Peca[]])[], executionStatus = 'IN_PROGRESS') {
   const customer = await request('POST', '/customers', auth, { name: `Cliente fluxo ${++sequence}`, phone: `9298711${String(sequence).padStart(4, '0')}` });
   expect(customer.statusCode, customer.body).toBe(201);
-  const created = await request('POST', '/quotes', auth, { customerId: customer.json().id, items: projects.map(item) });
+  const created = await request('POST', '/quotes', auth, { customerId: customer.json().id, items: projects.map((project) => typeof project === 'string' ? item(project) : item(...project)) });
   expect(created.statusCode, created.body).toBe(201);
   const approved = await request('PATCH', `/quotes/${created.json().id}/status`, auth, { status: 'APPROVED' });
   expect(approved.statusCode, approved.body).toBe(200);
@@ -197,5 +203,113 @@ describe('Fluxo de trabalho dos projetos', () => {
     const hidden = (await board(admin, other.id))[0];
     expect((await request('PATCH', `/workflow/projects/${hidden.id}/move`, seller, { status: 'DONE' })).statusCode).toBe(404);
     expect((await request('GET', '/workflow/projects', {})).statusCode).toBe(401);
+  });
+});
+
+/** Chave de cada peça do projeto (id do componente), pelo nome. */
+const chaves = (card: any) => Object.fromEntries(card.pieceList.map((peca: any) => [peca.name, peca.key]));
+const pecasPorEtapa = (cards: any[]) => Object.fromEntries(cards.map((card: any) => [card.status, Object.fromEntries(card.pieceList.map((peca: any) => [peca.name, peca.quantity]))]));
+
+describe('Produção e entrega por peças', () => {
+  const soleiras: [string, Peca[]] = ['Soleiras', [{ label: 'Soleira', componentType: 'THRESHOLD', quantity: 3 }, { label: 'Peitoril', componentType: 'SILL', quantity: 1 }]];
+
+  it('produziu só parte: as peças produzidas viram outro cartão e, quando o resto chega, voltam a ser um só', async () => {
+    const quote = await approvedQuote(admin, [soleiras]);
+    let [cartao] = await board(admin, quote.id);
+    expect(cartao).toMatchObject({ pieces: 4, totalPieces: 4, projectId: cartao.id });
+    const chave = chaves(cartao);
+    await move(admin, cartao.id, { status: 'IN_PROGRESS' });
+
+    const parte = await move(admin, cartao.id, { status: 'DONE', pieces: { [chave.Soleira]: 2, [chave.Peitoril]: 0 } });
+    expect(parte).toMatchObject({ status: 'DONE', pieces: 2, totalPieces: 4, projectId: cartao.id, completedAt: expect.any(String) });
+    expect(parte.id).not.toBe(cartao.id);
+    expect(parte.projectCards).toHaveLength(2);
+    expect(pecasPorEtapa(await board(admin, quote.id))).toEqual({ IN_PROGRESS: { Soleira: 1, Peitoril: 1 }, DONE: { Soleira: 2 } });
+
+    // Seleção inválida: mais do que o cartão tem, nenhuma peça ou para a mesma etapa.
+    for (const [pieces, status] of [[{ [chave.Soleira]: 2 }, 'DONE'], [{ [chave.Soleira]: 0 }, 'DONE'], [{ [chave.Soleira]: 1 }, 'IN_PROGRESS'], [{ outra: 1 }, 'DONE']] as const) {
+      expect((await request('PATCH', `/workflow/projects/${cartao.id}/move`, admin, { status, pieces })).statusCode).toBe(422);
+    }
+
+    // Entregou 1 das 2 produzidas: a parte se divide de novo.
+    const entregue = await move(admin, parte.id, { status: 'DELIVERED', pieces: { [chave.Soleira]: 1 } });
+    expect(entregue).toMatchObject({ status: 'DELIVERED', pieces: 1, quoteDelivered: false });
+    expect(pecasPorEtapa(await board(admin, quote.id))).toEqual({ IN_PROGRESS: { Soleira: 1, Peitoril: 1 }, DONE: { Soleira: 1 }, DELIVERED: { Soleira: 1 } });
+
+    // O resto foi produzido: junta com o que já estava em "Produzido", no cartão principal.
+    const junto = await move(admin, cartao.id, { status: 'DONE' });
+    expect(junto).toMatchObject({ id: cartao.id, pieces: 3 });
+    const cards = await board(admin, quote.id);
+    expect(pecasPorEtapa(cards)).toEqual({ DONE: { Soleira: 2, Peitoril: 1 }, DELIVERED: { Soleira: 1 } });
+    [cartao] = cards.filter((card: any) => card.status === 'DONE');
+    expect(cartao.id).toBe(junto.id);
+  });
+
+  it('editar o orçamento não desfaz a divisão por peças', async () => {
+    const quote = await approvedQuote(admin, [soleiras]);
+    const [cartao] = await board(admin, quote.id);
+    await move(admin, cartao.id, { status: 'DONE', pieces: { [chaves(cartao).Soleira]: 2 } });
+    const saved = (await request('GET', `/quotes/${quote.id}`, admin)).json();
+    const items = saved.items.map(itemSalvoParaEntrada);
+    items[0].components[1].lengthMm = 1200;
+    const edited = await request('PUT', `/quotes/${quote.id}`, admin, { customerId: saved.customerId, expectedUpdatedAt: saved.updatedAt, discountAmount: saved.discountAmount, notes: saved.notes, validUntil: saved.validUntil, items });
+    expect(edited.statusCode, edited.body).toBe(200);
+    expect(pecasPorEtapa(await board(admin, quote.id))).toEqual({ TODO: { Soleira: 1, Peitoril: 1 }, DONE: { Soleira: 2 } });
+  });
+
+  it('nota de entrega: escolhe quantas peças entrega, marca quantas faltam e, na última, manda o orçamento para o Histórico', async () => {
+    const quote = await approvedQuote(admin, [['Cozinha', [{ label: 'Bancada', componentType: 'COUNTER', quantity: 1 }, { label: 'Rodabanca', componentType: 'BACKSPLASH', quantity: 2 }]], 'Banheiro']);
+    const entregas = async () => { const response = await request('GET', `/quotes/${quote.id}/entregas`, admin); expect(response.statusCode, response.body).toBe(200); return response.json(); };
+    const entregar = (itemId: string, pieces: object) => request('POST', `/quotes/${quote.id}/items/${itemId}/entregas`, admin, { pieces });
+    let situacao = await entregas();
+    expect(situacao).toMatchObject({ canDeliver: true, reason: null });
+    const cozinha = situacao.projects.find((projeto: any) => projeto.name === 'Cozinha');
+    const banheiro = situacao.projects.find((projeto: any) => projeto.name === 'Banheiro');
+    const chave = Object.fromEntries(cozinha.pieces.map((peca: any) => [peca.name, peca.key]));
+    expect(cozinha.pieces.map((peca: any) => [peca.name, peca.quantity, peca.delivered, peca.ready, peca.inProduction])).toEqual([['Bancada', 1, 0, 0, 1], ['Rodabanca', 2, 0, 0, 2]]);
+    await move(admin, cozinha.id, { status: 'DONE' });
+
+    const primeira = await entregar(cozinha.id, { [chave.Rodabanca]: 1 });
+    expect(primeira.statusCode, primeira.body).toBe(201);
+    expect(primeira.json()).toMatchObject({ number: `ENT-${quote.number.replace(/^[A-Za-z]+-/, '')}.1`, quoteDelivered: false });
+    situacao = await entregas();
+    const depois = situacao.projects.find((projeto: any) => projeto.id === cozinha.id);
+    expect(depois.pieces.map((peca: any) => [peca.name, peca.delivered, peca.ready])).toEqual([['Bancada', 0, 1], ['Rodabanca', 1, 1]]);
+    expect(depois.notes).toEqual([expect.objectContaining({ id: primeira.json().id, number: primeira.json().number, pieces: 1 })]);
+    expect(pecasPorEtapa((await board(admin, quote.id)).filter((card: any) => card.projectId === cozinha.id))).toEqual({ DONE: { Bancada: 1, Rodabanca: 1 }, DELIVERED: { Rodabanca: 1 } });
+
+    const pdf = await request('GET', `/quotes/${quote.id}/entregas/${primeira.json().id}/pdf`, admin);
+    expect(pdf.statusCode).toBe(200);
+    expect(pdf.headers['content-type']).toContain('application/pdf');
+    const dir = mkdtempSync(join(tmpdir(), 'nota-entrega-'));
+    writeFileSync(join(dir, 'nota.pdf'), pdf.rawPayload);
+    const texto = execFileSync('pdftotext', ['-layout', join(dir, 'nota.pdf'), '-'], { encoding: 'utf8', timeout: 10000 });
+    rmSync(dir, { recursive: true, force: true });
+    for (const trecho of ['NOTA DE ENTREGA E CONFERÊNCIA', primeira.json().number, 'Cozinha', 'Entrega parcial — 1 peça nesta nota. Ainda faltam 2 peças, listadas abaixo.', 'Peças que ainda faltam entregar', 'Conferido', 'Total de peças', `${primeira.json().number} · Página 1 de 1`]) expect(texto).toContain(trecho);
+
+    expect((await entregar(cozinha.id, { [chave.Rodabanca]: 2 })).statusCode).toBe(422);
+    const segunda = await entregar(cozinha.id, { [chave.Bancada]: 1, [chave.Rodabanca]: 1 });
+    expect(segunda.json()).toMatchObject({ number: expect.stringMatching(/\.2$/), quoteDelivered: false });
+    expect((await board(admin, quote.id)).filter((card: any) => card.projectId === cozinha.id)).toEqual([expect.objectContaining({ id: cozinha.id, status: 'DELIVERED', pieces: 3 })]);
+
+    // O banheiro nem começou: a entrega tira direto de "A fazer" e fecha o orçamento.
+    const ultima = await entregar(banheiro.id, { [banheiro.pieces[0].key]: 1 });
+    expect(ultima.json()).toMatchObject({ quoteDelivered: true });
+    expect((await request('GET', `/quotes/${quote.id}`, admin)).json().executionStatus).toBe('COMPLETED');
+    expect(await entregas()).toMatchObject({ canDeliver: false, reason: 'Este orçamento já foi entregue.' });
+    expect((await entregar(banheiro.id, { [banheiro.pieces[0].key]: 1 })).statusCode).toBe(409);
+    // As notas continuam reimprimíveis.
+    expect((await request('GET', `/quotes/${quote.id}/entregas/${ultima.json().id}/pdf`, admin)).statusCode).toBe(200);
+  });
+
+  it('só registra entrega de orçamento em execução e do próprio vendedor', async () => {
+    const naoIniciado = await approvedQuote(admin, ['Lavabo'], 'NOT_STARTED');
+    const situacao = (await request('GET', `/quotes/${naoIniciado.id}/entregas`, admin)).json();
+    expect(situacao).toMatchObject({ canDeliver: false, reason: 'Inicie o serviço para registrar entregas.' });
+    const projeto = situacao.projects[0];
+    const bloqueada = await request('POST', `/quotes/${naoIniciado.id}/items/${projeto.id}/entregas`, admin, { pieces: { [projeto.pieces[0].key]: 1 } });
+    expect(bloqueada.statusCode).toBe(409);
+    const seller = await login('fluxo-vendedor@example.test', 'FluxoTest@2026');
+    expect((await request('GET', `/quotes/${naoIniciado.id}/entregas`, seller)).statusCode).toBe(404);
   });
 });

@@ -1,5 +1,5 @@
 import { escopoClientes, escopoOrcamentos } from '../../compartilhado/acesso.js';
-import type { Prisma, ProjectWorkflowStatus } from '@prisma/client';
+import type { Prisma, WorkflowCard } from '@prisma/client';
 import { arredondarMoeda, calcularLimiteDesconto, podeEditarOrcamento, itemSalvoParaEntrada, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularSubtotalMaterial, calcularAreaRetangularM2, calcularTotalOrcamento, podeUsarM2Manual, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
 import { AppError, type AuthUser } from '../../compartilhado/http.js';
 import type { z } from 'zod';
@@ -140,20 +140,26 @@ export async function montarItem(tx: Tx, input: QuoteItemInput, user: AuthUser, 
   return { projectName: input.projectName ?? null, environment: input.environment ?? null, productTypeId: productType.id, materialId: material.id, materialNameSnapshot: material.name, billingUnitSnapshot: material.billingUnit, unitPriceSnapshot: unitPrice, quantity: input.quantity, calculationMode: input.calculationMode, manualJustification: input.manualJustification, drawingSchemaVersion: input.drawingData ? 1 : null, drawingData: input.drawingData, billedQuantity, materialSubtotal, servicesSubtotal, total, services: serviceRows, components: componentRowsWithValues, cutouts: cutoutRows };
 }
 
-type EstadoFluxo = { workflowStatus: ProjectWorkflowStatus; workflowPosition: number; workflowCompletedAt?: Date | null };
-
-/** Projeto novo entra no fim da coluna "A fazer" do fluxo de trabalho. */
-async function estadoFluxoNovo(tx: Tx): Promise<EstadoFluxo> {
-  const ultimo = await tx.quoteItem.aggregate({ where: { workflowStatus: 'TODO' }, _max: { workflowPosition: true } });
-  return { workflowStatus: 'TODO', workflowPosition: (ultimo._max.workflowPosition ?? -1) + 1 };
+/**
+ * Cartões do projeto no fluxo de trabalho. Projeto novo ganha o cartão
+ * principal (mesmo id do projeto) no fim de "A fazer"; projeto recriado por uma
+ * edição volta com os cartões que tinha, na mesma coluna e posição.
+ */
+async function criarCartoesFluxo(tx: Tx, quoteItemId: string, preservados?: WorkflowCard[]) {
+  if (preservados?.length) {
+    await tx.workflowCard.createMany({ data: preservados.map(({ pieces, ...cartao }) => ({ ...cartao, quoteItemId, ...(pieces === null ? {} : { pieces: pieces as Prisma.InputJsonValue }) })) });
+    return;
+  }
+  const ultimo = await tx.workflowCard.aggregate({ where: { status: 'TODO' }, _max: { position: true } });
+  await tx.workflowCard.create({ data: { id: quoteItemId, quoteItemId, status: 'TODO', position: (ultimo._max.position ?? -1) + 1 } });
 }
 
-async function persistirItem(tx: Tx, quoteId: string, item: BuiltItem, existingId?: string, fluxo?: EstadoFluxo) {
-  const estadoFluxo = fluxo ?? await estadoFluxoNovo(tx);
-  const created = await tx.quoteItem.create({ data: { ...(existingId ? { id: existingId } : {}), ...estadoFluxo, quoteId, projectName: item.projectName, environment: item.environment, productTypeId: item.productTypeId, materialId: item.materialId, materialNameSnapshot: item.materialNameSnapshot, billingUnitSnapshot: item.billingUnitSnapshot, unitPriceSnapshot: item.unitPriceSnapshot, quantity: item.quantity, calculationMode: item.calculationMode, manualJustification: item.manualJustification, drawingSchemaVersion: item.drawingSchemaVersion, drawingData: item.drawingData, billedQuantity: item.billedQuantity, materialSubtotal: item.materialSubtotal, servicesSubtotal: item.servicesSubtotal, total: item.total, services: { create: item.services }, components: { create: item.components.map((component: any) => ({ ...(component.id ? { id: component.id } : {}), materialId: component.materialId, materialNameSnapshot: component.materialNameSnapshot, billingUnitSnapshot: component.billingUnitSnapshot, unitPriceSnapshot: component.unitPriceSnapshot, label: component.label, componentType: component.componentType, orientation: component.orientation, shape: component.shape, lengthMm: component.lengthMm, widthMm: component.widthMm, quantity: component.quantity, billableArea: component.billableArea, subtotal: component.subtotal, calculatedTotal: component.calculatedTotal, appliedTotal: component.appliedTotal, hasManualPriceOverride: component.hasManualPriceOverride, sortOrder: component.sortOrder, edges: { create: component.edges } })) } }, include: { components: { orderBy: { sortOrder: 'asc' } } } });
+async function persistirItem(tx: Tx, quoteId: string, item: BuiltItem, existingId?: string, cartoesFluxo?: WorkflowCard[]) {
+  const created = await tx.quoteItem.create({ data: { ...(existingId ? { id: existingId } : {}), quoteId, projectName: item.projectName, environment: item.environment, productTypeId: item.productTypeId, materialId: item.materialId, materialNameSnapshot: item.materialNameSnapshot, billingUnitSnapshot: item.billingUnitSnapshot, unitPriceSnapshot: item.unitPriceSnapshot, quantity: item.quantity, calculationMode: item.calculationMode, manualJustification: item.manualJustification, drawingSchemaVersion: item.drawingSchemaVersion, drawingData: item.drawingData, billedQuantity: item.billedQuantity, materialSubtotal: item.materialSubtotal, servicesSubtotal: item.servicesSubtotal, total: item.total, services: { create: item.services }, components: { create: item.components.map((component: any) => ({ ...(component.id ? { id: component.id } : {}), materialId: component.materialId, materialNameSnapshot: component.materialNameSnapshot, billingUnitSnapshot: component.billingUnitSnapshot, unitPriceSnapshot: component.unitPriceSnapshot, label: component.label, componentType: component.componentType, orientation: component.orientation, shape: component.shape, lengthMm: component.lengthMm, widthMm: component.widthMm, quantity: component.quantity, billableArea: component.billableArea, subtotal: component.subtotal, calculatedTotal: component.calculatedTotal, appliedTotal: component.appliedTotal, hasManualPriceOverride: component.hasManualPriceOverride, sortOrder: component.sortOrder, edges: { create: component.edges } })) } }, include: { components: { orderBy: { sortOrder: 'asc' } } } });
   // Mesma razão do id de componente: preserva o id do cliente desde a criação,
   // pra productionPlan.cutouts (sourceCutoutId) não precisar reconciliar depois.
   for (const cutout of item.cutouts) { const component = cutout.componentIndex === undefined ? undefined : created.components[cutout.componentIndex]; await tx.quoteItemCutout.create({ data: { ...(cutout.id ? { id: cutout.id } : {}), quoteItemId: created.id, componentId: component?.id, cutoutType: cutout.cutoutType, sizePending: cutout.sizePending ?? false, label: cutout.label, lengthMm: cutout.lengthMm, widthMm: cutout.widthMm, diameterMm: cutout.diameterMm, positionX: cutout.positionX, positionY: cutout.positionY, quantity: cutout.quantity, serviceId: cutout.serviceId, serviceNameSnapshot: cutout.serviceNameSnapshot, billingUnitSnapshot: cutout.billingUnitSnapshot, unitPriceSnapshot: cutout.unitPriceSnapshot, billedQuantity: cutout.billedQuantity, calculatedSubtotal: cutout.calculatedSubtotal, appliedSubtotal: cutout.appliedSubtotal, hasManualPriceOverride: cutout.hasManualPriceOverride, sortOrder: cutout.sortOrder } }); }
+  await criarCartoesFluxo(tx, created.id, cartoesFluxo);
   return tx.quoteItem.findUniqueOrThrow({ where: { id: created.id }, include: quoteInclude.items.include });
 }
 
@@ -204,9 +210,10 @@ export async function editarOrcamento(tx: Tx, id: string, input: z.infer<typeof 
       grossTotal = calcularTotalOrcamento([grossTotal, Number(saved.total)]); continue;
     }
     const built = await montarItem(tx, item, user, saved);
+    // Recriar o projeto não o tira da coluna nem da posição em que está no Kanban (nem desfaz a divisão por peças).
+    const cartoesFluxo = saved ? await tx.workflowCard.findMany({ where: { quoteItemId: saved.id } }) : undefined;
     if (saved) await tx.quoteItem.delete({ where: { id: saved.id } });
-    // Recriar o projeto não o tira da coluna nem da posição em que está no Kanban.
-    await persistirItem(tx, id, built, saved?.id, saved ? { workflowStatus: saved.workflowStatus, workflowPosition: saved.workflowPosition, workflowCompletedAt: saved.workflowCompletedAt } : undefined);
+    await persistirItem(tx, id, built, saved?.id, cartoesFluxo);
     grossTotal = calcularTotalOrcamento([grossTotal, built.total]);
   }
   await tx.quoteItem.deleteMany({ where: { quoteId: id, id: { in: before.items.filter((item) => !ids.includes(item.id)).map((item) => item.id) } } });

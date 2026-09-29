@@ -1,14 +1,25 @@
 import { dataAtualEmpresa, dataConclusaoAoMover, deslocarDataCalendario, etapaConcluida, PROJECT_WORKFLOW_STATUSES, posicaoEntre, type FaseOrcamentoFluxo, type ProjectWorkflowStatus } from '@inova/domain';
 
 export type ResponsavelFluxo = { id: string; name: string | null; color: string };
+/** Peça de um cartão: a chave identifica a peça do projeto; `quantity` é quantas unidades estão neste cartão. */
+export type PecaCartao = { key: string; name: string; lengthMm: number | null; widthMm: number | null; quantity: number };
 export type CartaoFluxo = {
-  id: string; name: string; status: ProjectWorkflowStatus; position: number; completedAt: string | null; pieces: number;
+  id: string; name: string; status: ProjectWorkflowStatus; position: number; completedAt: string | null;
+  /** Peças deste cartão. Um projeto dividido (parte produzida/entregue) tem um cartão por etapa. */
+  pieces: number;
+  projectId: string;
+  /** Peças do projeto inteiro: maior que `pieces` quando o projeto foi dividido. */
+  totalPieces: number;
+  pieceList: PecaCartao[];
   /** Projeto parado por falta de material (marcado no próprio cartão). */
   materialMissing?: boolean;
   quote: { id: string; number: string; customerId: string; customerName: string; deadline: string | null; worker: ResponsavelFluxo | null; phase: FaseOrcamentoFluxo };
 };
-/** Resposta do movimento: `quoteDelivered` indica que o último projeto foi entregue e o orçamento foi para o Histórico. */
-export type CartaoMovido = CartaoFluxo & { quoteDelivered: boolean };
+/**
+ * Resposta do movimento: `quoteDelivered` indica que o último projeto foi entregue e o orçamento foi para o Histórico;
+ * `projectCards` são todos os cartões do projeto depois do movimento (divididos ou juntados).
+ */
+export type CartaoMovido = CartaoFluxo & { quoteDelivered: boolean; projectCards: CartaoFluxo[] };
 /**
  * `workerId` aceita também SEM_RESPONSAVEL, para achar orçamentos sem funcionário definido.
  * `entrega` filtra pelo prazo final do orçamento (a mesma data do cartão); `material`, pela marca de falta de material.
@@ -61,6 +72,17 @@ export function filtrarCartoes(cartoes: CartaoFluxo[], filtro: FiltroFluxo, hoje
 
 export const nomeResponsavel = (responsavel: ResponsavelFluxo) => responsavel.name?.trim() || 'Funcionário sem nome';
 export const rotuloPecas = (pecas: number) => `${pecas} ${pecas === 1 ? 'peça' : 'peças'}`;
+/** "3 peças" ou, com o projeto dividido, "2 de 5 peças". */
+export const rotuloPecasCartao = (cartao: Pick<CartaoFluxo, 'pieces' | 'totalPieces'>) => cartao.totalPieces > cartao.pieces ? `${cartao.pieces} de ${cartao.totalPieces} peças` : rotuloPecas(cartao.pieces);
+/** Troca os cartões de um projeto pelos que o servidor devolveu (o projeto pode ter sido dividido ou juntado). */
+export const trocarCartoesDoProjeto = (cartoes: CartaoFluxo[], projectId: string, novos: CartaoFluxo[]) => [...cartoes.filter((cartao) => cartao.projectId !== projectId), ...novos];
+
+/** Pergunta "produziu/entregou todas?" antes de levar um cartão com mais de uma peça para Produzido ou Entregue (só avançando). */
+export function perguntarPecas(cartao: CartaoFluxo, status: ProjectWorkflowStatus) {
+  if (cartao.pieces < 2 || cartao.status === status) return false;
+  if (status === 'DONE') return cartao.status === 'TODO' || cartao.status === 'IN_PROGRESS';
+  return status === 'DELIVERED';
+}
 
 const ordemDoQuadro = (a: CartaoFluxo, b: CartaoFluxo) => a.position - b.position || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
@@ -98,16 +120,21 @@ export function moverCartaoLocal(cartoes: CartaoFluxo[], id: string, status: Pro
   return { cartoes: atualizados, afterId, beforeId };
 }
 
-/** Um resumo por orçamento, com o progresso dos projetos e o prazo mais próximo primeiro dentro de cada fase. */
+/**
+ * Um resumo por orçamento, com o progresso em peças (um projeto pode estar parte
+ * produzido, parte não) e o prazo mais próximo primeiro dentro de cada fase.
+ */
 export function resumirPorOrcamento(cartoes: CartaoFluxo[]): ResumoOrcamentoFluxo[] {
   const grupos = new Map<string, CartaoFluxo[]>();
   for (const cartao of cartoes) grupos.set(cartao.quote.id, [...(grupos.get(cartao.quote.id) ?? []), cartao]);
+  const pecas = (lista: CartaoFluxo[]) => lista.reduce((total, cartao) => total + cartao.pieces, 0);
   const resumos = [...grupos.values()].map((projetos) => {
-    const concluidos = projetos.filter((projeto) => etapaConcluida(projeto.status)).length;
-    const entregues = projetos.filter((projeto) => projeto.status === 'DELIVERED').length;
-    // Mesma ordem dos projetos no orçamento (ids criados em sequência).
-    const ordenados = [...projetos].sort((a, b) => (a.id < b.id ? -1 : 1));
-    return { quote: projetos[0].quote, projetos: ordenados, concluidos, entregues, total: projetos.length, finalizado: projetos[0].quote.phase === 'IN_EXECUTION' && concluidos === projetos.length };
+    const concluidos = pecas(projetos.filter((projeto) => etapaConcluida(projeto.status)));
+    const entregues = pecas(projetos.filter((projeto) => projeto.status === 'DELIVERED'));
+    const total = pecas(projetos);
+    // Mesma ordem dos projetos no orçamento (ids criados em sequência); as partes de um projeto, pela etapa.
+    const ordenados = [...projetos].sort((a, b) => (a.projectId < b.projectId ? -1 : a.projectId > b.projectId ? 1 : PROJECT_WORKFLOW_STATUSES.indexOf(a.status) - PROJECT_WORKFLOW_STATUSES.indexOf(b.status)));
+    return { quote: projetos[0].quote, projetos: ordenados, concluidos, entregues, total, finalizado: projetos[0].quote.phase === 'IN_EXECUTION' && concluidos === total };
   });
   // Em execução primeiro, depois os finalizados (prontos para entregar), por fim os que ainda não iniciaram.
   return resumos.sort((a, b) => ORDEM_FASE[a.quote.phase] - ORDEM_FASE[b.quote.phase] || Number(a.finalizado) - Number(b.finalizado) || porPrazoENumero(a.quote, b.quote));
@@ -123,4 +150,11 @@ export function entregaFinalDoOrcamento(cartoes: CartaoFluxo[], id: string) {
 export function formatarDataFluxo(data: string) {
   const [ano, mes, dia] = data.slice(0, 10).split('-');
   return `${dia}/${mes}/${ano}`;
+}
+
+/** Medida da peça em metros (ex.: "1,20 × 0,60 m"); peça sem medida (área manual) fica sem texto. */
+export function medidaPeca(peca: { lengthMm: number | null; widthMm: number | null }) {
+  if (!peca.lengthMm || !peca.widthMm) return '';
+  const metros = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+  return `${metros(peca.lengthMm)} × ${metros(peca.widthMm)} m`;
 }

@@ -17,6 +17,7 @@ import { registrarRotasFuncionarios } from './modulos/funcionarios/worker.routes
 import { registrarRotasFluxo } from './modulos/fluxo/workflow.routes.js';
 import { AppError } from './compartilhado/http.js';
 import { registrarRotasRemontagem } from './modulos/remontagem/remount.routes.js';
+import { registrarRotasEntregas } from './modulos/entregas/entrega.routes.js';
 
 export async function criarAplicacao() {
   const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
@@ -30,6 +31,7 @@ export async function criarAplicacao() {
   app.register(registrarRotasClientes, { prefix: '/customers' });
   app.register(registrarRotasOrcamentos, { prefix: '/quotes' });
   app.register(registrarRotasRemontagem, { prefix: '/quotes' });
+  app.register(registrarRotasEntregas, { prefix: '/quotes' });
   app.register(registrarRotasUsuarios, { prefix: '/users' });
   app.register(registrarRotasDashboard, { prefix: '/dashboard' });
   app.register(registrarRotasAuditoria, { prefix: '/audit' });

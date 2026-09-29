@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { PROJECT_WORKFLOW_LABELS, type ProjectWorkflowStatus } from '@inova/domain';
 import { QuadroProjetos } from '../../componentes/fluxo/QuadroProjetos';
 import { ResumoOrcamentos } from '../../componentes/fluxo/ResumoOrcamentos';
+import { PerguntaPecas, type PedidoPecas } from '../../componentes/fluxo/PerguntaPecas';
+import { somaQuantidades, type QuantidadesPecas } from '../../componentes/fluxo/SeletorPecas';
 import { api } from '../../utilitarios/api';
-import { entregaFinalDoOrcamento, filtrarCartoes, moverCartaoLocal, nomeResponsavel, OPCOES_ENTREGA, OPCOES_MATERIAL, SEM_RESPONSAVEL, type CartaoFluxo, type CartaoMovido, type FiltroEntrega, type FiltroFluxo, type FiltroMaterial } from '../../utilitarios/fluxo';
+import { entregaFinalDoOrcamento, filtrarCartoes, moverCartaoLocal, nomeResponsavel, OPCOES_ENTREGA, OPCOES_MATERIAL, perguntarPecas, rotuloPecas, SEM_RESPONSAVEL, trocarCartoesDoProjeto, type CartaoFluxo, type CartaoMovido, type FiltroEntrega, type FiltroFluxo, type FiltroMaterial } from '../../utilitarios/fluxo';
 import { AbasFiltro, CampoFiltro, Icone, MenuSelecao, ModalFiltros, useCelular } from '../../componentes/filtros/Filtros';
 import '../../componentes/fluxo/fluxo.css';
 
@@ -25,6 +27,10 @@ export default function FluxoTrabalhoPage() {
   const cartoesAtuais = useRef(cartoes);
   cartoesAtuais.current = cartoes;
   const [aviso, setAviso] = useState('');
+  // Cartão com várias peças indo para Produzido/Entregue: espera a resposta de "produziu todas?".
+  const [pergunta, setPergunta] = useState<PedidoPecas & { idsDestino: string[]; origem?: 'menu' } | null>(null);
+  const [salvandoPecas, setSalvandoPecas] = useState(false);
+  const [erroPecas, setErroPecas] = useState('');
   const temporizadorAviso = useRef<number | undefined>(undefined);
   const filtrosAtivos = [filtro.workerId, filtro.customerId, filtro.quoteId, filtro.entrega !== 'TODAS', filtro.material].filter(Boolean).length;
   const limparFiltros = () => setFiltro(FILTRO_VAZIO);
@@ -78,10 +84,11 @@ export default function FluxoTrabalhoPage() {
     }
   }
 
-  async function mover(id: string, status: ProjectWorkflowStatus, idsDestino: string[], origem?: 'menu') {
+  async function mover(id: string, status: ProjectWorkflowStatus, idsDestino: string[], origem?: 'menu', respondido = false) {
     const atuais = cartoesAtuais.current;
     const cartao = atuais?.find((entrada) => entrada.id === id);
     if (!atuais || !cartao) return;
+    if (!respondido && perguntarPecas(cartao, status)) { setErroPecas(''); setPergunta({ cartao, status, idsDestino, origem }); return; }
     // Entregar o último projeto encerra o orçamento, que sai de Orçamentos para o Histórico: confirma antes.
     const entregaFinal = status === 'DELIVERED' && cartao.status !== 'DELIVERED' && entregaFinalDoOrcamento(atuais, id);
     if (entregaFinal && !window.confirm(`Com este, todos os projetos de ${cartao.quote.number} (${cartao.quote.customerName}) estarão entregues. O orçamento será marcado como entregue e vai de Orçamentos para o Histórico. Confirmar?`)) return;
@@ -95,7 +102,8 @@ export default function FluxoTrabalhoPage() {
         setCartoes((atual) => atual?.filter((entrada) => entrada.quote.id !== salvo.quote.id) ?? atual);
         avisar(`${salvo.quote.number} · ${salvo.quote.customerName} foi entregue e saiu do quadro. Ele está no Histórico; para reabrir, use "Marcar em retrabalho" no orçamento.`);
       } else {
-        if (versoes.current[id] === versao) setCartoes((atual) => atual?.map((cartao) => cartao.id === id ? salvo : cartao) ?? atual);
+        // O servidor devolve todos os cartões do projeto: um cartão pode ter se juntado a outro na mesma etapa.
+        if (versoes.current[id] === versao) setCartoes((atual) => atual && trocarCartoesDoProjeto(atual, salvo.projectId, salvo.projectCards));
         // Pelo menu do celular o cartão sai da etapa que está na tela: o aviso confirma para onde foi.
         if (origem === 'menu') avisar(`${cartao.name} foi para "${PROJECT_WORKFLOW_LABELS[status]}".`, true);
       }
@@ -104,6 +112,25 @@ export default function FluxoTrabalhoPage() {
       setErro(cause instanceof Error ? cause.message : 'Não foi possível mover o projeto.');
       setTentativa((valor) => valor + 1);
     }
+  }
+
+  /** "Não, só algumas": as peças marcadas vão para a etapa num cartão novo; as outras ficam onde estavam. */
+  async function moverParte(pecas: QuantidadesPecas) {
+    if (!pergunta) return;
+    const { cartao, status, idsDestino, origem } = pergunta;
+    const movidas = somaQuantidades(pecas);
+    if (movidas === cartao.pieces) { setPergunta(null); void mover(cartao.id, status, idsDestino, origem, true); return; }
+    const indice = idsDestino.indexOf(cartao.id);
+    setSalvandoPecas(true); setErroPecas('');
+    try {
+      const salvo = await api<CartaoMovido>(`/workflow/projects/${cartao.id}/move`, { method: 'PATCH', body: JSON.stringify({ status, afterId: idsDestino[indice - 1] ?? null, beforeId: idsDestino[indice + 1] ?? null, pieces: pecas }) });
+      setCartoes((atual) => atual && trocarCartoesDoProjeto(atual, cartao.projectId, salvo.projectCards));
+      setPergunta(null);
+      const resto = cartao.pieces - movidas;
+      avisar(`${cartao.name}: ${rotuloPecas(movidas)} ${movidas === 1 ? 'foi' : 'foram'} para "${PROJECT_WORKFLOW_LABELS[status]}"; ${rotuloPecas(resto)} ${resto === 1 ? 'continua' : 'continuam'} em "${PROJECT_WORKFLOW_LABELS[cartao.status]}".`, true);
+    } catch (cause) {
+      setErroPecas(cause instanceof Error ? cause.message : 'Não foi possível mover as peças.');
+    } finally { setSalvandoPecas(false); }
   }
 
   return <main className="list-page fluxo-page">
@@ -145,6 +172,8 @@ export default function FluxoTrabalhoPage() {
     <p className="fluxo-legenda"><span className="legenda-vencido">Prazo vencido</span><span className="legenda-proximo">Vence em até 7 dias</span></p>
     {aviso && <p role="status" className="fluxo-aviso">{aviso} <button type="button" className="text-button" aria-label="Fechar aviso" onClick={() => avisar('')}>✕</button></p>}
     {erro && <p role="alert" className="form-error">{erro} {!cartoes && <button type="button" className="text-button" onClick={() => { setErro(''); setTentativa((valor) => valor + 1); }}>Tentar novamente</button>}</p>}
+    <PerguntaPecas pedido={pergunta} salvando={salvandoPecas} erro={erroPecas} aoCancelar={() => { if (!salvandoPecas) setPergunta(null); }} aoParte={(pecas) => void moverParte(pecas)}
+      aoTodas={() => { if (!pergunta) return; const { cartao, status, idsDestino, origem } = pergunta; setPergunta(null); void mover(cartao.id, status, idsDestino, origem, true); }} />
     {!cartoes ? !erro && <p className="empty">Carregando projetos…</p>
       : aba === 'QUADRO' ? <QuadroProjetos cartoes={visiveis} onMover={mover} onFaltaMaterial={alternarFaltaMaterial} /> : <ResumoOrcamentos cartoes={visiveis} />}
   </main>;

@@ -32,6 +32,8 @@
 .fluxo-cartao small { color: var(--muted); font-size: 12px; }
 .fluxo-cartao-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; }
 .fluxo-pecas { flex: none; color: var(--ink); font-size: 11px; font-weight: 700; }
+/* Projeto dividido: "2 de 5 peças" em destaque, para lembrar que o resto está em outra etapa. */
+.fluxo-pecas-parte { padding: 1px 7px; border: 1px dashed var(--green); border-radius: 999px; color: var(--green); }
 .fluxo-responsavel { display: inline-flex; align-items: center; gap: 6px; }
 .fluxo-responsavel i { flex: none; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1px #0000001f; }
 .fluxo-responsavel.sem-responsavel { font-style: italic; }

@@ -8,6 +8,7 @@ export const pdfMoney = (value: number) => `R$ ${value.toLocaleString('pt-BR', {
 export const pdfDate = (value: Date | string) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 /** Mantém nomes de materiais em uma única linha, inclusive quando vierem do cadastro com quebra de linha. */
 export const normalizarNomeMaterial = (value: unknown) => String(value ?? '').replace(/\s+/g, ' ').trim();
+export const CNPJ_EMPRESA = '32.298.601/0001-19';
 export function cabecalhoEmpresaPdf(pdf: PDFKit.PDFDocument, title: string, quote: { number: string }) {
   pdf.fillColor('#b6811e').rect(36, 34, 523, 5).fill();
   if (fs.existsSync(logoPath)) pdf.image(logoPath, 36, 42, { fit: [64, 49] });
@@ -15,7 +16,7 @@ export function cabecalhoEmpresaPdf(pdf: PDFKit.PDFDocument, title: string, quot
   pdf.font('Helvetica').fontSize(8).fillColor('#5f5a52')
     .text('Av. Visconde de Itiúba, Nº 224 - Flores - Manaus AM', 112, 65, { width: 280 })
     .text('Contatos: (92) 98181-7980 / 93994-1402', 112, 77, { width: 280 })
-    .text('CNPJ: 32.298.601/0001-19', 112, 89, { width: 280 });
+    .text(`CNPJ: ${CNPJ_EMPRESA}`, 112, 89, { width: 280 });
   pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(title.length > 24 ? 9 : 13).text(title, 385, 49, { width: 174, align: 'right' });
   pdf.font('Helvetica-Bold').fontSize(9).fillColor('#b6811e').text(quote.number, 385, title.length > 24 ? 90 : 67, { width: 174, align: 'right' });
   pdf.moveTo(36, 114).lineTo(559, 114).stroke('#b8b2a8');

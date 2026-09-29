@@ -14,7 +14,7 @@ export async function registrarRotasFluxo(app: FastifyInstance) {
     const input = moverProjetoSchema.parse(request.body);
     const { card, previousStatus } = await prisma.$transaction((tx) => moverProjeto(tx, id, input, request.user));
     // Reordenar na mesma coluna é frequente e não é auditado; a troca de coluna é.
-    if (previousStatus !== card.status) await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: id, action: 'WORKFLOW_STATUS_CHANGED', previous: { status: previousStatus }, current: { status: card.status, quoteId: card.quote.id } } });
+    if (previousStatus !== card.status) await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: card.projectId, action: 'WORKFLOW_STATUS_CHANGED', previous: { status: previousStatus, cardId: id }, current: { status: card.status, quoteId: card.quote.id, cardId: card.id, ...(input.pieces ? { pieces: input.pieces } : {}) } } });
     return card;
   });
 
@@ -22,7 +22,7 @@ export async function registrarRotasFluxo(app: FastifyInstance) {
     const { id } = idSchema.parse(request.params);
     const input = faltaMaterialSchema.parse(request.body);
     const { card, previous } = await prisma.$transaction((tx) => marcarFaltaMaterial(tx, id, input, request.user));
-    if (previous !== card.materialMissing) await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: id, action: 'WORKFLOW_MATERIAL_CHANGED', previous: { materialMissing: previous }, current: { materialMissing: card.materialMissing, quoteId: card.quote.id } } });
+    if (previous !== card.materialMissing) await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: card.projectId, action: 'WORKFLOW_MATERIAL_CHANGED', previous: { materialMissing: previous }, current: { materialMissing: card.materialMissing, quoteId: card.quote.id, cardId: card.id } } });
     return card;
   });
 }

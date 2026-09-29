@@ -16,5 +16,6 @@ export * from './orcamentos/production-plan.js';
 export * from './orcamentos/arquivo-pdf.js';
 export * from './orcamentos/remontagem.js';
 export * from './orcamentos/fluxo.js';
+export * from './orcamentos/pecas-fluxo.js';
 export * from './acesso.js';
 export * from './dashboard.js';
