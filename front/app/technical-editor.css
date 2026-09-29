@@ -151,3 +151,15 @@ html.inova-dark .inova-theme .tec-conferencia :is(.structural, .technical) { col
 html.inova-dark .inova-theme .tec-conferencia .warning { color: #f1d58a; }
 html.inova-dark .inova-theme .tec-conferencia .ok { color: #9fd8b4; }
 @media (min-width: 761px) { .tec-revisoes .tec-acoes > button { flex: 0 0 auto; min-width: 120px; } }
+
+/* Perguntas do desenho livre: folha sobre a parte de baixo do canvas, sem cobrir o traço. */
+.tec-folha-traco { position: absolute; z-index: 5; left: 12px; right: 12px; bottom: 12px; display: grid; gap: 8px; max-width: 520px; margin: 0 auto; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); box-shadow: 0 8px 26px #00000026; }
+.tec-folha-traco.erro { border-color: #e5c9c2; }
+.tec-folha-traco strong { font-size: 15px; }
+.tec-folha-traco p { margin: 0; color: var(--muted); font-size: 13px; }
+.tec-referencia { display: flex; gap: 8px; }
+.tec-referencia input { flex: 1; min-width: 0; min-height: 46px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 17px; }
+@media (max-width: 760px) { .tec-modos { order: -1; width: 100%; } .tec-modos button { flex: 1; min-height: 44px; } .tec-folha-traco { left: 8px; right: 8px; bottom: 8px; } }
+.tec-folha-traco > * { min-width: 0; }
+.tec-referencia input { width: 100%; }
+.tec-referencia .botao-destaque { flex: none; }

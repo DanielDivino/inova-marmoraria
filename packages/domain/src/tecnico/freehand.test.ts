@@ -97,4 +97,14 @@ describe('desenho livre', () => {
     const elipse = Array.from({ length: 80 }, (_, i) => ({ x: 950 + 250 * Math.cos(i * Math.PI / 40), y: 300 + 150 * Math.sin(i * Math.PI / 40) }));
     expect(recorteDoTraco(elipse)).toMatchObject({ shape: 'OVAL', widthMm: 500, lengthMm: 300, x: 950, y: 300 });
   });
+
+  it('reconhece o formato mesmo com a tremida grande de um recorte desenhado pequeno', () => {
+    for (let semente = 1; semente <= 12; semente++) {
+      const pequeno = tracoTorto([{ x: 0, y: 0 }, { x: 400, y: 0 }, { x: 400, y: 150 }, { x: 0, y: 150 }], { tremida: 30, semente, desvioGraus: 0 });
+      expect(recorteDoTraco(pequeno)?.shape).toBe('RECTANGLE');
+      const aleatorio = ruido(semente);
+      const elipse = Array.from({ length: 90 }, (_, i) => ({ x: 200 * Math.cos(i * Math.PI / 45) + aleatorio() * 30, y: 80 * Math.sin(i * Math.PI / 45) + aleatorio() * 30 }));
+      expect(recorteDoTraco(elipse)?.shape).toBe('OVAL');
+    }
+  });
 });

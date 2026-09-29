@@ -1,17 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ajustarRecursosDeBorda, alterarMedidaLado, updatePiece, type Piece, type PieceShape, type Point, type TechnicalDocument } from '@inova/domain/technical';
 import { api } from '../../utilitarios/api';
 import { criarId } from '../../utilitarios/id';
 import { BarraFerramentas } from './BarraFerramentas';
 import { CanvasPlanta } from './CanvasPlanta';
 import { EditorLado } from './EditorLado';
+import { JanelaTraco } from './JanelaTraco';
 import { adicionarPeca, novoRecursoBorda, novoRecursoCorpo } from './operacoes';
 import { PainelMedidas } from './PainelMedidas';
 import { PainelRevisoes } from './PainelRevisoes';
-import { ROTULO_RECURSO, type Ferramenta, type LadoEmEdicao, type Selecao, type TipoBorda, type TipoCorpo } from './tipos';
+import { ROTULO_RECURSO, type Ferramenta, type LadoEmEdicao, type Modo, type Selecao, type TipoBorda, type TipoCorpo } from './tipos';
+import { useDesenhoLivre } from './useDesenhoLivre';
 import { useDocumentoTecnico } from './useDocumentoTecnico';
 import '../../app/technical-editor.css';
 
@@ -31,6 +33,15 @@ export default function EditorTecnico({ designId }: { designId: string }) {
   const [lado, setLado] = useState<LadoEmEdicao>(null);
   const [folha, setFolha] = useState<Folha>(null);
   const [pedidoEnquadrar, setPedidoEnquadrar] = useState(0);
+  const [modo, setModo] = useState<Modo>('MANUAL');
+  const [passoMm, setPassoMm] = useState(10);
+  const livre = useDesenhoLivre({ documento, mudar: tecnico.mudar, aoSelecionar: setSelecao, aoMensagem: tecnico.setMensagem, passoMm });
+  // O modo escolhido fica lembrado neste aparelho (conveniência; sem ele, começa no manual).
+  useEffect(() => { try { const salvo = window.localStorage.getItem('inova-desenho-modo'); if (salvo === 'LIVRE') { setModo('LIVRE'); setFerramenta('TRACO_PECA'); } } catch { /* sem armazenamento local */ } }, []);
+  const trocarModo = (proximo: Modo) => {
+    setModo(proximo); setFerramenta(proximo === 'LIVRE' ? 'TRACO_PECA' : 'SELECIONAR'); setPendenteBorda(null); livre.descartar(); setFolha(null);
+    try { window.localStorage.setItem('inova-desenho-modo', proximo); } catch { /* sem armazenamento local */ }
+  };
 
   // Peça onde entram cubas, furos e faixas: a selecionada, a do componente/vértice selecionado ou a única que existe.
   const pecaAtiva = useMemo<Piece | undefined>(() => {
@@ -103,6 +114,10 @@ export default function EditorTecnico({ designId }: { designId: string }) {
     {tecnico.conflito && <p className="tec-alerta" role="alert">Este desenho foi alterado em outra sessão. Suas mudanças não foram salvas por cima. <button type="button" className="text-button" onClick={() => void tecnico.carregar()}>Recarregar o desenho salvo</button></p>}
     {tecnico.mensagem && !tecnico.conflito && <p className="tec-mensagem" role="status">{tecnico.mensagem}{pendenteBorda && <button type="button" className="text-button" onClick={() => { setPendenteBorda(null); tecnico.setMensagem(''); }}>Cancelar</button>}</p>}
     <div className="tec-barra-topo">
+      <div className="tec-modos" role="group" aria-label="Modo de desenho">
+        <button type="button" aria-pressed={modo === 'LIVRE'} onClick={() => trocarModo('LIVRE')}>✍ Desenho livre</button>
+        <button type="button" aria-pressed={modo === 'MANUAL'} onClick={() => trocarModo('MANUAL')}>📐 Manual</button>
+      </div>
       <span className="tec-regra">As alterações deste desenho não alteram o valor do orçamento.</span>
       <div className="tec-folhas" role="group" aria-label="Painéis">
         <button type="button" aria-pressed={folha === 'medidas'} onClick={() => setFolha((atual) => atual === 'medidas' ? null : 'medidas')}>Medidas</button>
@@ -110,13 +125,16 @@ export default function EditorTecnico({ designId }: { designId: string }) {
       </div>
     </div>
     <div className="tec-area">
-      <BarraFerramentas modo="MANUAL" ferramenta={ferramenta} pendenteBorda={pendenteBorda} temPeca={!!pecaAtiva} podeDesfazer={tecnico.podeDesfazer} podeRefazer={tecnico.podeRefazer}
-        temTraco={false} passoMm={10} aoPasso={() => undefined} aoDesfazerTraco={() => undefined} aoLimpar={() => undefined}
+      <BarraFerramentas modo={modo} ferramenta={ferramenta} pendenteBorda={pendenteBorda} temPeca={!!pecaAtiva || documento.pieces.length > 0} podeDesfazer={tecnico.podeDesfazer} podeRefazer={tecnico.podeRefazer}
+        temTraco={livre.temTraco} passoMm={passoMm} aoPasso={setPassoMm} aoDesfazerTraco={() => livre.temTraco ? livre.descartar() : tecnico.desfazer()} aoLimpar={livre.limpar}
         aoFerramenta={escolherFerramenta} aoAdicionarForma={adicionarForma} aoAdicionarCorpo={adicionarCorpo} aoEscolherBorda={escolherBorda} aoDesfazer={tecnico.desfazer} aoRefazer={tecnico.refazer} />
       <div className="tec-vistas">
-        <CanvasPlanta documento={documento} selecao={selecao} ferramenta={ferramenta} pendenteBorda={pendenteBorda} tracoPendente={null} pedidoEnquadrar={pedidoEnquadrar}
-          aoSelecionar={setSelecao} aoTocarLado={tocarLado} aoCriarTexto={criarTexto} aoTraco={() => undefined}
+        <CanvasPlanta documento={documento} selecao={selecao} ferramenta={ferramenta} pendenteBorda={pendenteBorda} pedidoEnquadrar={pedidoEnquadrar}
+          tracoPendente={livre.traco && { pontos: livre.traco.pontos, fechado: livre.traco.fechado, ladoReferencia: livre.traco.ladoReferencia }}
+          aoSelecionar={setSelecao} aoTocarLado={tocarLado} aoCriarTexto={criarTexto} aoTraco={livre.aoTraco} aoCancelarTraco={() => tecnico.setMensagem('Traço cancelado: dois dedos na tela mexem na vista.')}
           substituir={tecnico.substituir} concluirGesto={tecnico.concluirGesto} />
+        <JanelaTraco traco={livre.traco} recorte={livre.recorte} aoFechar={livre.fechar} aoTrocarLado={livre.trocarLado} aoDescartar={livre.descartar}
+          aoCriarPeca={(mm) => { const erro = livre.criarPeca(mm); if (!erro) setFerramenta('SELECIONAR'); return erro; }} aoCriarRecorte={livre.criarRecorte} />
       </div>
       <aside className="tec-lateral" aria-label="Propriedades">
         <button type="button" className="tec-fechar-folha" aria-label="Fechar painel" onClick={() => setFolha(null)}>×</button>

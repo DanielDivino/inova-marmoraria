@@ -74,7 +74,8 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados }: Prop
     })}
 
     <CotasPeca peca={peca} recursos={recursos} escala={escala} mostrarDistancias={selecionada} />
-    <Texto x={centro.x} y={centro.y} tamanho={px(12)} className="tec-peca-nome" pointerEvents="none">{peca.locked ? '🔒 ' : ''}{peca.name}</Texto>
+    {/* Selecionada com cubas, as distâncias ocupam o meio: o nome sai para não embolar. */}
+    {!(selecionada && embaixo.length) && <Texto x={centro.x} y={centro.y} tamanho={px(12)} className="tec-peca-nome" pointerEvents="none">{peca.locked ? '🔒 ' : ''}{peca.name}</Texto>}
 
     {/* Área de toque de cada lado: tocar abre a medida; com rodabanca/saia/acabamento escolhido, coloca nele. */}
     {peca.contour.map((vertice) => <polyline key={`lado-${vertice.id}`} points={pontosSvg(pontosDoLado(peca, vertice.id))} className={`tec-lado${destacarLados ? ' destacado' : ''}`}

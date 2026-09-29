@@ -220,10 +220,13 @@ export function arredondarPontos(pontos: Point[], passoMm = 10): Point[] {
 export const paraContorno = (idPeca: string, pontos: Point[]): Vertex[] => pontos.map((p, i) => ({ id: `${idPeca}-v${i}`, x: p.x, y: p.y, bulge: 0 }));
 
 export type RecorteDoTraco = { shape: 'RECTANGLE' | 'OVAL'; x: number; y: number; widthMm: number; lengthMm: number; rotationDeg: number };
+const percentil = (valores: number[], p: number) => { const ordenados = [...valores].sort((a, b) => a - b); return ordenados[Math.min(ordenados.length - 1, Math.max(0, Math.round(p * (ordenados.length - 1))))]; };
 /**
  * Traço fechado dentro de uma peça vira recorte (cuba, cooktop): retangular ou
- * oval, o que o traço mais parecer. Um retângulo ocupa quase toda a caixa que o
- * envolve; uma elipse, cerca de 78% (π/4). A orientação vem da direção principal do traço.
+ * oval, o que o traço mais parecer. Cada ponto é comparado com os dois modelos
+ * (no retângulo, max(|u|,|v|) = 1; na elipse, u² + v² = 1): ganha o de menor
+ * desvio médio, o que resiste à tremida do dedo. A orientação vem da direção
+ * principal do traço; as medidas ignoram os 2% de pontos mais fora.
  */
 export function recorteDoTraco(bruto: Point[], passoMm = 10): RecorteDoTraco | null {
   const pontos = reamostrar(bruto, Math.max(diagonal(bruto) / 150, EPS));
@@ -236,13 +239,16 @@ export function recorteDoTraco(bruto: Point[], passoMm = 10): RecorteDoTraco | n
   const cos = Math.cos(-angulo), sin = Math.sin(-angulo);
   const locais = pontos.map((p) => ({ x: (p.x - cx) * cos - (p.y - cy) * sin, y: (p.x - cx) * sin + (p.y - cy) * cos }));
   const xs = locais.map((p) => p.x), ys = locais.map((p) => p.y);
-  const largura = Math.max(...xs) - Math.min(...xs), comprimento = Math.max(...ys) - Math.min(...ys);
+  const [x0, x1, y0, y1] = [percentil(xs, .02), percentil(xs, .98), percentil(ys, .02), percentil(ys, .98)];
+  const largura = x1 - x0, comprimento = y1 - y0;
   if (largura < EPS || comprimento < EPS) return null;
-  const ocupacao = Math.abs(signedArea(locais)) / (largura * comprimento);
-  const centro = { x: (Math.max(...xs) + Math.min(...xs)) / 2, y: (Math.max(...ys) + Math.min(...ys)) / 2 };
+  const centro = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+  const normalizados = locais.map((p) => ({ u: (p.x - centro.x) / (largura / 2), v: (p.y - centro.y) / (comprimento / 2) }));
+  const desvio = (medida: (u: number, v: number) => number) => normalizados.reduce((s, { u, v }) => s + Math.abs(medida(u, v) - 1), 0) / normalizados.length;
+  const retangular = desvio((u, v) => Math.max(Math.abs(u), Math.abs(v))) <= desvio((u, v) => Math.hypot(u, v));
   const redondo = (v: number) => Math.max(passoMm, Math.round(v / passoMm) * passoMm);
   return {
-    shape: ocupacao > .87 ? 'RECTANGLE' : 'OVAL',
+    shape: retangular ? 'RECTANGLE' : 'OVAL',
     x: Math.round(cx + centro.x * Math.cos(angulo) - centro.y * Math.sin(angulo)),
     y: Math.round(cy + centro.x * Math.sin(angulo) + centro.y * Math.cos(angulo)),
     widthMm: redondo(largura), lengthMm: redondo(comprimento),
