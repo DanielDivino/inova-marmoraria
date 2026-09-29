@@ -1,6 +1,6 @@
 import { acabamentoBordaPedra } from '../orcamentos/edge-finishes.js';
 import { EPS, edgeLength, edgePoint, sampleContour } from './geometry.js';
-import type { Feature, Piece, Point, TechnicalDocument } from './schema.js';
+import { nomeDaPeca, type Feature, type Piece, type Point, type TechnicalDocument } from './schema.js';
 
 /**
  * Desenho técnico → projeto do orçamento. O orçamento só conhece peças
@@ -160,11 +160,12 @@ export function desenhoParaOrcamento(doc: TechnicalDocument, servicos: ServicoPa
   const saia = servicoSaia(servicos);
 
   for (const peca of doc.pieces) {
+    const nome = nomeDaPeca(peca, doc.pieces);
     const materialId = peca.material?.id;
     const { retangulos, envolvente } = retangulosDaPeca(peca);
     const partes = retangulos.map((retangulo, indice) => {
       const componente: ComponenteDoDesenho = {
-        id: indice ? `${peca.id}#${indice + 1}` : peca.id, pecaId: peca.id, label: retangulos.length > 1 ? `${peca.name} · parte ${indice + 1}` : peca.name,
+        id: indice ? `${peca.id}#${indice + 1}` : peca.id, pecaId: peca.id, label: retangulos.length > 1 ? `${nome} · parte ${indice + 1}` : nome,
         componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: retangulo.x1 - retangulo.x0, widthMm: retangulo.y1 - retangulo.y0,
         materialId, bordas: [], envolvente, retangulo,
       };
@@ -193,7 +194,7 @@ export function desenhoParaOrcamento(doc: TechnicalDocument, servicos: ServicoPa
       if (recurso.type === 'BACKSPLASH') {
         const presa = trechos.trechos.length === 1 ? trechos.trechos[0] : undefined;
         componentes.push({
-          id: recurso.id, pecaId: peca.id, recursoId: recurso.id, label: nomeDoRecurso(recurso) === 'Rodabanca' ? `Rodabanca · ${peca.name}` : nomeDoRecurso(recurso),
+          id: recurso.id, pecaId: peca.id, recursoId: recurso.id, label: nomeDoRecurso(recurso) === 'Rodabanca' ? `Rodabanca · ${nome}` : nomeDoRecurso(recurso),
           componentType: 'BACKSPLASH', orientation: 'VERTICAL', lengthMm: trechos.total, widthMm: Math.max(1, mm(recurso.heightMm)), materialId, bordas: [], envolvente: false,
           ...(presa ? { paiId: partes[presa.indice].id, ladoPai: presa.side } : {}),
         });

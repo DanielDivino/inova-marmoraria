@@ -314,14 +314,16 @@ export function desenharPlanta(pdf: Pdf, documento: TechnicalDocument, planta: P
       })]);
     const larguraNome = pdf.font('Helvetica-Bold').fontSize(8).widthOfString(peca.name);
     const larguraEspessura = pdf.font('Helvetica').fontSize(6.5).widthOfString(centimetros(peca.thicknessMm));
+    // Peça sem nome: fica com o número do item da tabela, como as pequenas demais para o nome.
+    const semNome = !peca.name.trim();
     const completo = lugarDoNome(contorno, daPeca, pontos, Math.max(larguraNome, larguraEspessura) / 2 + 1.5, 9);
-    if (completo.folga >= 0) {
+    if (!semNome && completo.folga >= 0) {
       rotulo(pdf, peca.name, { x: completo.ponto.x, y: completo.ponto.y - 3.5 }, 0, { fonte: 'Helvetica-Bold', tamanho: 8, cor: COR.tinta });
       rotulo(pdf, centimetros(peca.thicknessMm), { x: completo.ponto.x, y: completo.ponto.y + 5.5 }, 0, { fonte: 'Helvetica', tamanho: 6.5, cor: COR.rotulo });
       return;
     }
     const soNome = lugarDoNome(contorno, daPeca, pontos, larguraNome / 2 + 1.5, 5);
-    if (soNome.folga >= 0) { rotulo(pdf, peca.name, soNome.ponto, 0, { fonte: 'Helvetica-Bold', tamanho: 8, cor: COR.tinta }); return; }
+    if (!semNome && soNome.folga >= 0) { rotulo(pdf, peca.name, soNome.ponto, 0, { fonte: 'Helvetica-Bold', tamanho: 8, cor: COR.tinta }); return; }
     const { ponto } = lugarDoNome(contorno, daPeca, pontos, 6, 6);
     comNumero = true;
     pdf.lineWidth(.7).circle(ponto.x, ponto.y, 5.5).fillAndStroke('#ffffff', COR.dourado);

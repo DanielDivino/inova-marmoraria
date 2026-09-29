@@ -1,7 +1,7 @@
 import { calcularLinha, calcularLinhaServico, calcularTotalCartao, calcularTotalOrcamento, type BillingUnit } from '../calculos/quote-calculator.js';
 import { calcularAreaRetangularM2, medidaM2Fechado, somarAreasComponentes } from '../calculos/components.js';
 import { calcularAcabamentoBorda } from '../orcamentos/edge-finishes.js';
-import { formatMeasure, type Piece, type TechnicalDocument } from './schema.js';
+import { formatMeasure, nomeDaPeca, type Piece, type TechnicalDocument } from './schema.js';
 import { desenhoParaOrcamento, nomeDoRecurso, retangulosDaPeca, type ComponenteDoDesenho, type ItemDoDesenho, type OpcoesConversao } from './orcamento.js';
 
 /**
@@ -73,13 +73,14 @@ export function estimarDesenho(doc: TechnicalDocument, catalogo: CatalogoEstimat
     ? `m² fechado: ${lista.map((c) => medidas(fechadas(c))).join(' + ')}` : '';
 
   for (const peca of doc.pieces) {
+    const nome = nomeDaPeca(peca, doc.pieces);
     const partes = item.componentes.filter((componente) => componente.pecaId === peca.id && componente.componentType === 'TOP');
     const pedra = precoDaPedra(partes[0]?.materialId, catalogo);
     const detalhe = [
       partes.length > 1 ? `${partes.length} partes: ${partes.map(medidas).join(' + ')}` : partes[0]?.envolvente ? `Peça curva ou diagonal: cobrada pelo retângulo ${medidas(partes[0])}` : '',
       notaFechado(partes),
     ].filter(Boolean).join(' · ');
-    linhas.push({ id: peca.id, pieceId: peca.id, grupo: 'PEDRA', descricao: 'material' in pedra ? `${peca.name} · ${pedra.material.name}` : peca.name,
+    linhas.push({ id: peca.id, pieceId: peca.id, grupo: 'PEDRA', descricao: 'material' in pedra ? `${nome} · ${pedra.material.name}` : nome,
       quantidade: arredondarArea(partes.reduce((soma, parte) => soma + areaCobradaComponenteM2(parte, m2Fechado), 0)), unidade: 'm²', ...(detalhe ? { detalhe } : {}),
       ...('material' in pedra ? { precoUnitario: pedra.preco, subtotal: calcularTotalOrcamento(partes.map((parte) => valorDaPedra(parte, pedra.preco))) } : { precoUnitario: null, subtotal: null, semPreco: pedra.semPreco }) });
 
@@ -89,7 +90,7 @@ export function estimarDesenho(doc: TechnicalDocument, catalogo: CatalogoEstimat
         const rodabanca = item.componentes.find((componente) => componente.recursoId === recurso.id);
         if (!rodabanca) continue;
         const nota = notaFechado([rodabanca]);
-        linhas.push({ ...base, grupo: 'PEDRA', descricao: `${nomeDoRecurso(recurso)} · ${peca.name}`, quantidade: areaCobradaComponenteM2(rodabanca, m2Fechado), unidade: 'm²', ...(nota ? { detalhe: nota } : {}),
+        linhas.push({ ...base, grupo: 'PEDRA', descricao: `${nomeDoRecurso(recurso)} · ${nome}`, quantidade: areaCobradaComponenteM2(rodabanca, m2Fechado), unidade: 'm²', ...(nota ? { detalhe: nota } : {}),
           ...('material' in pedra ? { precoUnitario: pedra.preco, subtotal: valorDaPedra(rodabanca, pedra.preco) } : { precoUnitario: null, subtotal: null, semPreco: pedra.semPreco }) });
         continue;
       }
@@ -102,7 +103,7 @@ export function estimarDesenho(doc: TechnicalDocument, catalogo: CatalogoEstimat
         const semPreco = saia
           ? (!servico ? 'Cadastre o serviço “Saia” (metro linear) em Materiais e serviços.' : !('material' in pedra) ? pedra.semPreco : '')
           : (!servico ? 'Escolha o serviço de acabamento.' : servico.billingUnit !== 'LINEAR_METER' ? 'Acabamento de borda precisa de serviço por metro linear.' : '');
-        const descricao = `${saia ? nomeDoRecurso(recurso) : servico?.name ?? nomeDoRecurso(recurso)} · ${peca.name}`;
+        const descricao = `${saia ? nomeDoRecurso(recurso) : servico?.name ?? nomeDoRecurso(recurso)} · ${nome}`;
         const partesTexto = bordas.length > 1 ? { detalhe: `${bordas.length} trechos: ${bordas.map((borda) => formatMeasure(borda.lengthMm)).join(' + ')}` } : {};
         if (semPreco || !servico) { linhas.push({ ...base, descricao, quantidade: saia ? arredondarArea(bordas.reduce((soma, borda) => soma + borda.lengthMm * (borda.heightMm ?? 0), 0) / 1_000_000) : metros, unidade: saia ? 'm²' : 'm', precoUnitario: null, subtotal: null, semPreco: semPreco || 'Escolha o serviço.', ...partesTexto }); continue; }
         const calculos = bordas.map((borda) => calcularAcabamentoBorda({ name: servico.name, lengthMm: borda.lengthMm, heightMm: borda.heightMm, quantity: 1, materialPrice: 'material' in pedra ? pedra.preco : 0, servicePrice: servico.currentPrice }));
@@ -114,7 +115,7 @@ export function estimarDesenho(doc: TechnicalDocument, catalogo: CatalogoEstimat
       const recorte = item.recortes.find((entrada) => entrada.recursoId === recurso.id);
       if (!recorte) continue;
       const servico = catalogo.services.find((entrada) => entrada.id === recorte.serviceId);
-      const descricao = `${servico?.name ?? nomeDoRecurso(recurso)} · ${peca.name}`;
+      const descricao = `${servico?.name ?? nomeDoRecurso(recurso)} · ${nome}`;
       if (!servico) { linhas.push({ ...base, descricao, quantidade: 1, unidade: 'un', precoUnitario: null, subtotal: null, semPreco: 'Escolha o serviço deste componente.' }); continue; }
       if (servico.billingUnit === 'LINEAR_METER') { linhas.push({ ...base, descricao, quantidade: 1, unidade: 'un', precoUnitario: null, subtotal: null, semPreco: 'Recortes não usam serviço por metro linear.' }); continue; }
       const quantidade = servico.billingUnit === 'SQUARE_METER' ? calcularAreaRetangularM2(recorte.lengthMm, recorte.widthMm) : 1;

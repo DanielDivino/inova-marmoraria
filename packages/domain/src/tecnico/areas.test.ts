@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { areasDaPeca, faixaDentroDaPeca, marcarArea, posicaoNoBalcao, tirarArea, trocarTipoArea } from './areas.js';
 import { makePiece } from './geometry.js';
+import { centroDaPecaNoMundo, girarPeca } from './commands.js';
+import { emptyTechnicalDocument } from './schema.js';
 import { pieceSchema, type Piece } from './schema.js';
 
 const balcao = (zonas: Piece['wetDryZones'] = []): Piece => ({ ...makePiece('b', 'RECTANGLE'), wetDryZones: zonas });
@@ -42,5 +44,19 @@ describe('área seca e área molhada do balcão', () => {
     const u = makePiece('u', 'U');
     expect(faixaDentroDaPeca(u, 1300)).toEqual({ y0: 900, y1: 1500 });
     expect(faixaDentroDaPeca(u, 300)).toEqual({ y0: 0, y1: 1500 });
+  });
+
+  it('girar a peça mantém o centro dela no lugar, em qualquer ângulo', () => {
+    const doc = emptyTechnicalDocument();
+    doc.pieces.push({ ...makePiece('p', 'RECTANGLE'), x: 1000, y: 500 });
+    const centro = centroDaPecaNoMundo(doc.pieces[0]);
+    for (const graus of [90, 37, 180, -45, 405]) {
+      const girado = girarPeca(doc, 'p', graus);
+      const depois = centroDaPecaNoMundo(girado.pieces[0]);
+      expect(Math.abs(depois.x - centro.x)).toBeLessThan(.1);
+      expect(Math.abs(depois.y - centro.y)).toBeLessThan(.1);
+      expect(girado.pieces[0].rotationDeg).toBe(((graus % 360) + 360) % 360);
+    }
+    expect(girarPeca({ ...doc, pieces: [{ ...doc.pieces[0], locked: true }] }, 'p', 90).pieces[0].rotationDeg).toBe(0);
   });
 });
