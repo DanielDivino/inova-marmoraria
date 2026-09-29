@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyTechnicalDocument, technicalDocumentSchema, type Feature, type TechnicalDocument } from './schema.js';
-import { validateTechnicalDocument, makePiece, contourArea } from './geometry.js';
+import { validateTechnicalDocument, makePiece, contourArea, parametricContour, contornoDosParametros, problemaParametros } from './geometry.js';
 
 function rectangleDocument(): TechnicalDocument {
   const document = emptyTechnicalDocument();
@@ -67,5 +67,24 @@ describe('validação do documento técnico', () => {
     document.pieces.push(second);
     document.constraints = [{ id: 'c1', pieceId: 'p1', targetPieceId: 'p2', dx: 0, dy: 0, rotationOffset: 0 }, { id: 'c2', pieceId: 'p2', targetPieceId: 'p1', dx: 0, dy: 0, rotationOffset: 0 }];
     expect(validateTechnicalDocument(document)).toContainEqual(expect.objectContaining({ code: 'CONSTRAINT_CYCLE' }));
+  });
+});
+
+describe('peça em U', () => {
+  it('gera o contorno com fundo, dois braços e larguras próprias', () => {
+    const contorno = parametricContour('u', 'U', 3000, 600, 0, 600, { leftArm: 1800, rightArm: 1200, leftArmWidth: 650, rightArmWidth: 550 });
+    expect(contorno.map((vertice) => [vertice.x, vertice.y])).toEqual([[0, 0], [650, 0], [650, 1200], [2450, 1200], [2450, 600], [3000, 600], [3000, 1800], [0, 1800]]);
+    // Área = fundo 3,0 × 0,6 + braço esquerdo 0,65 × 1,2 + braço direito 0,55 × 0,6.
+    expect(contourArea(contorno)).toBeCloseTo(3000 * 600 + 650 * 1200 + 550 * 600);
+  });
+  it('é aceito pela validação e aponta braços incompatíveis', () => {
+    const document = emptyTechnicalDocument();
+    const u = makePiece('u', 'U');
+    document.pieces.push(u);
+    expect(validateTechnicalDocument(document).filter((diagnostico) => diagnostico.severity !== 'WARNING')).toEqual([]);
+    const parametros = { ...u.parameters!, leftArmWidth: 1500, rightArmWidth: 1500 };
+    document.pieces[0] = { ...u, parameters: parametros, contour: contornoDosParametros('u', parametros) };
+    expect(problemaParametros(parametros)).toMatch(/larguras dos braços/);
+    expect(validateTechnicalDocument(document)).toContainEqual(expect.objectContaining({ code: 'PARAMETERS' }));
   });
 });

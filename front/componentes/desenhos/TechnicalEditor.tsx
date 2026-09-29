@@ -208,7 +208,7 @@ export default function EditorTecnico({ designId }: { designId: string }) {
   const finishDraw = (points: Point[]) => {
     if (!document || points.length < 3) return;
     const id = uid(); const origin = points[0];
-    const piece: Piece = { id, name: `Peça ${document.pieces.length + 1}`, contour: points.map((point, index) => ({ id: `${id}-v${index}`, x: point.x - origin.x, y: point.y - origin.y, bulge: 0 })), thicknessMm: 20, x: origin.x, y: origin.y, z: 0, rotationDeg: 0, tiltDeg: 0, locked: false, layerId: 'pieces', geometryMode: 'FREE' };
+    const piece: Piece = { id, name: `Peça ${document.pieces.length + 1}`, contour: points.map((point, index) => ({ id: `${id}-v${index}`, x: point.x - origin.x, y: point.y - origin.y, bulge: 0 })), thicknessMm: 20, x: origin.x, y: origin.y, z: 0, rotationDeg: 0, tiltDeg: 0, locked: false, layerId: 'pieces', geometryMode: 'FREE', dimensionLabels: {}, lockedEdges: [] };
     change({ ...document, pieces: [...document.pieces, piece], assemblies: document.assemblies.map((assembly, index) => index === 0 ? { ...assembly, pieceIds: [...assembly.pieceIds, id] } : assembly) });
     setSelection({ type: 'piece', id }); setDrawPoints(null); setDrawCursor(null); setDrawTyped(''); setTool('select'); setMessage('');
   };

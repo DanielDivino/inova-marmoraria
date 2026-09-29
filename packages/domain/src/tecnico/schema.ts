@@ -8,7 +8,15 @@ export const pieceSchema = z.object({
   id, name: z.string().trim().min(1).max(160), contour: z.array(point).min(3).max(1000), thicknessMm: n,
   x: n, y: n, z: n.default(0), rotationDeg: n.default(0), tiltDeg: n.default(0), locked: z.boolean().default(false),
   material: visual.optional(), layerId: id.default('pieces'), geometryMode: z.enum(['PARAMETRIC', 'FREE']).default('FREE'),
-  parameters: z.object({ shape: z.enum(['RECTANGLE', 'L', 'CIRCLE', 'ROUNDED']), width: n, length: n, radius: n.default(0), arm: n.default(600) }).strict().optional(),
+  // U: width = comprimento total, length = fundo (profundidade do trecho do fundo), braços com comprimento e largura próprios.
+  parameters: z.object({
+    shape: z.enum(['RECTANGLE', 'L', 'CIRCLE', 'ROUNDED', 'U']), width: n, length: n, radius: n.default(0), arm: n.default(600),
+    leftArm: n.optional(), rightArm: n.optional(), leftArmWidth: n.optional(), rightArmWidth: n.optional(),
+  }).strict().optional(),
+  /** Texto livre no lugar da medida de um lado (ex.: "medir no local"), pela id do vértice que inicia o lado. */
+  dimensionLabels: z.record(id, z.string().trim().max(120)).default({}),
+  /** Lados com cadeado: não mudam quando outro lado é redimensionado. */
+  lockedEdges: z.array(id).max(1000).default([]),
 }).strict();
 export const featureSchema = z.object({
   id, type: z.enum(['SINK', 'SCULPTED_SINK', 'CUTOUT', 'HOLE', 'SKIRT', 'BACKSPLASH', 'EDGE_FINISH']), pieceId: id,
@@ -25,7 +33,7 @@ export const technicalDocumentSchema = z.object({
   schemaVersion: z.literal(1), unit: z.literal('mm'), coordinateSystem: z.object({ x: z.literal('right'), y: z.literal('up'), rotation: z.literal('clockwise-degrees') }).strict(),
   assemblies: z.array(z.object({ id, name: z.string().min(1).max(120), pieceIds: z.array(id), locked: z.boolean().default(false) }).strict()).max(100),
   pieces: z.array(pieceSchema).max(500), features: z.array(featureSchema).max(1000), layers: z.array(layerSchema).max(50),
-  annotations: z.array(z.object({ id, text: z.string().min(1).max(2000), x: n, y: n, layerId: id.default('annotations') }).strict()).max(500),
+  annotations: z.array(z.object({ id, text: z.string().min(1).max(2000), x: n, y: n, layerId: id.default('annotations'), fontSizeMm: z.number().positive().max(2000).optional() }).strict()).max(500),
   dimensions: z.array(z.object({ id, from: ref, to: ref, offsetMm: n.default(100), layerId: id.default('dimensions') }).strict()).max(1000).default([]),
   constraints: z.array(z.object({ id, pieceId: id, targetPieceId: id, dx: n, dy: n, rotationOffset: n.default(0) }).strict()).max(500).default([]),
   views: z.array(z.object({ id, name: z.string().min(1).max(80), mode: z.enum(['TOP','FRONT','SIDE','ISO']), x: n.default(0), y: n.default(0), width: z.number().positive().default(4000) }).strict()).max(50).default([]),
@@ -35,6 +43,9 @@ export type TechnicalDocument = z.infer<typeof technicalDocumentSchema>;
 export type Piece = TechnicalDocument['pieces'][number];
 export type Feature = TechnicalDocument['features'][number];
 export type Vertex = Piece['contour'][number];
+export type Annotation = TechnicalDocument['annotations'][number];
+export type PieceShape = NonNullable<Piece['parameters']>['shape'];
+export type PieceParameters = NonNullable<Piece['parameters']>;
 export type Point = { x: number; y: number };
 export type Diagnostic = { severity: 'STRUCTURAL' | 'TECHNICAL' | 'WARNING'; code: string; message: string; elementId?: string };
 export const emptyTechnicalDocument = (): TechnicalDocument => technicalDocumentSchema.parse({ schemaVersion: 1, unit: 'mm', coordinateSystem: { x: 'right', y: 'up', rotation: 'clockwise-degrees' }, assemblies: [], pieces: [], features: [], annotations: [], layers: ['pieces', 'features', 'dimensions', 'references', 'annotations'].map((id, i) => ({ id, name: ['Peças', 'Recortes e cubas', 'Cotas', 'Referências', 'Anotações'][i], visible: true, locked: false })) });
