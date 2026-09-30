@@ -2,7 +2,7 @@ import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { criarAplicacao } from '../../back/src/app.js';
 import { prisma } from '../../back/src/config/prisma.js';
-import { itemSalvoParaEntrada } from '@inova/domain';
+import { itemSalvoParaEntrada, validadeOrcamento } from '@inova/domain';
 
 if (!/^inova_test_[a-f0-9]{32}$/.test(process.env.INOVA_TEST_SCHEMA ?? '') || new URL(process.env.DATABASE_URL!).searchParams.get('schema') !== process.env.INOVA_TEST_SCHEMA) throw new Error('Banco de testes isolado obrigatório.');
 const app = await criarAplicacao();
@@ -265,6 +265,26 @@ describe('Orçamento, snapshots, edição e relacionamentos', () => {
     expect(response.statusCode).toBe(200); expect(response.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
     const text = execFileSync('pdftotext', ['-', '-'], { input: response.rawPayload, encoding: 'utf8' });
     expect(text).toContain('975,31'); expect(text).toContain('987,65'); expect(text).toContain('TOTAL DO PROJETO'); expect(text).not.toContain('600,00');
+  });
+  it('validade sempre 10 dias úteis após a emissão; observações do orçamento pela tela do orçamento, sem se perder ao editar', async () => {
+    // A validade enviada é ignorada: vale sempre a regra dos 10 dias úteis.
+    const q = await quote({ validUntil: '2030-01-01' });
+    expect(q.validUntil.slice(0, 10)).toBe(validadeOrcamento(new Date(q.createdAt)));
+    expect(q.notes).toBeNull();
+    const salvo = await request('PATCH', `/quotes/${q.id}/tracking`, { notes: '  Conferir medidas no local.  ', deliveryDeadline: '2030-02-01', deadlineConfirmed: true });
+    expect(salvo.statusCode, salvo.body).toBe(200);
+    expect(salvo.json()).toMatchObject({ notes: 'Conferir medidas no local.', deadlineConfirmed: true });
+    // Editar pelo Novo orçamento (que não manda observações nem validade) mantém as duas.
+    const { notes: _notes, validUntil: _validUntil, ...semObservacoes } = editInput(salvo.json());
+    const editado = await request('PUT', `/quotes/${q.id}`, semObservacoes);
+    expect(editado.statusCode, editado.body).toBe(200);
+    expect(editado.json()).toMatchObject({ notes: 'Conferir medidas no local.', validUntil: q.validUntil });
+    const pdf = execFileSync('pdftotext', ['-', '-'], { input: (await request('GET', `/quotes/${q.id}/pdf`)).rawPayload, encoding: 'utf8' });
+    expect(pdf).toContain(`VÁLIDO ATÉ: ${validadeOrcamento(new Date(q.createdAt)).split('-').reverse().join('/')}`);
+    expect(pdf).toContain('Conferir medidas no local.');
+    // Apagar as observações; texto longo demais é recusado.
+    expect((await request('PATCH', `/quotes/${q.id}/tracking`, { notes: '' })).json().notes).toBeNull();
+    expect((await request('PATCH', `/quotes/${q.id}/tracking`, { notes: 'x'.repeat(3001) })).statusCode).toBe(422);
   });
 });
 

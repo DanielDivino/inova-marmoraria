@@ -1,6 +1,6 @@
 import { escopoClientes, escopoOrcamentos } from '../../compartilhado/acesso.js';
 import type { Prisma, WorkflowCard } from '@prisma/client';
-import { arredondarMoeda, calcularLimiteDesconto, podeEditarOrcamento, itemSalvoParaEntrada, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularSubtotalMaterial, calcularAreaRetangularM2, calcularTotalOrcamento, podeUsarM2Manual, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
+import { arredondarMoeda, calcularLimiteDesconto, podeEditarOrcamento, itemSalvoParaEntrada, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularSubtotalMaterial, calcularAreaRetangularM2, calcularTotalOrcamento, podeUsarM2Manual, acabamentoBordaPedra, calcularAcabamentoBorda, validadeOrcamento } from '@inova/domain';
 import { AppError, type AuthUser } from '../../compartilhado/http.js';
 import type { z } from 'zod';
 import { quoteItemSchema, type createQuoteSchema, type editQuoteSchema } from './quote.schema.js';
@@ -174,7 +174,8 @@ export async function criarOrcamento(tx: Tx, input: QuoteInput, user: AuthUser) 
   const { year, month } = periodoNumeroOrcamento(createdAt);
   const sequence = await tx.quoteSequence.upsert({ where: { year_month: { year, month } }, create: { year, month, lastNumber: 1 }, update: { lastNumber: { increment: 1 } } });
   const number = formatarNumeroOrcamento(createdAt, sequence.lastNumber);
-  const quote = await tx.quote.create({ data: { number, createdAt, parentQuoteId: input.parentQuoteId, customerId: input.customerId, customerNameSnapshot: customer.name, customerPhoneSnapshot: customer.phone, workAddressSnapshot: customer.address, createdById: user.id, validUntil: input.validUntil, notes: input.notes, deliveryDeadline: input.deliveryDeadline ? new Date(input.deliveryDeadline + 'T00:00:00.000Z') : null, installationDeadline: input.installationDeadline ? new Date(input.installationDeadline + 'T00:00:00.000Z') : null, deadlineConfirmed: input.deadlineConfirmed ?? false, deadlineNote: input.deadlineNote, discountAmount: input.discountAmount, grossTotal, netTotal: calcularTotalOrcamento([grossTotal], input.discountAmount) } });
+  // A validade é sempre 10 dias úteis a partir da emissão (não se escolhe no orçamento).
+  const quote = await tx.quote.create({ data: { number, createdAt, parentQuoteId: input.parentQuoteId, customerId: input.customerId, customerNameSnapshot: customer.name, customerPhoneSnapshot: customer.phone, workAddressSnapshot: customer.address, createdById: user.id, validUntil: new Date(validadeOrcamento(createdAt) + 'T00:00:00.000Z'), notes: input.notes, deliveryDeadline: input.deliveryDeadline ? new Date(input.deliveryDeadline + 'T00:00:00.000Z') : null, installationDeadline: input.installationDeadline ? new Date(input.installationDeadline + 'T00:00:00.000Z') : null, deadlineConfirmed: input.deadlineConfirmed ?? false, deadlineNote: input.deadlineNote, discountAmount: input.discountAmount, grossTotal, netTotal: calcularTotalOrcamento([grossTotal], input.discountAmount) } });
   for (const item of items) await persistirItem(tx, quote.id, item);
   return tx.quote.findUniqueOrThrow({ where: { id: quote.id }, include: incluirOrcamento(user) });
 }
