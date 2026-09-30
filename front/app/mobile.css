@@ -213,7 +213,7 @@
   html .inova-theme .list-header { align-items: flex-start; gap: 12px; }
   html .inova-theme .list-header h1 { font-size: 28px; }
   html .inova-theme .list-header a { display: inline-flex; align-items: center; min-height: 44px; }
-  html .inova-theme :is(.quote-filter-row, .customer-toolbar, .quote-workbench-general, .quote-workbench-deadlines, .quote-workbench-team, .user-form) { display: grid; grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme :is(.quote-filter-row, .customer-toolbar, .quote-workbench-general, .quote-workbench-work, .quote-workbench-prazo-obs, .user-form) { display: grid; grid-template-columns: minmax(0, 1fr); }
   html .inova-theme .quote-filter-row label { min-width: 0; }
   html .inova-theme .quote-filter-row :is(input, select) { width: 100%; }
   html .inova-theme .quote-workbench-tabs { display: flex; overflow-x: auto; flex-wrap: nowrap; }

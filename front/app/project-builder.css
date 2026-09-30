@@ -328,12 +328,6 @@
 .summary-project-totals .summary-grand-total { margin-top: 3px; border-bottom: 0; }
 .project-builder .quote-summary-card .summary-grand-total { color: #53452f; font-weight: 700; padding: 10px 0; }
 .summary-grand-total b { font-size: 15px; }
-.project-builder .quote-validity-field { gap: 5px; }
-.project-builder .summary-notes { display: grid; gap: 7px; margin: 0; padding: 0; }
-.project-builder .summary-notes > label { color: var(--muted); font-size: 12px; font-weight: 600; }
-.project-builder .summary-notes > textarea { display: block; width: 100%; min-height: 86px; padding: 9px 11px; resize: vertical; color: var(--ink); background: #fffdf9; border: 1px solid var(--line); border-radius: 8px; font: 13px/1.45 Arial, Helvetica, sans-serif; }
-.project-builder .summary-notes > textarea:focus { outline: 2px solid #b89152; outline-offset: 2px; }
-.project-builder .summary-notes > p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.4; }
 .project-builder .quote-summary-note { padding: 9px; font-size: 10px; line-height: 1.5; }
 .project-builder .quote-summary-actions { margin-top: 0; padding-top: 0; border: 0; gap: 8px; }
 .project-builder .quote-summary-actions small { font-size: 9px; color: #928b7f; text-align: center; line-height: 1.5; }

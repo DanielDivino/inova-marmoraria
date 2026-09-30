@@ -132,11 +132,13 @@ try {
   await expect(page.locator('.quote-summary-card')).toBeFocused();
   // O resumo abre como janela sobre a página; a barra continua com "Fechar resumo".
   await expect(page.locator('.mobile-quote-bar').getByRole('button', { name: /Fechar resumo/ })).toHaveAttribute('aria-expanded', 'true');
-  await page.getByLabel('Observações do orçamento', { exact: true }).fill('Medidas conferidas no celular.');
+  // Resumo sem validade (sempre 10 dias úteis, no PDF), sem observações (ficam na tela do orçamento) e sem a opção de valores no PDF.
+  for (const campo of ['Validade do orçamento', 'Observações do orçamento', 'Valores no PDF']) assert.equal(await page.getByLabel(campo, { exact: true }).count(), 0, campo);
+  await page.getByLabel('Desconto geral rápido', { exact: true }).fill('15');
   await page.reload();
   // Máscara de metros: o rascunho reabre com duas casas.
   await expect(page.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('2,00');
-  await expect(page.getByLabel('Observações do orçamento', { exact: true })).toHaveValue('Medidas conferidas no celular.');
+  await expect(page.getByLabel('Desconto geral rápido', { exact: true })).toHaveValue('15');
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(page.getByRole('button', { name: 'Abrir menu', exact: true })).not.toBeVisible();
   assert.equal(await page.locator('.quick-table').evaluate(el => getComputedStyle(el).display), 'table');
@@ -149,7 +151,9 @@ try {
   assert.equal(saved.items[0].components.length, 1);
   assert.equal(saved.items[0].components[0].lengthMm, 2000);
   assert.equal(saved.items[0].components[0].widthMm, 600);
-  assert.equal(saved.notes, 'Medidas conferidas no celular.');
+  assert.equal(saved.discountAmount, 15);
+  assert.equal(saved.notes, undefined, 'observações se editam na tela do orçamento');
+  assert.equal(saved.validUntil, undefined, 'validade calculada no servidor');
   assert.deepEqual(errors, []);
   console.log('OK: menu por perfil, teclado, peças, descrição, cálculos, serviços, modais, resumo, rascunho e salvamento. Cinco larguras em dois temas; desktop preservado. APIs simuladas.');
 } finally { await browser.close(); }
