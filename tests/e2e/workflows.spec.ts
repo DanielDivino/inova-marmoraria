@@ -10,10 +10,24 @@ async function login(page: Page) {
   // data (materials, measurements, finishes, values) is entered. Detalhado is
   // reached afterwards, via "Adicionar desenhos", purely for production division.
   await expect(page.locator('#project-name')).toBeVisible();
+  await limparRascunho(page);
 }
 async function api(page: Page, method: string, path: string, data?: unknown) {
   const token = await page.evaluate(() => localStorage.getItem('inova_access_token'));
   return page.request.fetch(`/api${path}`, { method, headers: { authorization: `Bearer ${token}` }, data });
+}
+/**
+ * O rascunho do Novo orçamento fica no servidor, por usuário (igual em todos os aparelhos): cada teste
+ * começa com ele vazio, sem os clientes deixados abertos pelo teste anterior.
+ */
+async function limparRascunho(page: Page) {
+  // Sai do Novo orçamento e espera a última gravação dele chegar ao servidor antes de limpar.
+  await page.goto('/clientes'); await page.waitForTimeout(2000);
+  const atual = await (await api(page, 'GET', '/quote-draft')).json();
+  if (atual.version) expect((await (await api(page, 'PUT', '/quote-draft', { data: { workspaces: [], removedWorkspaceIds: [] }, baseVersion: atual.version })).json()).saved).toBe(true);
+  await page.evaluate(() => Object.keys(localStorage).filter((chave) => chave.startsWith('inova_quote_draft')).forEach((chave) => localStorage.removeItem(chave)));
+  await page.goto('/'); await expect(page.locator('#project-name')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cliente: selecionar', exact: true })).toBeVisible();
 }
 async function client(page: Page, name: string) {
   const result = await api(page, 'POST', '/customers', { name, phone: `929${String(Date.now()).slice(-8)}` });
@@ -25,12 +39,11 @@ async function configure(page: Page, name: string) {
   await page.getByPlaceholder('Digite nome, telefone ou CPF').fill(name);
   await page.locator('.customer-result').filter({ hasText: name }).click();
   await page.locator('#project-name').fill(name);
-  await page.locator('.material-picker summary').click();
-  await page.locator('.material-search-inline').fill('Verde Ubatuba');
-  await page.locator('.material-picker-panel button.material').filter({ hasText: 'Verde Ubatuba' }).click();
+  await page.locator('.quick-project-fields .material-picker summary').click();
+  await page.locator('.quick-project-fields .material-search-inline').fill('Verde Ubatuba');
+  await page.locator('.quick-project-fields .material-picker-panel button.material').filter({ hasText: 'Verde Ubatuba' }).click();
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('2,00');
   await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,60');
-  await page.getByLabel('Validade do orçamento', { exact: true }).fill('2026-12-20');
   return customer;
 }
 /** Abre o assistente "+ Acabamentos" (sempre a primeira peça) e marca `side`
@@ -58,6 +71,15 @@ async function save(page: Page) {
   return result.json();
 }
 async function openQuote(page: Page, id: string) { await page.goto(`/orcamentos/${id}`); await expect(page.getByRole('link', { name: 'Editar orçamento', exact: true })).toBeVisible(); }
+/** Observações do orçamento (as do PDF): na tela do orçamento, aba "Equipe, prazo e observação". */
+async function salvarObservacoes(page: Page, id: string, texto: string) {
+  await openQuote(page, id);
+  await page.getByRole('button', { name: /Equipe, prazo e observação/ }).click();
+  await page.getByRole('textbox', { name: 'Observações do orçamento' }).fill(texto);
+  const salvo = page.waitForResponse((response) => response.url().endsWith(`/api/quotes/${id}/tracking`) && response.request().method() === 'PATCH');
+  await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+  expect((await salvo).status()).toBe(200);
+}
 const nbsp = String.fromCharCode(160);
 const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replaceAll(nbsp, ' ');
 async function expectTotal(page: Page, value: number) {
@@ -175,41 +197,43 @@ test('45 graus e saia coexistem com preços independentes e persistem ao reabrir
 test('salvar, editar, restaurar valor, cancelar e preservar rascunho após atualizar', async ({ page }) => {
   await login(page); const name = `Edição ${Date.now()}`; await configure(page, name);
   const notes = 'Conferir medidas em obra.\nAlinhar os veios das peças.';
-  await page.getByLabel('Observações do orçamento', { exact: true }).fill(notes);
+  // O Novo orçamento não tem mais validade nem observações: a validade é sempre 10 dias úteis
+  // e as observações se editam na tela do orçamento.
+  await expect(page.getByLabel('Observações do orçamento', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Validade do orçamento', { exact: true })).toHaveCount(0);
   await detailFirstRow(page);
   await page.getByLabel('Valor final da peça (material + acabamentos)', { exact: true }).fill('650,00');
   await expectTotal(page, 650);
   await page.reload(); await expect(page.locator('#project-name')).toHaveValue(name); await expectTotal(page, 650);
-  await expect(page.getByLabel('Observações do orçamento', { exact: true })).toHaveValue(notes);
-  const saved = await save(page); await openQuote(page, saved.id);
-  expect(saved.notes).toBe(notes);
+  const saved = await save(page);
+  expect(saved.notes).toBeNull();
+  expect(saved.validUntil).toBeTruthy();
+  await salvarObservacoes(page, saved.id, notes);
   await page.getByRole('link', { name: 'Editar orçamento', exact: true }).click();
-  await expect(page.getByLabel('Observações do orçamento', { exact: true })).toHaveValue(notes);
-  const editedNotes = 'Instalar após conferir o nivelamento.';
-  await page.getByLabel('Observações do orçamento', { exact: true }).fill(editedNotes);
-  await page.reload();
-  await expect(page.getByLabel('Observações do orçamento', { exact: true })).toHaveValue(editedNotes);
+  await expect(page.locator('#project-name')).toHaveValue(name);
   await detailFirstRow(page);
   await expect(page.getByLabel('Valor final da peça (material + acabamentos)', { exact: true })).toHaveValue('650,00');
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('2,20');
   await expectTotal(page, 650);
   const updated = page.waitForResponse((response) => response.url().endsWith(`/api/quotes/${saved.id}`) && response.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Salvar orçamento', exact: true }).last().click(); expect((await updated).status()).toBe(200); await expect(page).toHaveURL(/\/orcamentos$/);
-  await page.goto(`/orcamentos/${saved.id}/editar`); await expect(page.locator('#project-name')).toHaveValue(name);
-  await expect(page.getByLabel('Observações do orçamento', { exact: true })).toHaveValue(editedNotes);
+  // Editar o orçamento não apaga as observações nem muda a validade.
+  const depoisDeEditar = await (await api(page, 'GET', `/quotes/${saved.id}`)).json();
+  expect(depoisDeEditar.notes).toBe(notes);
+  expect(depoisDeEditar.validUntil).toBe(saved.validUntil);
+  const editedNotes = 'Instalar após conferir o nivelamento.';
+  await salvarObservacoes(page, saved.id, editedNotes);
   const pdf = await api(page, 'GET', `/quotes/${saved.id}/pdf`);
   const pdfText = execFileSync('pdftotext', ['-', '-'], { input: await pdf.body(), encoding: 'utf8' });
   expect(pdfText).toContain(editedNotes); expect(pdfText).not.toContain(notes.split('\n')[0]);
+  expect(pdfText).toContain(`VÁLIDO ATÉ: ${new Date(saved.validUntil).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`);
+  await page.goto(`/orcamentos/${saved.id}/editar`); await expect(page.locator('#project-name')).toHaveValue(name);
   await detailFirstRow(page);
   await page.getByLabel('Valor final da peça (material + acabamentos)', { exact: true }).fill('');
   await expectTotal(page, 792);
   await page.getByRole('link', { name: 'Cancelar edição', exact: true }).click();
   await page.getByRole('link', { name: 'Editar orçamento', exact: true }).click(); await expectTotal(page, 650);
-  await page.getByLabel('Observações do orçamento', { exact: true }).fill('');
-  const cleared = page.waitForResponse((response) => response.url().endsWith(`/api/quotes/${saved.id}`) && response.request().method() === 'PUT');
-  await page.getByRole('button', { name: 'Salvar orçamento', exact: true }).last().click();
-  expect((await cleared).status()).toBe(200);
-  await expect(page).toHaveURL(/\/orcamentos$/);
+  await salvarObservacoes(page, saved.id, '');
   expect((await (await api(page, 'GET', `/quotes/${saved.id}`)).json()).notes).toBeNull();
 });
 
@@ -219,7 +243,7 @@ test('complemento abaixo da validade, cliente vinculado e total original intacto
   await expect(page.locator('.quote-summary-card .quote-linker')).toBeVisible();
   await expect(page.locator('.quote-linker')).toContainText(parent.number); await expect(page.locator('.atendimento-barra')).toContainText(name);
   await page.locator('#project-name').fill('Saia adicional');
-  await page.locator('.material-picker summary').click(); await page.locator('.material-search-inline').fill('Verde Ubatuba'); await page.locator('.material-picker-panel button.material').filter({ hasText: 'Verde Ubatuba' }).click();
+  await page.locator('.quick-project-fields .material-picker summary').click(); await page.locator('.quick-project-fields .material-search-inline').fill('Verde Ubatuba'); await page.locator('.quick-project-fields .material-picker-panel button.material').filter({ hasText: 'Verde Ubatuba' }).click();
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('1,00'); await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,10');
   const child = await save(page); expect(child.parentQuote.id).toBe(parent.id); expect(child.netTotal).toBe(60);
   const original = await (await api(page, 'GET', `/quotes/${parent.id}`)).json(); expect(original.netTotal).toBe(parent.netTotal); expect(original.complements.map((item: any) => item.id)).toContain(child.id);

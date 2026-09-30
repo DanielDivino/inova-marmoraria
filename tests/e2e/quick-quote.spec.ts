@@ -6,6 +6,19 @@ async function api(page: Page, method: string, path: string, data?: unknown) {
   const token = await page.evaluate(() => localStorage.getItem('inova_access_token'));
   return page.request.fetch(`/api${path}`, { method, headers: { authorization: `Bearer ${token}` }, data });
 }
+/**
+ * O rascunho do Novo orçamento fica no servidor, por usuário (igual em todos os aparelhos): cada teste
+ * começa com ele vazio, sem os clientes deixados abertos pelo teste anterior.
+ */
+async function limparRascunho(page: Page) {
+  // Sai do Novo orçamento e espera a última gravação dele chegar ao servidor antes de limpar.
+  await page.goto('/clientes'); await page.waitForTimeout(2000);
+  const atual = await (await api(page, 'GET', '/quote-draft')).json();
+  if (atual.version) expect((await (await api(page, 'PUT', '/quote-draft', { data: { workspaces: [], removedWorkspaceIds: [] }, baseVersion: atual.version })).json()).saved).toBe(true);
+  await page.evaluate(() => Object.keys(localStorage).filter((chave) => chave.startsWith('inova_quote_draft')).forEach((chave) => localStorage.removeItem(chave)));
+  await page.goto('/'); await expect(page.locator('#project-name')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cliente: selecionar', exact: true })).toBeVisible();
+}
 
 // Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
 async function selecionarCliente(page: Page) { await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click(); }
@@ -17,6 +30,7 @@ test('Orçamento rápido: teclado, projetos, serviços, PDF e detalhamento no me
   await page.getByLabel('Senha', { exact: true }).fill(process.env.INOVA_E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.locator('#project-name')).toBeVisible();
+  await limparRascunho(page);
   const catalog = await (await api(page, 'GET', '/catalog')).json();
   const material = catalog.materials.find((entry: any) => entry.name === 'Preto São Gabriel');
   const otherMaterial = catalog.materials.find((entry: any) => entry.name === 'Branco Dallas');
@@ -29,7 +43,7 @@ test('Orçamento rápido: teclado, projetos, serviços, PDF e detalhamento no me
   await page.getByRole('button', { name: 'Orçamento Rápido', exact: true }).click();
   const quick = page.locator('.quick-quote');
   await quick.locator('#project-name').fill('Cozinha rápida');
-  await quick.locator('.picker-summary').click();
+  await quick.locator('.quick-project-fields .picker-summary').click();
   await quick.getByRole('button').filter({ hasText: /^Preto São Gabriel/ }).click();
   const length = quick.getByLabel('Comprimento da peça 1 (m)', { exact: true });
   await length.fill('0,70'); await length.press('Enter');
@@ -57,13 +71,12 @@ test('Orçamento rápido: teclado, projetos, serviços, PDF e detalhamento no me
   await expect(quick.locator('[data-quick-row]')).toHaveCount(3);
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
   await quick.locator('#project-name').fill('Banheiro rápido');
-  await quick.locator('.picker-summary').click();
+  await quick.locator('.quick-project-fields .picker-summary').click();
   await quick.getByRole('button').filter({ hasText: /^Branco Dallas/ }).click();
   await quick.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('1,20');
   await quick.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,60');
   await escolherProjeto(page, 'Cozinha rápida');
   await expect(quick.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('0,70');
-  await page.getByLabel('Observações do orçamento', { exact: true }).fill('Conferir medidas na obra.');
   await page.waitForTimeout(450);
   await page.reload();
   await expect(page.locator('.quick-quote')).toBeVisible();
