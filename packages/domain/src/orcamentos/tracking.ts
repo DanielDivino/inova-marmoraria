@@ -59,6 +59,17 @@ export function dataAtualEmpresa(now = new Date()): string {
 export function deslocarDataCalendario(date: string, days: number): string {
   const value = new Date(date + 'T00:00:00.000Z'); value.setUTCDate(value.getUTCDate() + days); return dataCalendario(value);
 }
+/** O orçamento vale sempre 10 dias úteis a partir do dia da emissão (no fuso da empresa). */
+export const DIAS_UTEIS_VALIDADE_ORCAMENTO = 10;
+export function validadeOrcamento(emissao: Date = new Date()): string {
+  let dia = dataAtualEmpresa(emissao);
+  for (let uteis = 0; uteis < DIAS_UTEIS_VALIDADE_ORCAMENTO;) {
+    dia = deslocarDataCalendario(dia, 1);
+    const semana = new Date(dia + 'T00:00:00.000Z').getUTCDay();
+    if (semana !== 0 && semana !== 6) uteis += 1;
+  }
+  return dia;
+}
 export function prazoEfetivo(quote: QuoteTracking) { return quote.installationDeadline || quote.deliveryDeadline || null; }
 export function obterStatusPrazo(quote: QuoteTracking, now = new Date()): CustomerDeadlineStatus {
   if (obterStatusTrabalho(quote) === 'DELIVERED') return 'COMPLETED';

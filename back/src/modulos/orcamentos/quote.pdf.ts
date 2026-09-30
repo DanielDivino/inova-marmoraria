@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import { cabecalhoEmpresaPdf as header, assinaturasPdf, normalizarNomeMaterial, pdfDate } from './pdf-layout.js';
 import { montarLinhasPdf, type QuotePdfLine } from './quote.pdf-lines.js';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
-import { projetoTemDesenho, calcularTotalCartao, planoDeProducao, nomeProjeto } from '@inova/domain';
+import { projetoTemDesenho, calcularTotalCartao, planoDeProducao, nomeProjeto, validadeOrcamento } from '@inova/domain';
 import { formatoRecorte, detalheDesenhoComponente, descricaoProducaoComponente, descricaoProducaoRecorte, tituloComponenteProducao, escalasDesenhoTecnico, isMiterFinish, miterJointPath, posicaoMarcadorMeiaEsquadria, acabamentoBordaPedra, faixasBordaPedra, rotuloMedidaDesenho, posicaoMedidaFaixa, type ManufacturingLine } from '@inova/domain';
 
 type PdfDocument = InstanceType<typeof PDFDocument>;
@@ -276,6 +276,8 @@ function pecasParaOrdemDeServico(item: any): { components: any[]; cutouts: any[]
   return { components, cutouts, production: true };
 }
 
+/** Validade: 10 dias úteis após a emissão (a gravada; nos orçamentos antigos sem ela, calculada). */
+const rotuloValidade = (quote: any) => quote.validUntil ? pdfDate(quote.validUntil) : quote.createdAt ? pdfDate(validadeOrcamento(new Date(quote.createdAt))) : 'Não definida';
 const rotuloEntrega = (quote: any) => {
   const deliveryDate = quote.deliveryDeadline ?? quote.dueDate;
   return deliveryDate ? pdfDate(deliveryDate) : 'A definir';
@@ -288,7 +290,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
   pdf.font('Helvetica-Bold').text('ENDEREÇO:', 36, 137).font('Helvetica').text(quote.workAddressSnapshot ?? 'Não informado', 92, 137);
   pdf.font('Helvetica-Bold').text('FONE:', 36, 150).font('Helvetica').text(quote.customerPhoneSnapshot ?? 'Não informado', 92, 150);
   pdf.font('Helvetica').text(`DATA DE EMISSÃO: ${date(quote.createdAt)}`, 330, 150, { width: 229, align: 'right' });
-  pdf.fontSize(7.5).text(`VÁLIDO ATÉ: ${date(quote.validUntil)}  ·  APROVAÇÃO: ${date(quote.approvedAt)}`, 36, 164, { width: 523, align: 'right' });
+  pdf.fontSize(7.5).text(`VÁLIDO ATÉ: ${rotuloValidade(quote)}  ·  APROVAÇÃO: ${date(quote.approvedAt)}`, 36, 164, { width: 523, align: 'right' });
   pdf.text(`PRAZO DE EXECUÇÃO: ${quote.estimatedBusinessDays ? `${quote.estimatedBusinessDays} dias úteis após aprovação` : 'A definir'}  ·  ENTREGA: ${deliveryLabel}`, 36, 175, { width: 523, align: 'right' });
   let y = 190;
   const commercial = montarLinhasPdf(quote.items);

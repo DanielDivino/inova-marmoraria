@@ -39,7 +39,7 @@ type Service = { id: string; name: string; category: string; billingUnit: Billin
 type ProductType = { id: string; name: string };
 type Customer = { id: string; name: string; phone: string | null; isQuick?: boolean; document?: string | null; email?: string | null; address?: string | null; neighborhood?: string | null; city?: string | null; postalCode?: string | null; complement?: string | null; notes?: string | null };
 type Catalog = { materials: Material[]; services: Service[]; productTypes: ProductType[]; settings?: { closedSquareMeter: boolean } };
-type ClientWorkspace = { id: string; customer: Customer | null; items: DraftItem[]; activeIndex: number; discount: string; validUntil: string; notes: string; parentQuote: QuoteLink | null };
+type ClientWorkspace = { id: string; customer: Customer | null; items: DraftItem[]; activeIndex: number; discount: string; parentQuote: QuoteLink | null };
 type CustomerTarget = { kind: 'WORKSPACE'; workspaceId: string } | { kind: 'NEW_WORKSPACE' };
 
 const projetoPreenchido = (project: DraftItem) => !!project.projectName.trim() || !!project.materialId || !!project.manualM2 || !!project.manualJustification || project.components.length > 1 || project.cutouts.length > 0 || project.serviceIds.length > 0 || project.components.some(component => !!component.label.trim() || !!component.materialId || !!component.lengthCm || !!component.widthCm || component.quantity !== 1 || component.componentType !== 'TOP' || component.edges.length > 0 || component.appliedTotal !== undefined);
@@ -57,11 +57,11 @@ const blankComponent = (componentType: ComponentType): DraftComponent => ({ id: 
 // Orçamentos novos começam no modo rápido; o usuário pode mudar para o
 // detalhado a qualquer momento sem criar outro orçamento.
 const newItem = (): DraftItem => ({ id: newId(), projectName: '', productTypeId: '', materialId: '', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [blankComponent('TOP')], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {}, drawingData: dadosEntradaProjeto(undefined, 'QUICK') });
-const newClientWorkspace = (): ClientWorkspace => ({ id: newId(), customer: null, items: [newItem()], activeIndex: 0, discount: '0', validUntil: '', notes: '', parentQuote: null });
+const newClientWorkspace = (): ClientWorkspace => ({ id: newId(), customer: null, items: [newItem()], activeIndex: 0, discount: '0', parentQuote: null });
 const workspaceHasData = (entry: ClientWorkspace) => !!entry.customer || entry.items.some((project) => projetoPreenchido(project));
 const normalizarProjetos = (entries: DraftItem[] | undefined, componentNamesVersion?: number) => entries?.length ? restaurarNomesComponentes(entries, componentNamesVersion).map((entry) => ({ ...entry, projectName: entry.projectName ?? '', components: normalizarPedrasDasPecas(entry, entry.components), serviceAppliedValues: entry.serviceAppliedValues ?? {} })) : [newItem()];
 /** Atendimentos guardados (neste aparelho ou no servidor) no formato atual do editor. */
-const normalizarAtendimentos = (entries: Partial<ClientWorkspace>[], componentNamesVersion = 1): ClientWorkspace[] => entries.map((entry) => ({ ...newClientWorkspace(), ...entry, id: entry.id ?? newId(), customer: entry.customer ?? null, items: normalizarProjetos(entry.items, componentNamesVersion), activeIndex: Math.min(Math.max(0, entry.activeIndex ?? 0), Math.max(0, (entry.items?.length ?? 1) - 1)), discount: entry.discount ?? '0', validUntil: entry.validUntil ?? '', notes: entry.notes ?? '', parentQuote: entry.parentQuote ?? null }));
+const normalizarAtendimentos = (entries: Partial<ClientWorkspace>[], componentNamesVersion = 1): ClientWorkspace[] => entries.map((entry) => ({ ...newClientWorkspace(), ...entry, id: entry.id ?? newId(), customer: entry.customer ?? null, items: normalizarProjetos(entry.items, componentNamesVersion), activeIndex: Math.min(Math.max(0, entry.activeIndex ?? 0), Math.max(0, (entry.items?.length ?? 1) - 1)), discount: entry.discount ?? '0', parentQuote: entry.parentQuote ?? null }));
 // roundUp (Orçamento Rápido, "M² fechado") só afeta o m² usado para calcular o
 // valor do material — as medidas exibidas, o desenho técnico e o que é salvo no
 // orçamento/PDF sempre usam component.lengthCm/widthCm exatos, sem passar por aqui.
@@ -118,7 +118,6 @@ export default function EditorOrcamento() {
     navigateStep(Math.min(currentStep + 1, 2));
   };
   const [saving, setSaving] = useState(false);
-  const [pdfIndividualPrices, setPdfIndividualPrices] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [componentNamesVersion, setComponentNamesVersion] = useState(0);
   const savedRef = useRef(false);
@@ -129,16 +128,12 @@ export default function EditorOrcamento() {
   const items = workspace.items;
   const activeIndex = workspace.activeIndex;
   const discount = workspace.discount;
-  const validUntil = workspace.validUntil;
-  const notes = workspace.notes;
   const parentQuote = workspace.parentQuote;
   const setWorkspaceValue = <K extends keyof ClientWorkspace>(key: K, value: SetStateAction<ClientWorkspace[K]>) => setWorkspaces(current => current.map(entry => entry.id === workspace.id ? { ...entry, [key]: typeof value === 'function' ? (value as (current: ClientWorkspace[K]) => ClientWorkspace[K])(entry[key]) : value } : entry));
   const setCustomer = (value: Customer | null | ((current: Customer | null) => Customer | null)) => setWorkspaceValue('customer', value);
   const setItems = (value: SetStateAction<DraftItem[]>) => setWorkspaceValue('items', value);
   const setActiveIndex = (value: SetStateAction<number>) => setWorkspaceValue('activeIndex', value);
   const setDiscount = (value: string | ((current: string) => string)) => setWorkspaceValue('discount', value);
-  const setValidUntil = (value: string | ((current: string) => string)) => setWorkspaceValue('validUntil', value);
-  const setNotes = (value: string | ((current: string) => string)) => setWorkspaceValue('notes', value);
   const setParentQuote = (value: QuoteLink | null | ((current: QuoteLink | null) => QuoteLink | null)) => setWorkspaceValue('parentQuote', value);
   const createQuickService = async (input: { name: string; billingUnit: BillingUnit; currentPrice: number }): Promise<Service> => {
     const created = await api<Service>('/catalog/services', { method: 'POST', body: JSON.stringify({ ...input, category: 'Outros serviços', isActive: true }) });
@@ -175,7 +170,7 @@ export default function EditorOrcamento() {
     try {
       const stored = localStorage.getItem(quoteDraftStorageKey) ?? (currentUser?.role === 'SUPER_ADMIN' ? localStorage.getItem(legacyQuoteDraftStorageKey) : null);
       if (stored) {
-        const draft = JSON.parse(stored) as Partial<{ customer: Customer | null; customerMode: 'NEW' | 'EXISTING' | null; customerForm: typeof customerForm; items: DraftItem[]; activeIndex: number; discount: string; validUntil: string; notes: string; parentQuote: QuoteLink | null; componentNamesVersion: number; workspaces: Partial<ClientWorkspace>[]; activeClientIndex: number }>;
+        const draft = JSON.parse(stored) as Partial<{ customer: Customer | null; customerMode: 'NEW' | 'EXISTING' | null; customerForm: typeof customerForm; items: DraftItem[]; activeIndex: number; discount: string; parentQuote: QuoteLink | null; componentNamesVersion: number; workspaces: Partial<ClientWorkspace>[]; activeClientIndex: number }>;
         const normalizeItems = (entries: DraftItem[] | undefined) => normalizarProjetos(entries, draft.componentNamesVersion);
         if (Array.isArray(draft.workspaces) && draft.workspaces.length) {
           setWorkspaces(normalizarAtendimentos(draft.workspaces, draft.componentNamesVersion));
@@ -188,8 +183,6 @@ export default function EditorOrcamento() {
           if (Array.isArray(draft.items) && draft.items.length) setItems(normalizeItems(draft.items));
           if (typeof draft.activeIndex === 'number') setActiveIndex(Math.min(Math.max(0, draft.activeIndex), Math.max(0, (draft.items?.length ?? 1) - 1)));
           if (typeof draft.discount === 'string') setDiscount(draft.discount);
-          if (typeof draft.validUntil === 'string') setValidUntil(draft.validUntil);
-          if (typeof draft.notes === 'string') setNotes(draft.notes);
         }
         localStorage.setItem(quoteDraftStorageKey, JSON.stringify({ ...draft, componentNamesVersion: 1 }));
         localStorage.removeItem(legacyQuoteDraftStorageKey);
@@ -207,7 +200,7 @@ export default function EditorOrcamento() {
     }, 350);
     return () => window.clearTimeout(timer);
   }, [quoteDraftStorageKey, draftHydrated, workspaces, activeClientIndex, customerMode, customerForm, componentNamesVersion]);
-  latestDraft.current = JSON.stringify({ customer, customerMode, customerForm, items, activeIndex, discount, validUntil, notes, parentQuote, componentNamesVersion, workspaces, activeClientIndex, expectedUpdatedAt: editingQuote?.updatedAt });
+  latestDraft.current = JSON.stringify({ customer, customerMode, customerForm, items, activeIndex, discount, parentQuote, componentNamesVersion, workspaces, activeClientIndex, expectedUpdatedAt: editingQuote?.updatedAt });
   // Clientes abertos e os seus projetos ficam também no servidor: iguais no celular e no computador.
   // Cada aparelho só escolhe qual cliente e qual projeto estão abertos na tela.
   const rascunhoServidor = useRascunhoServidor({
@@ -247,13 +240,11 @@ export default function EditorOrcamento() {
       api<EditingQuote>(`/quotes/${quoteId}`, { signal: controller.signal }).then((quote) => {
         if (!podeEditarOrcamento(quote)) throw new Error('Este orçamento está encerrado. Crie um complemento ou reabra como retrabalho.');
         setEditingQuote(quote); setCustomer(quote.customer); setCustomerMode(null);
-        setItems(quote.items.map(itemSalvoParaRascunho)); setDiscount(String(quote.discountAmount)); setValidUntil(quote.validUntil?.slice(0, 10) ?? '');
-        setNotes(quote.notes ?? '');
+        setItems(quote.items.map(itemSalvoParaRascunho)); setDiscount(String(quote.discountAmount));
         try {
           const stored = JSON.parse(localStorage.getItem(quoteDraftStorageKey) || 'null');
           if (stored?.expectedUpdatedAt === quote.updatedAt && stored.items?.length) {
-            setItems(stored.items.map((entry: DraftItem) => ({ ...entry, components: normalizarPedrasDasPecas(entry, entry.components) }))); setDiscount(stored.discount); setValidUntil(stored.validUntil);
-            if (typeof stored.notes === 'string') setNotes(stored.notes);
+            setItems(stored.items.map((entry: DraftItem) => ({ ...entry, components: normalizarPedrasDasPecas(entry, entry.components) }))); setDiscount(stored.discount);
             if (stored.customer) setCustomer(stored.customer);
           }
         } catch {}
@@ -673,7 +664,7 @@ export default function EditorOrcamento() {
     setSaving(true);
     try {
       const defaultProductTypeId = catalog?.productTypes[0]?.id ?? '';
-      const payload = { customerId: activeWorkspace.customer!.id, parentQuoteId: activeWorkspace.parentQuote?.id, expectedUpdatedAt: editingQuote?.updatedAt, notes: activeWorkspace.notes.trim() || null, validUntil: activeWorkspace.validUntil || null, discountAmount: activeWorkspace.discount.trim() ? currency(activeWorkspace.discount) : 0, items: itemsToSave.map((draft) => { const prepared = conciliarPlanoParaSalvar(prepareDraftForSave(draft), servicesFor(draft)); const normalized = prepared.productTypeId ? prepared : { ...prepared, productTypeId: defaultProductTypeId }; return rascunhoParaEntradaItem(normalized, snapshotFor(draft)); }) };
+      const payload = { customerId: activeWorkspace.customer!.id, parentQuoteId: activeWorkspace.parentQuote?.id, expectedUpdatedAt: editingQuote?.updatedAt, discountAmount: activeWorkspace.discount.trim() ? currency(activeWorkspace.discount) : 0, items: itemsToSave.map((draft) => { const prepared = conciliarPlanoParaSalvar(prepareDraftForSave(draft), servicesFor(draft)); const normalized = prepared.productTypeId ? prepared : { ...prepared, productTypeId: defaultProductTypeId }; return rascunhoParaEntradaItem(normalized, snapshotFor(draft)); }) };
       const saved = await api<{ id: string }>(quoteId ? `/quotes/${quoteId}` : '/quotes', { method: quoteId ? 'PUT' : 'POST', body: JSON.stringify(payload) });
       const savedActiveId = saved.id;
       if (!quoteId) await api(`/quotes/${saved.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'SENT' }) });
@@ -684,7 +675,7 @@ export default function EditorOrcamento() {
         if (remaining.length) localStorage.setItem(quoteDraftStorageKey, JSON.stringify({ workspaces: remaining, activeClientIndex: 0, componentNamesVersion: 1 }));
         else localStorage.removeItem(quoteDraftStorageKey);
       } else localStorage.removeItem(quoteDraftStorageKey);
-      window.location.href = openPdf && savedActiveId ? `/orcamentos/${savedActiveId}?pdf=1&individualPrices=${pdfIndividualPrices}` : '/orcamentos';
+      window.location.href = openPdf && savedActiveId ? `/orcamentos/${savedActiveId}?pdf=1` : '/orcamentos';
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o orçamento.'); } finally { setSaving(false); }
   }
   if (quoteId && !editingQuote) return <main className="shell"><Link href="/orcamentos">← Orçamentos</Link><p className={error ? 'form-error' : 'empty'}>{error || 'Abrindo orçamento para edição…'}</p></main>;
@@ -767,13 +758,13 @@ export default function EditorOrcamento() {
     {/* Etapa 2: só o desenho e a ordem de serviço, para conferir. */}
     <section className="section">
       <TituloEtapaProjeto number={2} title="Conferência / produção" description="Confira o desenho e a ordem de serviço antes de salvar o orçamento. As alterações deste desenho não alteram o valor do orçamento." />
-      {(showAll || currentStep === 2) && <DesenhoTecnico components={productionDrawingComponents} cutouts={productionDrawingCutouts} materialNames={Object.fromEntries(productionPlan.pieces.map((piece) => [piece.id, materialFor(item, item.components.find((entry) => entry.id === piece.sourceComponentId) ?? item.components[0])?.name ?? 'Material não selecionado']))} linearServices={drawingServices} services={activeServices} additionalServices={item.serviceIds.flatMap((id) => { const service = activeServices.find((entry) => entry.id === id); return service ? [{ name: service.name, quantity: service.billingUnit === 'UNIT' ? item.serviceQuantities[id] : undefined }] : []; })} notes={notes} />}
+      {(showAll || currentStep === 2) && <DesenhoTecnico components={productionDrawingComponents} cutouts={productionDrawingCutouts} materialNames={Object.fromEntries(productionPlan.pieces.map((piece) => [piece.id, materialFor(item, item.components.find((entry) => entry.id === piece.sourceComponentId) ?? item.components[0])?.name ?? 'Material não selecionado']))} linearServices={drawingServices} services={activeServices} additionalServices={item.serviceIds.flatMap((id) => { const service = activeServices.find((entry) => entry.id === id); return service ? [{ name: service.name, quantity: service.billingUnit === 'UNIT' ? item.serviceQuantities[id] : undefined }] : []; })} notes={editingQuote?.notes ?? ''} />}
     </section>
     </div>
     <div className="project-stage-actions" hidden={quickMode}><button type="button" className="secondary-button" onClick={() => navigateStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>← Voltar</button><span>{`Etapa ${currentStep} de 2`}</span>{currentStep < 2 ? <button type="button" className="save-quote-button" onClick={nextStep}>Conferir produção <span aria-hidden="true">→</span></button> : <button type="button" className="save-quote-button" onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'} <span aria-hidden="true">✓</span></button>}</div>
     </>}
     </div>
-<aside id="quote-summary-card" className="quote-summary-card" aria-label="Resumo do orçamento"><div className="quote-visual-card"><p>Projetos únicos<br />para espaços<br />incríveis.</p><i /></div><strong>Resumo do orçamento</strong><label className="summary-project-select">Projeto em edição<select aria-label="Projeto em edição" value={summarySelection} onChange={(event) => { const value = event.target.value; if (value === 'TOTAL') { setSummarySelection('TOTAL'); return; } selectProject(Number(value)); }}>{items.map((draft, index) => <option key={draft.id} value={index}>{draft.projectName || `Projeto ${index + 1}`}</option>)}<option value="TOTAL">Total</option></select></label>{summaryIsTotal ? <div className="summary-project-totals">{items.map((draft, index) => <span key={draft.id}><span>{draft.projectName || `Projeto ${index + 1}`}</span><b>{formatarMoeda(summaries[index]?.total ?? 0)}</b></span>)}<span className="summary-grand-total"><span>Total dos projetos</span><b>{formatarMoeda(gross)}</b></span></div> : <><span>Projetos adicionados <b>{items.length}</b></span><span>Área total <b>{(selectedSummary?.area ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²</b></span>{selectedComponentBreakdown.length ? selectedComponentBreakdown.map((component) => <span key={component.id}>{component.name} <b>{formatarMoeda(component.amount)}</b></span>) : <span>Material <b>{formatarMoeda(selectedSummary?.materialSubtotal ?? 0)}</b></span>}{selectedServiceBreakdown.length ? selectedServiceBreakdown.map((service) => <span key={service.id}>{service.name} <b>{formatarMoeda(service.amount)}</b></span>) : <span>Serviços, recortes e cubas <b>{formatarMoeda(0)}</b></span>}<span>Descontos individuais <b>{formatarMoeda(selectedSummary?.individualDiscountTotal ?? 0)}</b></span><span className="summary-grand-total">Total do projeto <b>{formatarMoeda(selectedSummary?.total ?? 0)}</b></span></>}<label className="quote-validity-field">Validade do orçamento<input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></label><section className="summary-notes"><label htmlFor="quote-notes">Observações do orçamento</label><textarea id="quote-notes" rows={4} maxLength={3000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ex.: conferir medidas no local e alinhar os veios das peças." aria-describedby="quote-notes-help" /><p id="quote-notes-help">Estas observações aparecem no PDF do orçamento.</p></section>{!quoteId && <VincularOrcamento value={parentQuote} onChange={(quote) => { setParentQuote(quote); if (quote) selectCustomer(quote.customer); }} />}<small className="quote-summary-note">As medidas e os acabamentos atualizam o orçamento automaticamente.</small>{quickMode && <label>Desconto autorizado (R$)<input aria-label="Desconto geral rápido" inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>}{quickMode && <><span>Total no Pix (10% de desconto) <b>{formatarMoeda(total)}</b></span><span>No cartão (+10%) <b>{formatarMoeda(calcularTotalCartao(total))}</b></span></>}<div className="quote-summary-actions">{quickMode && <><label className="quick-pdf-pricing"><span>PDF do orçamento</span><select aria-label="Valores no PDF" value={pdfIndividualPrices ? 'individual' : 'total'} onChange={event => setPdfIndividualPrices(event.target.value === 'individual')}><option value="total">Sem valores individuais (totais por projeto)</option><option value="individual">Com valores discriminados</option></select></label><button type="button" className="save-quote-button" disabled={saving} onClick={() => salvarOrcamento(true)}>Salvar e abrir PDF</button><button type="button" className="save-draft-button" onClick={() => changeEntryMode('DETAILED')}>Adicionar desenhos</button></>}{!quickMode && currentStep < 3 && <button type="button" className="save-quote-button" onClick={nextStep}>Continuar <span aria-hidden="true">→</span></button>}<button type="button" className={currentStep < 3 ? 'save-draft-button' : 'save-quote-button'} onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'}</button><small>{quoteId ? 'Seu preenchimento é mantido neste navegador.' : 'Seu preenchimento fica guardado e aparece também no celular e no computador.'}</small></div></aside>
+<aside id="quote-summary-card" className="quote-summary-card" aria-label="Resumo do orçamento"><div className="quote-visual-card"><p>Projetos únicos<br />para espaços<br />incríveis.</p><i /></div><strong>Resumo do orçamento</strong><label className="summary-project-select">Projeto em edição<select aria-label="Projeto em edição" value={summarySelection} onChange={(event) => { const value = event.target.value; if (value === 'TOTAL') { setSummarySelection('TOTAL'); return; } selectProject(Number(value)); }}>{items.map((draft, index) => <option key={draft.id} value={index}>{draft.projectName || `Projeto ${index + 1}`}</option>)}<option value="TOTAL">Total</option></select></label>{summaryIsTotal ? <div className="summary-project-totals">{items.map((draft, index) => <span key={draft.id}><span>{draft.projectName || `Projeto ${index + 1}`}</span><b>{formatarMoeda(summaries[index]?.total ?? 0)}</b></span>)}<span className="summary-grand-total"><span>Total dos projetos</span><b>{formatarMoeda(gross)}</b></span></div> : <><span>Projetos adicionados <b>{items.length}</b></span><span>Área total <b>{(selectedSummary?.area ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²</b></span>{selectedComponentBreakdown.length ? selectedComponentBreakdown.map((component) => <span key={component.id}>{component.name} <b>{formatarMoeda(component.amount)}</b></span>) : <span>Material <b>{formatarMoeda(selectedSummary?.materialSubtotal ?? 0)}</b></span>}{selectedServiceBreakdown.length ? selectedServiceBreakdown.map((service) => <span key={service.id}>{service.name} <b>{formatarMoeda(service.amount)}</b></span>) : <span>Serviços, recortes e cubas <b>{formatarMoeda(0)}</b></span>}<span>Descontos individuais <b>{formatarMoeda(selectedSummary?.individualDiscountTotal ?? 0)}</b></span><span className="summary-grand-total">Total do projeto <b>{formatarMoeda(selectedSummary?.total ?? 0)}</b></span></>}{/* Validade: sempre 10 dias úteis após a emissão (sai no PDF). Observações do orçamento: na tela do orçamento salvo. */}{!quoteId && <VincularOrcamento customer={customer} value={parentQuote} onChange={(quote) => { setParentQuote(quote); if (quote) selectCustomer(quote.customer); }} />}<small className="quote-summary-note">As medidas e os acabamentos atualizam o orçamento automaticamente.</small>{quickMode && <label>Desconto autorizado (R$)<input aria-label="Desconto geral rápido" inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>}{quickMode && <><span>Total no Pix (10% de desconto) <b>{formatarMoeda(total)}</b></span><span>No cartão (+10%) <b>{formatarMoeda(calcularTotalCartao(total))}</b></span></>}<div className="quote-summary-actions">{quickMode && <><button type="button" className="save-quote-button" disabled={saving} onClick={() => salvarOrcamento(true)}>Salvar e abrir PDF</button><button type="button" className="save-draft-button" onClick={() => changeEntryMode('DETAILED')}>Adicionar desenhos</button></>}{!quickMode && currentStep < 3 && <button type="button" className="save-quote-button" onClick={nextStep}>Continuar <span aria-hidden="true">→</span></button>}<button type="button" className={currentStep < 3 ? 'save-draft-button' : 'save-quote-button'} onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'}</button><small>{quoteId ? 'Seu preenchimento é mantido neste navegador.' : 'Seu preenchimento fica guardado e aparece também no celular e no computador.'}</small></div></aside>
     </div>
   </main>;
 }

@@ -95,7 +95,7 @@ try {
   await cortes.locator('.quick-service-choice').filter({ hasText: 'Corte de cuba oval' }).locator('input[type="checkbox"]').check();
   await cortes.getByRole('button', { name: 'Concluir', exact: true }).click();
   await assertTotalContains('1.375,00');
-  await page.getByLabel('Observações do orçamento', { exact: true }).fill('Conferir medidas antes de fabricar.');
+  for (const campo of ['Validade do orçamento', 'Observações do orçamento', 'Valores no PDF']) assert.equal(await page.getByLabel(campo, { exact: true }).count(), 0, `${campo} saiu do resumo`);
   await screenshot('03-recortes');
   // Cuba Grande (item, não recorte) e Instalação vivem em "+ Outros serviços",
   // com quantidade por unidade (Instalação é valor fixo, sem quantidade).
@@ -173,7 +173,8 @@ try {
   const recorte = saved.items[0].drawingData.productionPlan.cutouts[0];
   assert.deepEqual([recorte.cutoutType, recorte.lengthMm, recorte.widthMm], ['OVAL_SINK', 560, 340], 'Recorte de produção salvo no plano');
   assert.equal(saved.discountAmount, 25);
-  assert.equal(saved.notes, 'Conferir medidas antes de fabricar.');
+  assert.equal(saved.notes, undefined, 'observações se editam na tela do orçamento');
+  assert.equal(saved.validUntil, undefined, 'validade calculada no servidor');
   assert.deepEqual(errors, []);
   console.log('OK: Orçamento Rápido, acabamentos, opções da peça, cortes e furos, outros serviços, desconto, recorte de produção no desenho, Ver tudo, rascunho, salvamento e 4 larguras sem overflow e sem campo Orientação. Nenhuma API real chamada.');
 } finally {

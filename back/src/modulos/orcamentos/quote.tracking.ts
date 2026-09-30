@@ -13,6 +13,8 @@ export const trackingSchema = z.object({
   deadlineConfirmed: z.boolean().optional(),
   deadlineNote: z.string().trim().max(500).nullable().optional(),
 }).strict();
+/** Acompanhamento na tela do orçamento: prazos e as observações do orçamento (as que saem no PDF). */
+export const acompanhamentoSchema = trackingSchema.extend({ notes: z.string().trim().max(3000).nullable().optional() }).strict();
 /** Ordens da lista de orçamentos; "prazo" usa o prazo final (montagem ou, sem ela, a data acordada). */
 export const ORDENS_ORCAMENTO = ['recentes', 'antigos', 'prazo', 'maior-valor', 'cliente'] as const;
 export type OrdemOrcamentos = typeof ORDENS_ORCAMENTO[number];

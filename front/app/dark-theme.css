@@ -183,7 +183,7 @@
     .material, .service, .piece
   ) { background: var(--surface); color: var(--ink); border-color: var(--line); }
   html.inova-dark .inova-theme :is(
-    .quote-workbench-tabs, .quick-services, .quick-assembly-service, .quick-round-toggle,
+    .quote-workbench-tabs, .quote-workbench-bloco, .quick-services, .quick-assembly-service, .quick-round-toggle,
     .quick-new-service-form, .component-measure-preview, .pricing-notice,
     .split-assistant-pieces li, .project-builder .customer-mode-tabs,
     .project-builder .selected-stone-placeholder
@@ -257,6 +257,7 @@
     .map-component-add label, .map-editor-heading button, .edge-length-editor, .backsplash-details-button
   ) { color: var(--gold); }
   html.inova-dark .inova-theme .project-builder :is(.component-material-picker .picker-summary:hover, .project-selection-grid .picker-summary:hover) { background: #303631; }
+  html.inova-dark .inova-theme :is(.quote-workbench-bloco h3, .quote-workbench-prazo-obs > footer [role=status]) { color: #a9c29b; }
   html.inova-dark .inova-theme .project-builder .project-step-number { background: #343a35; color: var(--ink); }
   html.inova-dark .inova-theme .project-stage-heading .stage-badge { background: var(--accent-soft); color: var(--gold); }
   html.inova-dark .inova-theme .project-builder :is(.project-step.current, .project-step.completed) .project-step-number { background: #485f48; color: #fff; }

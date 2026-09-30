@@ -200,11 +200,6 @@ button:not(:disabled) { cursor: pointer; }
 .quote-summary-card > span { gap: 12px; line-height: 1.5; }
 .quote-summary-card > span > b { text-align: right; overflow-wrap: anywhere; }
 .quote-summary-actions button { font-family: inherit; font-size: 13px; font-weight: 600; min-height: 42px; }
-.quick-pdf-pricing { display:grid; gap:4px; color:var(--muted); font-size:11px; font-weight:600; }
-.quick-pdf-pricing select { min-height:36px; max-width:290px; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--ink); padding:8px 10px; font:inherit; }
-.quote-validity-field { display: grid; gap: 7px; padding-top: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
-.quote-validity-field input { display: block; width: 100%; min-width: 0; height: 42px; padding: 9px 11px; font: 13px Arial, Helvetica, sans-serif; color: var(--ink); background: #fffdf9; border: 1px solid var(--line); border-radius: 8px; color-scheme: light; }
-.quote-validity-field input::-webkit-calendar-picker-indicator { opacity: .55; cursor: pointer; }
 .project-selection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .project-selection-grid > details { display: block; min-height: 100px; padding: 0; }
 .project-selection-grid .picker-summary { display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; gap: 12px; min-height: 100px; padding: 14px; list-style: none; cursor: pointer; border-radius: 10px; }
@@ -315,32 +310,41 @@ button:not(:disabled) { cursor: pointer; }
 .worker-colors label i { flex:0 0 9px; width:9px; height:9px; border-radius:50%; }
 .worker-colors input[type="color"] { width:26px; height:25px; padding:1px; margin-left:auto; border:1px solid var(--line); border-radius:5px; background:#fff; }
 .quote-workbench { overflow:hidden; margin:0 0 16px; border:1px solid var(--line); border-radius:11px; background:#fff; box-shadow:0 3px 12px #34240e06; }
-.quote-workbench-tabs { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); border-bottom:1px solid var(--line); background:#fafbf8; }
+.quote-workbench-tabs { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0, 1fr); border-bottom:1px solid var(--line); background:#fafbf8; }
 .quote-workbench-tabs button { display:flex; align-items:center; justify-content:center; gap:7px; min-height:34px; padding:7px 8px; border:0; border-bottom:2px solid transparent; color:#85897e; background:transparent; font-size:10px; font-weight:600; cursor:pointer; }
 .quote-workbench-tabs button[aria-pressed="true"] { color:#4b6343; border-bottom-color:#607453; background:#fff; }
 .quote-workbench-tabs i { font-size:14px; font-style:normal; line-height:1; }
 .quote-workbench-general { display:grid; grid-template-columns:1.3fr 1fr 1fr 1fr auto; gap:9px; align-items:end; padding:10px 12px; }
-.quote-workbench-general label, .quote-workbench-deadlines label, .quote-workbench-notes label, .quote-workbench-team > label { display:grid; gap:4px; color:var(--muted); font-size:9px; }
+.quote-workbench-general label { display:grid; gap:4px; color:var(--muted); font-size:9px; }
 .quote-workbench-general label > strong { display:grid; min-height:32px; align-content:center; padding:4px 8px; border:1px solid var(--line); border-radius:6px; color:var(--ink); background:#fff; font-size:11px; }
 .quote-workbench-general label > strong small { overflow:hidden; color:var(--muted); font-size:9px; font-weight:400; text-overflow:ellipsis; white-space:nowrap; }
 .quote-workbench :is(select, input, textarea) { min-width:0; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); font:11px inherit; }
 .quote-workbench :is(select, input) { min-height:32px; padding:5px 8px; }
 .quote-workbench-general button { min-height:32px; padding:5px 12px; white-space:nowrap; font-size:11px; }
-.quote-workbench-team { display:grid; grid-template-columns:minmax(260px, .7fr) minmax(230px, .55fr); gap:10px 14px; align-items:end; padding:12px; }
-.quote-workbench-team > details { grid-column:1 / -1; }
-.quote-workbench-team .worker-colors { margin-top:0; }
-.quote-workbench-deadlines { display:grid; grid-template-columns:repeat(2, minmax(0, 220px)) auto; gap:10px; align-items:end; padding:12px; }
-.quote-workbench-deadlines .tracking-check { display:flex; align-items:center; gap:6px; min-height:32px; color:var(--muted); font-size:10px; }
-.quote-workbench-deadlines .tracking-check input { min-height:auto; padding:0; }
-.quote-workbench-deadlines > small { grid-column:1 / -1; color:var(--muted); font-size:10px; }
-.quote-workbench-deadlines button, .quote-workbench-notes button { min-height:32px; padding:5px 12px; font-size:11px; }
-.quote-workbench-notes { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:10px; align-items:end; padding:12px; }
-.quote-workbench-notes textarea { min-height:50px; padding:7px 8px; resize:vertical; }
 .quote-workbench-history { display:grid; grid-template-columns:minmax(240px, .65fr) minmax(0, 1fr); gap:14px; padding:12px; }
+/* Aba "Equipe, prazo e observação": blocos compactos lado a lado, no estilo da aba Geral. */
+.quote-workbench-work { display:grid; grid-template-columns:minmax(230px, .75fr) minmax(0, 2.25fr); gap:10px; padding:12px; }
+.quote-workbench-work.sem-equipe { grid-template-columns:minmax(0, 1fr); }
+.quote-workbench-work > .quote-workbench-bloco { align-self:start; }
+.quote-workbench-prazo-obs { display:grid; grid-template-columns:minmax(250px, .85fr) minmax(0, 1.4fr); gap:10px; }
+.quote-workbench-bloco { display:grid; align-content:start; gap:8px; min-width:0; padding:10px 11px; border:1px solid #e3e6dc; border-radius:9px; background:#fbfcf9; }
+.quote-workbench-bloco h3 { display:flex; align-items:center; gap:6px; margin:0; color:#4b6343; font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.quote-workbench-bloco h3 i { font-size:13px; font-style:normal; line-height:1; }
+.quote-workbench-bloco > label, .quote-workbench-datas label { display:grid; gap:4px; color:var(--muted); font-size:9px; }
+.quote-workbench-datas { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+.quote-workbench-bloco .tracking-check { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:10px; }
+.quote-workbench-bloco .tracking-check input { min-height:auto; padding:0; }
+.quote-workbench-bloco > small { color:var(--muted); font-size:10px; }
+.quote-workbench-bloco textarea { width:100%; min-height:66px; padding:7px 8px; resize:vertical; }
+.quote-workbench-bloco .worker-colors { margin-top:0; }
+.quote-workbench-bloco .worker-colors summary { font-size:11px; }
+.quote-workbench-prazo-obs > footer { grid-column:1 / -1; display:flex; align-items:center; justify-content:flex-end; gap:10px; }
+.quote-workbench-prazo-obs > footer button { min-height:32px; padding:5px 16px; font-size:11px; }
+.quote-workbench-prazo-obs > footer [role=status] { color:#4b6343; font-size:11px; font-weight:600; }
 .quote-workbench-history .deadline-summary { display:grid; gap:5px; color:var(--muted); font-size:10px; }
 .quote-workbench-history .worker-history { border:0; padding:0; }
 .quote-workbench-history .worker-history > strong { color:var(--ink); font-size:11px; }
-@media (max-width: 900px) { .quote-workbench-general { grid-template-columns:repeat(2, minmax(0, 1fr)); } .quote-workbench-general button { grid-column:1 / -1; } .quote-workbench-team, .quote-workbench-history { grid-template-columns:1fr; } .quote-workbench-team > details { grid-column:1; } }
+@media (max-width: 900px) { .quote-workbench-general { grid-template-columns:repeat(2, minmax(0, 1fr)); } .quote-workbench-general button { grid-column:1 / -1; } .quote-workbench-history, .quote-workbench-work, .quote-workbench-prazo-obs { grid-template-columns:1fr; } }
 @media (max-width: 760px) { .quote-tracking-card, .quote-worker-card { grid-template-columns:1fr; } .quote-tracking-card > label { grid-template-columns:1fr; } .quote-tracking-card form > label:nth-of-type(1), .quote-tracking-card form > label:nth-of-type(2), .quote-tracking-card form > label:nth-of-type(3), .quote-tracking-card form > label:nth-of-type(4), .quote-tracking-card form > button { grid-column:1; } .quote-worker-card > span, .quote-worker-card > details { grid-column:1; } }
 @media (max-width: 620px) { .quote-filter-panel { padding:14px; } .quote-filter-panel > header { display:grid; grid-template-columns:1fr; } .quote-filter-panel > header .quote-filter-actions { width:100%; justify-content:flex-end; } }
 .pagination { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 20px; color: var(--muted); font-size: 12px; }
@@ -438,6 +442,7 @@ button:not(:disabled) { cursor: pointer; }
 .quote-linker { margin: 0 0 20px; padding: 16px; border: 1px solid #e7ded1; border-radius: 12px; background: #fffdf8; }
 .quote-linker summary { cursor: pointer; font-weight: 600; }
 .quote-linker .customer-results { max-height: 260px; overflow-y: auto; }
+.quote-linker-vazio { margin: 8px 0 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 12px; text-align: center; }
 .quote-summary-card .quote-linker { min-width: 0; margin: 0; padding: 12px; }
 .quote-summary-card .quote-linker summary { line-height: 1.5; }
 .quote-summary-card .quote-linker .customer-result { min-width: 0; overflow-wrap: anywhere; }

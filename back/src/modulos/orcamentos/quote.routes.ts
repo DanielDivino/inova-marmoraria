@@ -14,7 +14,7 @@ import { editQuoteSchema } from './quote.schema.js';
 import { renderizarPdfOrcamento, renderizarPdfDesenhoProjeto } from './quote.pdf.js';
 import { quotePdfOptionsSchema } from './quote.pdf-options.js';
 import { compararPorPrazo, montarFiltrosOrcamento, historySchema, ORDEM_ORCAMENTOS } from './quote.tracking.js';
-import { trackingSchema } from './quote.tracking.js';
+import { acompanhamentoSchema } from './quote.tracking.js';
 
 const asNumber = (value: unknown) => Number(value);
 export async function registrarRotasOrcamentos(app: FastifyInstance) {
@@ -73,7 +73,7 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
   });
   app.patch('/:id/tracking', authenticated, async (request) => {
     const { id } = idSchema.parse(request.params);
-    const input = trackingSchema.parse(request.body);
+    const input = acompanhamentoSchema.parse(request.body);
     const before = await prisma.quote.findUnique({ where: { id } });
     if (!before) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
     const data: Prisma.QuoteUpdateInput = {
@@ -81,9 +81,10 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
       ...(input.installationDeadline !== undefined ? { installationDeadline: input.installationDeadline ? new Date(input.installationDeadline + 'T00:00:00.000Z') : null } : {}),
       ...(input.deadlineConfirmed !== undefined ? { deadlineConfirmed: input.deadlineConfirmed } : {}),
       ...(input.deadlineNote !== undefined ? { deadlineNote: input.deadlineNote } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
     };
     const updated = await prisma.quote.update({ where: { id }, data, include: incluirOrcamento(request.user) });
-    await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'DEADLINE_UPDATED', previous: { deliveryDeadline: before.deliveryDeadline, installationDeadline: before.installationDeadline, deadlineConfirmed: before.deadlineConfirmed, deadlineNote: before.deadlineNote }, current: { deliveryDeadline: updated.deliveryDeadline, installationDeadline: updated.installationDeadline, deadlineConfirmed: updated.deadlineConfirmed, deadlineNote: updated.deadlineNote } } });
+    await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'DEADLINE_UPDATED', previous: { deliveryDeadline: before.deliveryDeadline, installationDeadline: before.installationDeadline, deadlineConfirmed: before.deadlineConfirmed, deadlineNote: before.deadlineNote, notes: before.notes }, current: { deliveryDeadline: updated.deliveryDeadline, installationDeadline: updated.installationDeadline, deadlineConfirmed: updated.deadlineConfirmed, deadlineNote: updated.deadlineNote, notes: updated.notes } } });
     return serializarOrcamento(updated);
   });
   app.patch('/:id', authenticated, async (request) => {
