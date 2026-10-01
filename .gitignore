@@ -3,12 +3,13 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+.turbo/
 *.log
 *.zip
 
 # Next.js e relatórios automatizados
-front/.next/
-front/.next-*/
+apps/web/.next/
+apps/web/.next-*/
 .test-artifacts/
 playwright-report/
 test-results/
@@ -18,8 +19,8 @@ test-results/
 .env.local
 .env.*.local
 !.env.example
-back/uploads/*
-!back/uploads/.gitkeep
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
 
 # Arquivos do sistema/editor
 .DS_Store

@@ -1,6 +1,6 @@
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
-import { criarAplicacao } from '../../back/src/app.js';
-import { prisma } from '../../back/src/config/prisma.js';
+import { criarAplicacao } from '../../apps/api/src/app.js';
+import { prisma } from '../../apps/api/src/config/prisma.js';
 
 if (!/^inova_test_[a-f0-9]{32}$/.test(process.env.INOVA_TEST_SCHEMA ?? '') || new URL(process.env.DATABASE_URL!).searchParams.get('schema') !== process.env.INOVA_TEST_SCHEMA) throw new Error('Banco de testes isolado obrigatório.');
 const app = await criarAplicacao();

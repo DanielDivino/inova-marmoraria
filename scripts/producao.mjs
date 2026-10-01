@@ -14,7 +14,7 @@ import { config } from 'dotenv';
  * aponta para a que está no ar. "atualizar" copia o código da pasta de
  * desenvolvimento para a cópia parada, compila e, só se tudo der certo, troca o
  * atalho e reinicia o serviço; a anterior fica guardada para "voltar".
- * O banco de dados, o .env e as imagens enviadas (back/uploads) são os mesmos
+ * O banco de dados, o .env e as imagens enviadas (apps/api/uploads) são os mesmos
  * da pasta de desenvolvimento.
  *
  *   npm run producao:instalar   primeira vez: serviço do sistema + primeira versão
@@ -34,10 +34,23 @@ const UNIDADE = path.join(os.homedir(), '.config/systemd/user', `${SERVICO}.serv
 /** Pasta do projeto deste script: a de desenvolvimento, ou a cópia no ar quando o serviço chama "iniciar". */
 const raiz = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 /** Continuam na cópia entre atualizações: dependências, cache da compilação e os atalhos para o .env e as imagens. */
-const MANTER = ['.env', 'back/uploads', 'front/.next', 'node_modules', 'packages/domain/node_modules', 'front/node_modules', 'back/node_modules'];
+const UPLOADS = 'apps/api/uploads';
+const MANTER = ['.env', UPLOADS, 'apps/web/.next', '.turbo', 'node_modules', 'apps/web/node_modules', 'apps/api/node_modules',
+  'packages/domain/node_modules', 'packages/contracts/node_modules', 'packages/database/node_modules', 'packages/config/node_modules'];
 const DEPENDENCIAS = MANTER.filter((item) => item.endsWith('node_modules'));
 
 const etapa = (texto) => console.log(`\n▸ ${texto}`);
+/** Executável do "bin" de um pacote, procurado a partir da pasta do app como o Node faria (com ou sem hoisting). */
+function binario(app, pacote, nome) {
+  for (let pasta = path.join(raiz, app); ; pasta = path.dirname(pasta)) {
+    const manifesto = path.join(pasta, 'node_modules', pacote, 'package.json');
+    if (fs.existsSync(manifesto)) {
+      const { bin } = JSON.parse(fs.readFileSync(manifesto, 'utf8'));
+      return path.join(path.dirname(manifesto), typeof bin === 'string' ? bin : bin[nome]);
+    }
+    if (path.dirname(pasta) === pasta) throw new Error(`Pacote ${pacote} não instalado nesta cópia.`);
+  }
+}
 function executar(comando, args, opcoes = {}) {
   const resultado = spawnSync(comando, args, { stdio: 'inherit', ...opcoes, env: { ...process.env, ...opcoes.env } });
   if (resultado.status !== 0) throw new Error(`Falhou: ${comando} ${args.join(' ')}`);
@@ -74,7 +87,7 @@ function copiarCodigo(destino) {
   fs.mkdirSync(destino, { recursive: true });
   limpar(destino);
   const arquivos = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: raiz }).toString().split('\0')
-    .filter((arquivo) => arquivo && !arquivo.startsWith('back/uploads/') && fs.existsSync(path.join(raiz, arquivo)));
+    .filter((arquivo) => arquivo && !arquivo.startsWith(`${UPLOADS}/`) && fs.existsSync(path.join(raiz, arquivo)));
   for (const arquivo of arquivos) {
     const alvo = path.join(destino, arquivo);
     fs.mkdirSync(path.dirname(alvo), { recursive: true });
@@ -85,7 +98,7 @@ function copiarCodigo(destino) {
 
 /** Mesmo .env e mesmas imagens enviadas da pasta de desenvolvimento. */
 function ligarCompartilhados(destino) {
-  for (const item of ['.env', 'back/uploads']) {
+  for (const item of ['.env', UPLOADS]) {
     const alvo = path.join(destino, item);
     if (fs.existsSync(alvo) || fs.lstatSync(alvo, { throwIfNoEntry: false })) continue;
     fs.mkdirSync(path.dirname(alvo), { recursive: true });
@@ -108,10 +121,15 @@ function garantirDependencias(destino) {
 }
 
 function compilar(destino) {
-  executar(process.execPath, ['scripts/prisma.mjs', 'generate'], { cwd: destino });
-  executar('npm', ['run', 'build', '--workspace=@inova/domain'], { cwd: destino });
-  executar('npm', ['run', 'build', '--workspace=@inova/api'], { cwd: destino });
-  executar('npm', ['run', 'build', '--workspace=@inova/web'], { cwd: destino, env: { API_URL } });
+  // Turborepo compila na ordem do grafo: cliente Prisma → banco, domínio e contratos → API (tipos) e web.
+  executar('npm', ['exec', '--', 'turbo', 'run', 'build', '--filter=@inova/api', '--filter=@inova/web'], { cwd: destino, env: { API_URL } });
+}
+
+/** Imagens enviadas ainda na pasta antiga (back/uploads, de antes do monorepo): mover antes de publicar. */
+function conferirPastasAntigas() {
+  const antiga = path.join(raiz, 'back/uploads');
+  const temArquivos = fs.existsSync(antiga) && fs.readdirSync(antiga, { recursive: true }).some((nome) => !String(nome).endsWith('.gitkeep') && fs.statSync(path.join(antiga, String(nome))).isFile());
+  if (temArquivos) throw new Error('Há imagens em back/uploads (estrutura antiga). Rode "npm run estrutura:migrar-pastas-locais" antes de atualizar a produção.');
 }
 
 /** Troca o atalho "atual" de uma vez (sem instante em que ele não existe). */
@@ -153,6 +171,7 @@ function travar() {
 async function atualizar() {
   if (raiz.startsWith(`${path.resolve(PASTA)}${path.sep}`)) throw new Error('Rode a atualização pela pasta de desenvolvimento, não pela cópia de produção.');
   travar();
+  conferirPastasAntigas();
   const estado = lerEstado();
   const copia = estado.ativa === 'a' ? 'b' : 'a';
   const destino = path.join(PASTA, copia);
@@ -164,7 +183,7 @@ async function atualizar() {
   etapa('Compilando e conferindo tipos');
   compilar(destino);
   etapa('Aplicando as mudanças pendentes do banco de dados');
-  executar(process.execPath, ['scripts/prisma.mjs', 'migrate', 'deploy'], { cwd: destino });
+  executar('npm', ['run', 'db:deploy', '--workspace=@inova/database'], { cwd: destino });
   etapa('Colocando a nova versão no ar');
   const anterior = estado.ativa;
   apontarPara(copia);
@@ -243,8 +262,8 @@ async function iniciar() {
   await esperarBanco();
   const ambiente = { ...process.env, NODE_ENV: 'production', API_URL };
   const servidores = [
-    spawn(process.execPath, [path.join(raiz, 'node_modules/tsx/dist/cli.mjs'), 'src/server.ts'], { cwd: path.join(raiz, 'back'), env: { ...ambiente, PORT: String(PORTA_API) }, stdio: 'inherit', detached: true }),
-    spawn(process.execPath, [path.join(raiz, 'node_modules/next/dist/bin/next'), 'start', '-p', String(PORTA_WEB), '-H', '0.0.0.0'], { cwd: path.join(raiz, 'front'), env: ambiente, stdio: 'inherit', detached: true }),
+    spawn(process.execPath, [binario('apps/api', 'tsx', 'tsx'), 'src/server.ts'], { cwd: path.join(raiz, 'apps/api'), env: { ...ambiente, PORT: String(PORTA_API) }, stdio: 'inherit', detached: true }),
+    spawn(process.execPath, [binario('apps/web', 'next', 'next'), 'start', '-p', String(PORTA_WEB), '-H', '0.0.0.0'], { cwd: path.join(raiz, 'apps/web'), env: ambiente, stdio: 'inherit', detached: true }),
   ];
   let encerrando = false;
   const encerrar = (codigo = 0) => {

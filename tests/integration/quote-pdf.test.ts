@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, mkdtempSync, unlinkSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { renderizarPdfOrcamento } from '../../back/src/modulos/orcamentos/quote.pdf.js';
+import { renderizarPdfOrcamento } from '../../apps/api/src/modulos/orcamentos/quote.pdf.js';
 
 const sides = ['FRONT', 'BACK', 'LEFT', 'RIGHT'];
 const component = (edges: any[] = []) => ({ id: 'top', label: 'Tampo', lengthMm: 2000, widthMm: 600, quantity: 1, billableArea: 1.2, edges });

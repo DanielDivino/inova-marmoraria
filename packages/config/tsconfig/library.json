@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Biblioteca compilada para dist (tipos inclusos)",
+  "extends": "./node.json",
+  "compilerOptions": {
+    "declaration": true
+  }
+}

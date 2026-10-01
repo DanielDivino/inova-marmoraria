@@ -2,7 +2,7 @@
 
 Sistema interno para criar, revisar, aprovar e acompanhar orçamentos e projetos da Inova Marmoraria.
 
-O projeto é um monorepo Node.js: a interface e a API permanecem separadas, mas usam as mesmas regras de domínio (`packages/domain/`) para cálculos, descontos, prazos e apresentação de status.
+O projeto é um monorepo npm workspaces orquestrado pelo [Turborepo](https://turborepo.dev): os apps (`apps/web`, `apps/api`) ficam separados e compartilham pacotes internos (`packages/`) com regras de domínio, contratos públicos e o banco. Estrutura e regras de dependência: [`docs/architecture/monorepo.md`](docs/architecture/monorepo.md).
 
 ## Como iniciar o projeto
 
@@ -25,7 +25,7 @@ npm run db:seed
 
 ### Rodar em desenvolvimento
 
-Para iniciar API e interface juntas:
+Para iniciar API e interface juntas (o Turborepo compila os pacotes internos e mantém domínio e contratos em modo watch):
 
 ```bash
 npm run dev
@@ -46,7 +46,7 @@ Troque a senha inicial e `JWT_SECRET` antes de qualquer ambiente que não seja l
 
 ### Produção na rede local
 
-A versão de produção roda separada do desenvolvimento, na porta 3000 (API interna na 3334), e é acessada pelos outros computadores do mesmo Wi‑Fi em `http://<IP deste computador>:3000`. Ela usa o mesmo banco, o mesmo `.env` e as mesmas imagens (`back/uploads`) da pasta de desenvolvimento.
+A versão de produção roda separada do desenvolvimento, na porta 3000 (API interna na 3334), e é acessada pelos outros computadores do mesmo Wi‑Fi em `http://<IP deste computador>:3000`. Ela usa o mesmo banco, o mesmo `.env` e as mesmas imagens (`apps/api/uploads`) da pasta de desenvolvimento.
 
 ```bash
 npm run producao:instalar   # primeira vez: cria o serviço do sistema e publica a primeira versão
@@ -62,8 +62,12 @@ As cópias ficam em `~/INOVA-producao` (`a` e `b`; `atual` aponta para a que est
 
 | Diretório | Responsabilidade |
 | --- | --- |
-| [`front/`](front/README.md) | Aplicação web Next.js: orçamento, clientes, histórico, desenhos 2D e interface administrativa. |
-| [`back/`](back/README.md) | API Fastify, Prisma, autenticação, PDF, banco e migrations. |
+| [`apps/web/`](apps/web/README.md) | Aplicação web Next.js: orçamento, clientes, histórico, desenhos 2D e interface administrativa. |
+| [`apps/api/`](apps/api/README.md) | API Fastify: autenticação, permissões, regras de orçamento, PDF e arquivos. |
+| [`packages/domain/`](packages/domain) | Cálculos e regras puras compartilhadas (sem React, Fastify ou Prisma). |
+| [`packages/contracts/`](packages/contracts/README.md) | Schemas públicos usados pela interface e pela API. |
+| [`packages/database/`](packages/database/README.md) | Schema Prisma, migrations, seed e cliente gerado. |
+| [`packages/config/`](packages/config/README.md) | Configurações comuns de TypeScript. |
 | `packages/domain/` | Regras de cálculo, snapshots de valores, prazos úteis e status compartilhados entre front e back. |
 | `tests/` | Testes de integração, E2E, roteiros visuais e executor isolado de banco temporário. |
 | `documentacao/` | Especificações, notas de revisão e ativos de marca (logo original). |
@@ -83,7 +87,7 @@ npm run build            # typecheck e build de produção
 
 Camadas de teste:
 
-- **Unitários** (`*.test.ts` ao lado do código, `packages/domain/src/`, `front/utilitarios/`, `back/src/`): regras puras, rodam com Vitest, sem banco nem rede.
+- **Unitários** (`*.test.ts` ao lado do código, `packages/domain/src/`, `apps/web/utilitarios/`, `apps/api/src/`; `npm test` roda `turbo run test` em cada pacote): regras puras, rodam com Vitest, sem banco nem rede.
 - **Integração** (`tests/integration/*.test.ts`): sobem a API real contra um schema PostgreSQL descartável.
 - **E2E** (`tests/e2e/*.spec.ts`): fluxo completo no navegador (Playwright) contra API e web reais, em portas isoladas.
 - **Visuais** (`tests/visual/*.mjs`): roteiros Playwright standalone que interceptam toda chamada `/api/**` — não iniciam backend nem gravam dados reais. Cada um também roda isolado com `node tests/visual/<arquivo>.mjs`.
@@ -92,7 +96,7 @@ Os testes de integração e E2E criam um schema PostgreSQL temporário com prefi
 
 ## Banco e migrations
 
-As migrations estão em `back/prisma/migrations/` e são incrementais. Para aplicar novas migrations em desenvolvimento:
+As migrations estão em `packages/database/prisma/migrations/` e são incrementais. Para aplicar novas migrations em desenvolvimento:
 
 ```bash
 npm run db:migrate
@@ -102,26 +106,29 @@ Não edite migrations já aplicadas. Crie uma nova migration para evoluir o esqu
 
 ## Imagens e outros ativos
 
-- `front/public/`: tudo que o Next.js precisa servir diretamente (logo da interface, ambientes do mostruário, placeholder de pedra).
-- `back/assets/`: ativos lidos do disco pela API (hoje, só o logo usado na geração de PDF).
-- `back/scripts/seed-assets/`: fotos de amostras de material e o zip de origem (`granitos-e-materiais-inova.zip`, ignorado pelo git) usados apenas para popular o catálogo via `npm run catalog:import-images --workspace=@inova/api`. Não são servidos pela aplicação.
-- `back/uploads/materials/`: destino em runtime das imagens do catálogo (gerado pelo importador, ignorado pelo git — nunca versionar).
-- `documentacao/marca/`: fonte canônica do logo em alta resolução. As cópias em `front/public/` e `back/assets/` são mantidas manualmente em sincronia porque cada uma é lida por um processo diferente em tempo de execução.
+- `apps/web/public/`: tudo que o Next.js precisa servir diretamente (logo da interface, ambientes do mostruário, placeholder de pedra).
+- `apps/api/assets/`: ativos lidos do disco pela API (hoje, só o logo usado na geração de PDF).
+- `apps/api/scripts/seed-assets/`: fotos de amostras de material e o zip de origem (`granitos-e-materiais-inova.zip`, ignorado pelo git) usados apenas para popular o catálogo via `npm run catalog:import-images --workspace=@inova/api`. Não são servidos pela aplicação.
+- `apps/api/uploads/materials/`: destino em runtime das imagens do catálogo (gerado pelo importador, ignorado pelo git — nunca versionar).
+- `documentacao/marca/`: fonte canônica do logo em alta resolução. As cópias em `apps/web/public/` e `apps/api/assets/` são mantidas manualmente em sincronia porque cada uma é lida por um processo diferente em tempo de execução.
 
 ## Documentação adicional
 
-- [Aplicação web](front/README.md)
-- [API e banco](back/README.md)
+- [Aplicação web](apps/web/README.md)
+- [API](apps/api/README.md)
+- [Banco](packages/database/README.md)
+- [Arquitetura do monorepo](docs/architecture/monorepo.md)
+- [Migração para a estrutura de monorepo](docs/runbooks/migracao-estrutura-monorepo.md)
 - Especificação: `SDD_Inova_Marmoraria_v2.docx`
 - Notas de revisão: [`documentacao/`](documentacao/)
 
 ## Organização do código
 
-- `back/src/modulos/`: autenticação, catálogo, clientes, usuários, orçamentos, desenhos, auditoria e notificações.
-- `back/src/compartilhado/`: contratos HTTP e erros comuns.
-- `front/componentes/orcamento/`: editor compartilhado, etapas, desenho, materiais e exportação.
-- `front/componentes/desenhos/`: editor técnico 2D.
-- `front/utilitarios/`: sessão, conversão de rascunhos, formatação e auxiliares de interface.
+- `apps/api/src/modulos/`: autenticação, catálogo, clientes, usuários, orçamentos, desenhos, auditoria e notificações.
+- `apps/api/src/compartilhado/`: contratos HTTP e erros comuns.
+- `apps/web/componentes/orcamento/`: editor compartilhado, etapas, desenho, materiais e exportação.
+- `apps/web/componentes/desenhos/`: editor técnico 2D.
+- `apps/web/utilitarios/`: sessão, conversão de rascunhos, formatação e auxiliares de interface.
 - `packages/domain/src/calculos/`: regras de medidas e preços.
 - `packages/domain/src/orcamentos/`: snapshots, prazos, fabricação e nomes de PDF.
 - `packages/domain/src/tecnico/`: geometria, comandos e schema do desenho técnico.

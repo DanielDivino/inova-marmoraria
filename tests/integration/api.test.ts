@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { criarAplicacao } from '../../back/src/app.js';
-import { prisma } from '../../back/src/config/prisma.js';
+import { criarAplicacao } from '../../apps/api/src/app.js';
+import { prisma } from '../../apps/api/src/config/prisma.js';
 import { itemSalvoParaEntrada, validadeOrcamento } from '@inova/domain';
 
 if (!/^inova_test_[a-f0-9]{32}$/.test(process.env.INOVA_TEST_SCHEMA ?? '') || new URL(process.env.DATABASE_URL!).searchParams.get('schema') !== process.env.INOVA_TEST_SCHEMA) throw new Error('Banco de testes isolado obrigatório.');

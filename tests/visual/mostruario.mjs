@@ -25,7 +25,7 @@ await page.route('**/api/**', async route => {
   if (caminho.startsWith('/api/uploads/materials/')) {
     const material = materiais.find(item => '/api' + item.images[0].url === caminho);
     assert(material, 'Somente amostras conhecidas');
-    const arquivo = resolve(raiz, 'back' + caminho.slice(4));
+    const arquivo = resolve(raiz, 'apps/api' + caminho.slice(4));
     if (process.env.INOVA_VISUAL_MATERIAIS_REAIS === '1' && existsSync(arquivo)) return route.fulfill({ path: arquivo });
     return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="' + material.cor + '"/><path d="M0 160L290 220 600 530" fill="none" stroke="#999" stroke-width="4"/></svg>' });
   }

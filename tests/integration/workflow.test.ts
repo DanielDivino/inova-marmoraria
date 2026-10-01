@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarAplicacao } from '../../back/src/app.js';
-import { prisma } from '../../back/src/config/prisma.js';
+import { criarAplicacao } from '../../apps/api/src/app.js';
+import { prisma } from '../../apps/api/src/config/prisma.js';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

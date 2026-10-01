@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { arredondarMoeda, calcularAcabamentoBorda, calcularLinha, calcularTotalOrcamento, medidaM2Fechado, calcularAreaRetangularM2, itemSalvoParaEntrada, type SavedQuoteItem } from '@inova/domain';
 import { contornoDosParametros, emptyTechnicalDocument, estimarDesenho, featureSchema, makePiece, type CatalogoEstimativa, type Feature, type TechnicalDocument } from '@inova/domain/technical';
-import { criarAplicacao } from '../../back/src/app.js';
-import { prisma } from '../../back/src/config/prisma.js';
-import { projetoDoDesenho } from '../../front/utilitarios/desenho-orcamento.js';
-import { itemSalvoParaRascunho, rascunhoParaEntradaItem } from '../../front/utilitarios/saved-quote.js';
+import { criarAplicacao } from '../../apps/api/src/app.js';
+import { prisma } from '../../apps/api/src/config/prisma.js';
+import { projetoDoDesenho } from '../../apps/web/utilitarios/desenho-orcamento.js';
+import { itemSalvoParaRascunho, rascunhoParaEntradaItem } from '../../apps/web/utilitarios/saved-quote.js';
 
 if (!/^inova_test_[a-f0-9]{32}$/.test(process.env.INOVA_TEST_SCHEMA ?? '') || new URL(process.env.DATABASE_URL!).searchParams.get('schema') !== process.env.INOVA_TEST_SCHEMA) throw new Error('Banco de testes isolado obrigatório.');
 const app = await criarAplicacao();
