@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { aplicarMedidaReferencia, comprimentoTraco, contornoValido, ladoMaisComprido, organizarTraco, paraContorno, recorteDoTraco, type Point, type RecorteDoTraco, type TechnicalDocument } from '@inova/domain/technical';
 import { criarId } from '../../utilitarios/id';
 import { inserirPeca, mundoParaLocal, novoRecursoCorpo, pecaNoPonto } from './operacoes';
+import { confirmar } from '../Confirmacao';
 import type { Selecao } from './tipos';
 
 /** Traço organizado esperando resposta: fechar a forma ou dar a medida de um lado. */
@@ -83,11 +84,11 @@ export function useDesenhoLivre({ documento, mudar, aoSelecionar, aoMensagem, pa
 
   const descartar = () => { setTraco(null); setRecorte(null); aoMensagem(''); };
   /** Tira tudo o que foi desenhado à mão nesta sessão (com confirmação). */
-  function limpar() {
+  async function limpar() {
     if (!documento) return;
     descartar();
     const existentes = desenhados.filter((id) => documento.pieces.some((peca) => peca.id === id) || documento.features.some((recurso) => recurso.id === id));
-    if (!existentes.length || !window.confirm(`Apagar as ${existentes.length} peças e recortes desenhados à mão agora?`)) return;
+    if (!existentes.length || !await confirmar({ titulo: `Apagar ${existentes.length === 1 ? 'o desenho feito à mão' : `as ${existentes.length} peças e recortes desenhados à mão`}?`, mensagem: 'Use Ctrl+Z para desfazer.', confirmar: 'Apagar', perigo: true })) return;
     mudar({ ...documento, pieces: documento.pieces.filter((peca) => !existentes.includes(peca.id)), features: documento.features.filter((recurso) => !existentes.includes(recurso.id) && !existentes.includes(recurso.pieceId)),
       assemblies: documento.assemblies.map((conjunto) => ({ ...conjunto, pieceIds: conjunto.pieceIds.filter((id) => !existentes.includes(id)) })) });
     setDesenhados([]); aoSelecionar(null);

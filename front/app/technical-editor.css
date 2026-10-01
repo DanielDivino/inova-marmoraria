@@ -102,7 +102,7 @@ html.inova-dark .inova-theme .tec-aviso { background: #3c3219; color: #f1d58a; }
 .tec-conferencia p { margin: 6px 0 0; font-size: 12.5px; }
 .tec-conferencia .structural, .tec-conferencia .technical { color: #a0392f; } .tec-conferencia .warning { color: #8a6415; } .tec-conferencia .ok { color: #356139; }
 .tec-trava.ativo { border-color: var(--green); color: var(--green); }
-.tec-janela .modal-filtros-campos p { margin: 0; }
+.tec-janela .janela-corpo p { margin: 0; }
 
 .tec-revisoes { margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); }
 .tec-revisoes header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

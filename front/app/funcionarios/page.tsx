@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../utilitarios/api';
 import { CabecalhoEquipe } from '../../componentes/equipe/CabecalhoEquipe';
+import { Janela } from '../../componentes/Janela';
 import { AbasFiltro, Icone } from '../../componentes/filtros/Filtros';
 
 type Worker = { id: string; name: string | null; cpf: string | null; phone: string | null; workColor: string; isActive: boolean };
@@ -105,18 +106,15 @@ export default function FuncionariosPage() {
       {!!workers.length && !visiveis.length && <p className="catalog-empty">Nenhum funcionário com esses filtros.</p>}
     </div>
 
-    {editingWorker !== null && <div className="catalog-modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) closeWorkerForm(); }}>
-      <section className="catalog-modal" role="dialog" aria-modal="true" aria-label={editingWorker ? 'Editar funcionário' : 'Novo funcionário'}>
-        <header><div><span className="catalog-eyebrow">{editingWorker ? 'EDITAR' : 'NOVO CADASTRO'}</span><h2>Funcionário</h2></div><button type="button" aria-label="Fechar" onClick={closeWorkerForm}>×</button></header>
-        <form className="admin-form" onSubmit={submitWorker}>
+    {editingWorker !== null && <Janela aberta aoFechar={closeWorkerForm} className="catalog-modal" icone="equipe" titulo={editingWorker ? 'Editar funcionário' : 'Novo funcionário'} aoEnviar={submitWorker}
+      rodape={<><button type="button" className="botao-contorno" onClick={closeWorkerForm}>Cancelar</button><button className="botao-principal">{editingWorker ? 'Salvar alterações' : 'Criar cadastro'}</button></>}>
+        <div className="admin-form">
           <label>Nome<input value={workerForm.name} onChange={event => setWorkerForm({ ...workerForm, name: event.target.value })} placeholder="Opcional" /></label>
           <label>CPF<input value={workerForm.cpf} onChange={event => setWorkerForm({ ...workerForm, cpf: event.target.value })} placeholder="Opcional" /></label>
           <label>Telefone<input value={workerForm.phone} onChange={event => setWorkerForm({ ...workerForm, phone: event.target.value })} placeholder="Opcional" /></label>
           <label>Cor de identificação<input type="color" value={workerForm.workColor} onChange={event => setWorkerForm({ ...workerForm, workColor: event.target.value })} /></label>
           <label className="active-toggle"><input type="checkbox" checked={workerForm.isActive} onChange={event => setWorkerForm({ ...workerForm, isActive: event.target.checked })} /> Ativo</label>
-          <button className="primary-button">{editingWorker ? 'Salvar alterações' : 'Criar cadastro'}</button>
-        </form>
-      </section>
-    </div>}
+        </div>
+    </Janela>}
   </main>;
 }

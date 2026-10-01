@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { DEFAULT_ASSEMBLY_PRICE, DEFAULT_DISASSEMBLY_PRICE, calcularComponente, centimetrosParaMilimetros, calcularTotalOrcamento, numeroDocumentoRemontagem, type PixDiscountPercent, type RemountDocument, type RemountItem, type RemountTotals } from '@inova/domain';
 import { EditorOrcamentoRapido } from '../../../../componentes/orcamento/QuickQuoteEditor';
@@ -17,16 +17,20 @@ import { criarId } from '../../../../utilitarios/id';
 import '../../../project-builder.css';
 import '../../../../componentes/orcamento/quick-quote.css';
 import './remontagem.css';
+import { Caminho } from '../../../../componentes/Caminho';
+import { caminhoDentroDoOrcamento, enderecoOrcamento, lerOrigem } from '../../../../utilitarios/rotas';
 
 type Service = { id: string; name: string; category: string; billingUnit: ComponentMaterial['billingUnit']; currentPrice: number };
 type Catalog = { materials: ComponentMaterial[]; services: Service[]; productTypes: { id: string; name: string }[] };
-type Origin = { id: string; number: string; customerNameSnapshot: string; customerPhoneSnapshot: string | null; workAddressSnapshot: string | null; notes: string | null; createdAt: string };
+type Origin = { id: string; number: string; customerId: string; status: string; executionStatus: string | null; customerNameSnapshot: string; customerPhoneSnapshot: string | null; workAddressSnapshot: string | null; notes: string | null; createdAt: string };
 type Preview = RemountTotals & { items: RemountItem[] };
 const newItem = (productTypeId: string): DraftItem => ({ id: criarId(), projectName: '', productTypeId, materialId: '', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [criarComponenteRapido()], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {}, drawingData: { entryMode: 'QUICK' } });
 const date = (value: string) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
 export default function RemontagemPage() {
   const { id } = useParams<{ id: string }>();
+  // De onde o orçamento foi aberto: o caminho volta para ele e, dele, para lá.
+  const origem = lerOrigem(useSearchParams());
   const [origin, setOrigin] = useState<Origin | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [saved, setSaved] = useState<RemountDocument | null>(null);
@@ -106,14 +110,14 @@ export default function RemontagemPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar.'); }
     finally { setBusy(false); }
   }
-  if (!origin || !catalog) return <main className="list-page">{error ? <p className="form-error" role="alert">{error} <button type="button" className="text-button" onClick={() => setAttempt(value => value + 1)}>Tentar novamente</button></p> : <p role="status">Carregando remontagem…</p>}</main>;
+  if (!origin || !catalog) return <main className="list-page">{error ? <p className="form-error" role="alert">{error} <button type="button" className="text-button" onClick={() => setAttempt(value => value + 1)}>Tentar novamente</button> <Link className="text-button" href={enderecoOrcamento(id, origem)}>Voltar ao orçamento</Link></p> : <p role="status">Carregando remontagem…</p>}</main>;
   const otherServices = totals ? calcularTotalOrcamento(totals.items.flatMap(item => [...item.services, ...item.cutouts].map(service => Number(service.appliedSubtotal)))) : undefined;
   const materials = totals ? calcularTotalOrcamento(totals.items.flatMap(item => item.components.map(component => Number(component.appliedTotal)))) : undefined;
   const individualComponents = items.flatMap(item => item.components.map(component => ({ item, component })));
   const updateComponentValue = (itemId: string, componentId: string, value: string) => change(() => { setItems(current => current.map(item => item.id !== itemId ? item : { ...item, components: item.components.map(component => component.id === componentId ? { ...component, appliedTotal: value || undefined } : component) })); setCard(''); });
   return <main className="shell project-builder remount-page">
     <ResumoMovel total={display(totals?.subtotal)} summaryId="remount-summary-card" />
-    <header className="quote-detail-header"><div className="quote-detail-heading"><Link href={`/orcamentos/${id}`}>← Orçamento {origin.number}</Link><h1>Desmontagem e Remontagem</h1><small>{saved?.number ?? numeroDocumentoRemontagem(origin.number, 'REM')}</small></div></header>
+    <header className="quote-detail-header"><div className="quote-detail-heading"><Caminho itens={caminhoDentroDoOrcamento(origin, origem)} /><h1>Desmontagem e Remontagem</h1><small>{saved?.number ?? numeroDocumentoRemontagem(origin.number, 'REM')}</small></div></header>
     <section className="detail-card"><strong>{origin.customerNameSnapshot}</strong><small>{origin.customerPhoneSnapshot || 'Telefone não informado'}</small><small>{origin.workAddressSnapshot || 'Endereço não informado'}</small><small>Orçamento {origin.number} · {date(origin.createdAt)}{saved ? ` · Proposta atualizada em ${date(saved.updatedAt)}` : ''}</small>{origin.notes && <p>Observações do projeto: {origin.notes}</p>}</section>
     {error && <p role="alert" className="form-error">{error}</p>}
     <fieldset disabled={busy} className="remount-fieldset">
@@ -150,12 +154,12 @@ export default function RemontagemPage() {
         <label>Montagem (R$)<input inputMode="decimal" value={assembly} onChange={event => change(() => { setAssembly(event.target.value); setCard(''); })} />{!!totals?.assemblyDiscount && <small>Desconto: {formatarMoeda(totals.assemblyDiscount)}</small>}</label>
         <label>Desmontagem (R$)<input inputMode="decimal" value={disassembly} onChange={event => change(() => { setDisassembly(event.target.value); setCard(''); })} />{ !!totals?.disassemblyDiscount && <small>Desconto: {formatarMoeda(totals.disassemblyDiscount)}</small>}</label>
       </div><p>Total dos serviços: {display(totals ? calcularTotalOrcamento([currency(assembly), currency(disassembly)]) : undefined)}</p></section>
-      <section className="section"><h2>Forma de pagamento</h2><div className="quick-project-fields"><label>Valor no cartão<input inputMode="decimal" placeholder={totals ? formatarMoeda(totals.subtotal) : 'Automático'} value={card} onChange={event => change(() => setCard(event.target.value))} /><small>O total calculado é o valor à vista. Informe aqui um valor maior para o cartão.</small></label><p className="payment-explanation">À vista: {display(totals?.subtotal)} · Desconto aplicado: {display(totals?.cashDiscount)}</p></div></section>
+      <section className="section"><h2>Forma de pagamento</h2><div className="quick-project-fields"><label>Valor no cartão<input inputMode="decimal" placeholder={totals ? formatarMoeda(totals.subtotal) : 'Automático'} value={card} onChange={event => change(() => setCard(event.target.value))} /><small>O total calculado corresponde ao valor à vista. Informe aqui o valor para pagamento no cartão, quando for maior.</small></label><p className="payment-explanation">À vista: {display(totals?.subtotal)} · Desconto aplicado: {display(totals?.cashDiscount)}</p></div></section>
       <section className="section"><label className="remount-notes">Observações da proposta e entrega<textarea rows={4} maxLength={3000} value={notes} onChange={event => change(() => setNotes(event.target.value))} /></label></section>
-    </div><aside id="remount-summary-card" className="quote-summary-card" aria-label="Resumo da remontagem"><strong>Resumo da remontagem</strong><span>Materiais e acabamentos <b>{display(materials)}</b></span><div className="remount-individual-values"><strong>Valores individuais</strong>{individualComponents.map(({ item, component }, index) => { const calculated = totals?.items.find(entry => entry.id === item.id)?.components.find(entry => entry.id === component.id); return <label key={component.id}>{component.label || `Peça ${index + 1}`}<input inputMode="decimal" aria-label={`Valor individual ${component.label || `peça ${index + 1}`}`} placeholder={calculated ? formatarMoeda(Number(calculated.appliedTotal)) : 'Automático'} value={component.appliedTotal ?? ''} onChange={event => updateComponentValue(item.id, component.id, event.target.value)} /><small>Deixe vazio para restaurar o cálculo.</small></label>; })}</div><span>Montagem <b>{display(totals ? currency(assembly) : undefined)}</b></span><span>Desmontagem <b>{display(totals ? currency(disassembly) : undefined)}</b></span><span>Outros serviços e recortes <b>{display(otherServices)}</b></span><span>Total à vista <b>{display(totals?.subtotal)}</b></span><span className="summary-grand-total">Cartão <b>{display(totals?.cardTotal)}</b></span><span>Desconto à vista <b>{display(totals?.cashDiscount)}</b></span>
+    </div><aside id="remount-summary-card" className="quote-summary-card" aria-label="Resumo da remontagem"><strong>Resumo da remontagem</strong><span>Materiais e acabamentos <b>{display(materials)}</b></span><div className="remount-individual-values"><strong>Valores individuais</strong>{individualComponents.map(({ item, component }, index) => { const calculated = totals?.items.find(entry => entry.id === item.id)?.components.find(entry => entry.id === component.id); return <label key={component.id}>{component.label || `Peça ${index + 1}`}<input inputMode="decimal" aria-label={`Valor individual ${component.label || `peça ${index + 1}`}`} placeholder={calculated ? formatarMoeda(Number(calculated.appliedTotal)) : 'Automático'} value={component.appliedTotal ?? ''} onChange={event => updateComponentValue(item.id, component.id, event.target.value)} /><small>Deixe em branco para utilizar o valor calculado.</small></label>; })}</div><span>Montagem <b>{display(totals ? currency(assembly) : undefined)}</b></span><span>Desmontagem <b>{display(totals ? currency(disassembly) : undefined)}</b></span><span>Outros serviços e recortes <b>{display(otherServices)}</b></span><span>Total à vista <b>{display(totals?.subtotal)}</b></span><span className="summary-grand-total">Cartão <b>{display(totals?.cardTotal)}</b></span><span>Desconto à vista <b>{display(totals?.cashDiscount)}</b></span>
       <p role="status">{input.issue || previewError || (!ready ? 'Calculando…' : dirty ? 'Alterações não salvas.' : saved ? 'Dados salvos.' : 'Nova proposta.')}</p>
     </aside></div>
-    <section className="section remount-document-actions"><label>Valores na proposta<select aria-label="Valores na proposta" value={String(individualPrices)} onChange={event => setIndividualPrices(event.target.value === 'true')}><option value="false">Sem valores descritos</option><option value="true">Com valores descritos</option></select></label><p>A geração salva os dados atuais. A nota de entrega contém itens, conferência e assinatura, sem preços.</p><div className="detail-actions"><button type="button" className="save-quote-button" disabled={!ready || busy} onClick={() => void submit()}>Salvar</button><button type="button" className="secondary-button" disabled={!ready || busy} onClick={() => void submit('pdf')}>Gerar proposta em PDF</button><button type="button" className="secondary-button" disabled={!ready || busy} onClick={() => void submit('delivery-pdf')}>Nota de Entrega</button></div>{status && <p role="status">{status}</p>}{busy && <p role="status">Salvando e preparando documento…</p>}</section>
+    <section className="section remount-document-actions"><label>Valores na proposta<select aria-label="Valores na proposta" value={String(individualPrices)} onChange={event => setIndividualPrices(event.target.value === 'true')}><option value="false">Sem valores descritos</option><option value="true">Com valores descritos</option></select></label><p>Ao gerar o documento, os dados atuais são salvos. A nota de entrega contém itens, conferência e assinatura, sem valores.</p><div className="detail-actions"><button type="button" className="save-quote-button" disabled={!ready || busy} onClick={() => void submit()}>Salvar</button><button type="button" className="secondary-button" disabled={!ready || busy} onClick={() => void submit('pdf')}>Gerar proposta em PDF</button><button type="button" className="secondary-button" disabled={!ready || busy} onClick={() => void submit('delivery-pdf')}>Nota de Entrega</button></div>{status && <p role="status">{status}</p>}{busy && <p role="status">Salvando e preparando documento…</p>}</section>
     </fieldset>
   </main>;
 }

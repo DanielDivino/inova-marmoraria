@@ -80,7 +80,7 @@ export function CanvasPlanta(props: Props) {
   const posicaoNaPeca = (peca: Piece, clienteX: number, clienteY: number) => posicaoNoBalcao(peca, mundoParaLocal(telaParaMundo(clienteX, clienteY), peca).x);
   const fecharArea = (peca: Piece, inicio: number, fim: number) => {
     mudarMarcacao(null);
-    if (Math.abs(fim - inicio) < 10) { props.aoAviso?.('Área muito curta: clique onde ela começa, puxe até o fim e clique de novo.'); return; }
+    if (Math.abs(fim - inicio) < 10) { props.aoAviso?.('Área muito curta: clique no início da área, arraste até o fim e clique novamente.'); return; }
     props.aoMarcarArea?.(peca.id, inicio, fim);
   };
 
@@ -175,7 +175,7 @@ export function CanvasPlanta(props: Props) {
       const total = peca.contour.length;
       const vizinhos = [peca.contour[(indice - 1 + total) % total].id, peca.contour[(indice + 1) % total].id];
       gesto.current = { ...base, tipo: 'lado', pecaId: peca.id, indice, normal: cotasDaPeca(peca)[indice].normal, inicioLocal: mundoParaLocal(mundo, peca), contorno: peca.contour,
-        bloqueio: vizinhos.some((id) => peca.lockedEdges.includes(id)) ? 'Os lados vizinhos estão travados: destrave o cadeado para puxar este lado.' : undefined,
+        bloqueio: vizinhos.some((id) => peca.lockedEdges.includes(id)) ? 'Os lados adjacentes estão travados. Destrave-os para ajustar este lado.' : undefined,
         aoTocar: () => props.aoTocarLado(peca.id, dado('lado')) };
       return;
     }
@@ -302,7 +302,7 @@ export function CanvasPlanta(props: Props) {
       if (!emAndamento || !peca || cancelado) { mudarMarcacao(null); return; }
       // Arrastou e soltou: a área fecha aqui. Só clicou: segue o ponteiro até o próximo clique.
       if (atual.moveu) fecharArea(peca, emAndamento.inicio, posicaoNaPeca(peca, evento.clientX, evento.clientY));
-      else props.aoAviso?.('Agora leve até o fim da área e clique (ou arraste e solte). Esc cancela.');
+      else props.aoAviso?.('Leve o cursor até o fim da área e clique (ou arraste e solte). Pressione Esc para cancelar.');
       return;
     }
     if (atual.tipo === 'traco') {
@@ -310,7 +310,7 @@ export function CanvasPlanta(props: Props) {
       if (!cancelado && atual.pontos.length > 2) props.aoTraco(atual.pontos, atual.ferramenta);
       return;
     }
-    if (atual.moveu && atual.tipo === 'girar') props.aoAviso?.(`Peça girada para ${atual.giro}°. Ctrl+Z desfaz.`);
+    if (atual.moveu && atual.tipo === 'girar') props.aoAviso?.(`Peça girada para ${atual.giro}°. Use Ctrl+Z para desfazer.`);
     if (atual.moveu && atual.tipo === 'lado') {
       // Saias, rodabancas e acabamentos continuam dentro dos lados que mudaram.
       const peca = documento.pieces.find((entrada) => entrada.id === atual.pecaId);

@@ -23,12 +23,12 @@ export function VincularOrcamento({ customer, value, onChange }: { customer: { i
   const projetos = (quote: QuoteLink) => quote.items?.map((item) => item.projectName).filter(Boolean).join(' · ');
   return <details className="quote-linker" open={open || Boolean(value)} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Vincular projeto a um orçamento existente (opcional)</summary>
-    <p className="customer-help">Para algo que não foi orçado: crie um complemento com valor próprio, sem alterar o orçamento original.</p>
+    <p className="customer-help">Para itens não previstos no orçamento, crie um complemento com valor próprio, sem alterar o orçamento original.</p>
     {value ? <div><Link href={`/orcamentos/${value.id}`}>{value.number} · {value.customer.name}</Link> <button className="text-button" type="button" onClick={() => onChange(null)}>Remover vínculo</button></div>
-      : !customerId ? <p className="customer-help">Escolha o cliente para ver os projetos dele.</p>
+      : !customerId ? <p className="customer-help">Selecione o cliente para visualizar os orçamentos vinculados.</p>
       : error ? <p role="alert" className="form-error">{error}</p>
-      : !results ? <p role="status">Buscando projetos do cliente…</p>
-      : !results.length ? <p className="quote-linker-vazio">Sem projetos ligados a esse cliente.</p>
+      : !results ? <p role="status">Buscando orçamentos do cliente…</p>
+      : !results.length ? <p className="quote-linker-vazio">Não há orçamentos vinculados a este cliente.</p>
       : <div className="customer-results">{results.map((quote) => <button type="button" className="customer-result" key={quote.id} onClick={() => onChange(quote)}><strong>{quote.number}</strong><small>{projetos(quote) || quote.customer.name}</small></button>)}</div>}
   </details>;
 }

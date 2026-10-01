@@ -30,7 +30,7 @@ export function PainelRevisoes({ revisoes, aoAtualizar, aoMensagem }: { revisoes
     } catch { aoMensagem('Não foi possível gerar o DXF desta revisão.'); }
   };
   return <section className="tec-revisoes" aria-label="Revisões e produção">
-    <header><div><p>CONTROLE TÉCNICO</p><h2>Revisões e produção</h2></div><small>Uma revisão fica congelada. O que mudar depois fica só no rascunho.</small></header>
+    <header><div><p>CONTROLE TÉCNICO</p><h2>Revisões e produção</h2></div><small>Cada revisão é registrada de forma definitiva. Alterações posteriores ficam apenas no rascunho.</small></header>
     {revisoes.length ? <ul>{revisoes.map((revisao) => <li key={revisao.id}>
       <div><strong>{nome(revisao)}</strong><span className={`tec-status ${revisao.status.toLowerCase()}`}>{ROTULO_REVISAO[revisao.status]}</span>
         <small>{new Date(revisao.createdAt).toLocaleString('pt-BR')} · {revisao.createdBy.name}</small>
@@ -48,6 +48,6 @@ export function PainelRevisoes({ revisoes, aoAtualizar, aoMensagem }: { revisoes
         <label className="tec-campo">Motivo da devolução<textarea rows={2} required value={motivo} autoFocus onChange={(evento) => setMotivo(evento.target.value)} placeholder="O que precisa ser corrigido?" /></label>
         <div className="tec-acoes"><button type="button" className="botao-contorno" onClick={() => setDevolvendo(null)}>Cancelar</button><button type="submit" className="botao-destaque" disabled={ocupado || !motivo.trim()}>Devolver revisão</button></div>
       </form>}
-    </li>)}</ul> : <p className="tec-dica">Salve o rascunho e envie a primeira revisão quando as medidas estiverem conferidas.</p>}
+    </li>)}</ul> : <p className="tec-dica">Salve o rascunho e envie a primeira revisão após a conferência das medidas.</p>}
   </section>;
 }

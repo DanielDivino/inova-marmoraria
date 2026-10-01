@@ -52,7 +52,8 @@ export const DesenhoTecnico = memo(function DesenhoTecnico({ components, cutouts
           {materialNames && <text className="drawing-material-label" x={column * cellWidth + 90} y={row * cellHeight + 18} textAnchor="middle">{materialNames[component.id]}</text>}
           <line className="drawing-dimension" x1={x} y1={dimensionY - 18} x2={x + width} y2={dimensionY - 18} /><line className="drawing-dimension" x1={x} y1={dimensionY - 24} x2={x} y2={dimensionY - 12} /><line className="drawing-dimension" x1={x + width} y1={dimensionY - 24} x2={x + width} y2={dimensionY - 12} /><text className="drawing-dimension-label" x={x + width / 2} y={dimensionY - 25} textAnchor="middle">{rotuloMedidaDesenho(component.lengthMm)}</text>
           <line className="drawing-dimension" x1={dimensionX - 20} y1={y} x2={dimensionX - 20} y2={y + height} /><line className="drawing-dimension" x1={dimensionX - 26} y1={y} x2={dimensionX - 14} y2={y} /><line className="drawing-dimension" x1={dimensionX - 26} y1={y + height} x2={dimensionX - 14} y2={y + height} /><text className="drawing-dimension-label" x={dimensionX - 31} y={y + height / 2} textAnchor="middle" transform={`rotate(-90 ${dimensionX - 31} ${y + height / 2})`}>{rotuloMedidaDesenho(component.widthMm)}</text>
-          <rect x={x} y={y} width={width} height={height} className={component.orientation === 'VERTICAL' ? 'drawing-vertical' : 'drawing-horizontal'} />
+          <rect x={x} y={y} width={width} height={height} className={component.orientation === 'VERTICAL' ? 'drawing-vertical' : 'drawing-horizontal'}
+            {...(component.raioCantosCm && safeMm(component.raioCantosCm) > 0 ? { rx: Math.min(safeMm(component.raioCantosCm) * scaleX, width / 2), ry: Math.min(safeMm(component.raioCantosCm) * scaleY, height / 2) } : {})} />
           {strips.map(({ edge, offsetMm }, stripIndex) => {
             const horizontal = edge.edge.side === 'FRONT' || edge.edge.side === 'BACK';
             const skirtLength = Math.min(edge.lengthMm, horizontal ? component.lengthMm : component.widthMm) * (horizontal ? scaleX : scaleY);
@@ -95,7 +96,7 @@ export const DesenhoTecnico = memo(function DesenhoTecnico({ components, cutouts
     </svg>}
     {valid.filter((component) => component.componentType === 'SILL' && !ehPeitorilDuplo(component)).map((component) => <div className="sill-drawing-detail" key={component.id}><strong>{nomeExibicaoComponente(component)}</strong><DetalhePeitoril measure={component.sillDetailCm} height={component.sillDetailHeightCm} showEmpty={false} /></div>)}
     {components.filter((component) => component.componentType === 'SILL' && ehPeitorilDuplo(component)).map((component) => <div className="sill-drawing-detail" key={component.id}><strong>{nomeExibicaoComponente(component)}</strong><DetalhePeitorilDuplo topWidth={component.sillTopWidthCm} bottomWidth={component.sillBottomWidthCm} finalWidth={component.sillFinalWidthCm} overlap={component.sillOverlapCm} showEmpty={false} /></div>)}
-    <small>Um desenho para cada peça; até 5 desenhos ficam por linha.</small>
+    <small>Um desenho por peça, com até 5 desenhos por linha.</small>
     <small className="drawing-legend">X = Acabamento simples · Área tracejada = recorte.</small>
     <div className="manufacturing-description">
       {descriptions.map((section, index) => <section key={index}><h4>{section.title}</h4>{section.lines.map((line, lineIndex) => <p key={lineIndex}>{line.label !== 'Acabamentos' && <><strong>{line.label}:</strong> </>}{line.text}</p>)}</section>)}

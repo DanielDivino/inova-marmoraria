@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { closestCenter, DndContext, KeyboardSensor, MouseSensor, pointerWithin, TouchSensor, useSensor, useSensors, type CollisionDetection, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -20,17 +20,34 @@ type Props = { item: DraftItem; materials: ComponentMaterial[]; material?: Compo
   title?: string; showAssembly?: boolean; showRounding?: boolean;
   /** M² fechado vale para este projeto (ajuste da empresa; aqui só é mostrado, travado). */
   m2Fechado?: boolean; renderComponentInfo?: (component: DraftComponent) => ReactNode;
+  /** "Duplicar projeto": cria outro projeto no orçamento, cópia deste. */
+  onDuplicate?: () => void;
   onChange: (patch: Partial<DraftItem>) => void; area: (component: DraftComponent) => number;
   value: (component: DraftComponent) => number; calculateCutout: (cutout: DraftCutout) => number;
   onCreateService?: (input: { name: string; billingUnit: Service['billingUnit']; currentPrice: number }) => Promise<Service>;
 };
+import { Janela } from '../Janela';
 import { formatarMoeda } from '../../utilitarios/formatadores';
 const sides: Exclude<EdgeSide, 'CUSTOM'>[] = ['BACK', 'FRONT', 'LEFT', 'RIGHT'];
+const centimetros = (valor?: string) => { const numero = Number((valor ?? '').replace(',', '.')); return Number.isFinite(numero) ? numero : 0; };
+/** Raio máximo dos cantos arredondados: metade do lado menor da peça (cm). */
+const raioMaximo = (component: DraftComponent) => Math.min(centimetros(component.lengthCm), centimetros(component.widthCm)) / 2;
+/** Raio sugerido ao arredondar: 10 cm, ou menos se a peça for estreita. */
+const raioSugerido = (component: DraftComponent) => { const maximo = raioMaximo(component); return String(maximo > 0 ? Math.min(10, Math.floor(maximo * 10) / 10) : 10).replace('.', ','); };
+const formatarCm = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+/** Campo do raio dos cantos arredondados, com o aviso quando passa da metade do lado menor. */
+function CampoRaio({ component, onChange, rotulo }: { component: DraftComponent; onChange: (raioCantosCm: string) => void; rotulo: string }) {
+  const maximo = raioMaximo(component), excede = maximo > 0 && centimetros(component.raioCantosCm) > maximo;
+  return <>
+    <label className="quick-acabamento-campo">Raio<input aria-label={rotulo} inputMode="decimal" aria-invalid={excede || undefined} value={component.raioCantosCm ?? ''} onChange={event => onChange(event.target.value)} />cm</label>
+    {excede && <span className="quick-cantos-aviso" role="alert">Máx. {formatarCm(maximo)} cm</span>}
+  </>;
+}
 
-function DialogoServicos({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog ref={dialog} className="quick-services-modal" aria-label={label} onClose={onClose} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>{children}</dialog>;
+/** Janela dos acabamentos, cortes e furos e outros serviços (a Janela padrão, com "Concluir" no rodapé). */
+function DialogoServicos({ titulo, subtitulo, rotuloFechar, onClose, children }: { titulo: string; subtitulo: string; rotuloFechar: string; onClose: () => void; children: ReactNode }) {
+  return <Janela aberta aoFechar={onClose} className="quick-services-modal" titulo={titulo} subtitulo={subtitulo} rotuloFechar={rotuloFechar}
+    rodape={<button type="button" className="botao-principal" onClick={onClose}>Concluir</button>}>{children}</Janela>;
 }
 
 /** Alça para arrastar a peça (a partir de 2 peças). Só a alça inicia o arraste: rolar a lista no celular continua normal. */
@@ -46,7 +63,7 @@ function GrupoPeca({ id, numero, ordenavel, recolhido, children }: { id: string;
     style={{ transform: CSS.Translate.toString(transform && { ...transform, x: 0 }), transition }}>{children(alca)}</tbody>;
 }
 
-export function EditorOrcamentoRapido({ item, materials, material, services, onChange, area, value, calculateCutout, onCreateService, title = 'Orçamento Rápido', showAssembly = true, showRounding = true, m2Fechado = false, renderComponentInfo }: Props) {
+export function EditorOrcamentoRapido({ item, materials, material, services, onChange, area, value, calculateCutout, onCreateService, title = 'Orçamento Rápido', showAssembly = true, showRounding = true, m2Fechado = false, renderComponentInfo, onDuplicate }: Props) {
   const [mobileExpanded, setMobileExpanded] = useState<Set<string>>(() => new Set(item.components.slice(-1).map(component => component.id)));
   const [expandedOptions, setExpandedOptions] = useState<Set<string>>(() => new Set());
   const [serviceModalComponentId, setServiceModalComponentId] = useState<string | null>(null);
@@ -145,7 +162,10 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
     <div className="quick-project-setup">
     <div className="quick-heading">
       <div><h2>{title}</h2><small><span className="quick-desktop-help">Medidas em metros · Enter avança e adiciona linhas · Tab e Shift + Tab navegam</span><span className="quick-mobile-help">Medidas em metros. Ex.: 1,20 × 0,60.</span></small></div>
-      {showRounding && m2Fechado && <label className="quick-round-toggle travado" title="Sempre marcado: o valor da pedra é calculado com cada peça arredondada para cima, de 5 em 5 cm (a medida exibida, o desenho e o PDF continuam exatos). Só dá para desligar em Materiais e serviços → Serviços e acabamentos."><input type="checkbox" checked disabled readOnly /> M² fechado</label>}
+      {((showRounding && m2Fechado) || onDuplicate) && <div className="quick-heading-acoes">
+        {showRounding && m2Fechado && <label className="quick-round-toggle travado" title="Opção sempre ativa: o valor da pedra é calculado com cada peça arredondada para cima, em múltiplos de 5 cm (medidas exibidas, desenho e PDF mantêm os valores exatos). A desativação é feita em Materiais e serviços → Serviços e acabamentos."><input type="checkbox" checked disabled readOnly /> M² fechado</label>}
+        {onDuplicate && <button type="button" className="quick-duplicar" onClick={onDuplicate} aria-haspopup="dialog" aria-label="Duplicar projeto" title="Cria outro projeto neste orçamento com a mesma pedra, peças, medidas, acabamentos e valores, para ajustar apenas o que for diferente."><Icone nome="copiar" tamanho={15} /><span className="quick-duplicar-texto">Duplicar projeto</span></button>}
+      </div>}
     </div>
     <div className="quick-project-fields"><label>Nome do projeto<input id="project-name" value={item.projectName} onChange={event => onChange({ projectName: event.target.value })} placeholder="Ex.: Cozinha" /></label>
       <SeletorMaterialComponente materials={materials.filter(entry => entry.billingUnit === 'SQUARE_METER')} selected={material} onSelect={materialId => onChange(aplicarMaterialProjeto(item, materialId))} />
@@ -172,7 +192,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
           <td role="cell" className="quick-number quick-item-total"><span className="quick-mobile-label">Valor</span><strong>{formatarMoeda(value(component))}</strong>{component.appliedTotal !== undefined && <small>Valor ajustado</small>}</td>
           <td role="cell" className="quick-actions"><div className="quick-row-actions"><button type="button" className="quick-options-button" aria-expanded={expandedOptions.has(component.id)} aria-controls={`quick-options-${component.id}`} onClick={() => toggleOptions(component.id)}>Opções</button><button type="button" aria-label={`Remover peça ${index + 1}`} onClick={() => remove(index)}>×</button>{marcasDaPeca(component)}</div></td>
         </tr>
-        {renderComponentInfo && <tr className="quick-info-row" role="row"><td role="cell" colSpan={7}>{renderComponentInfo(component)}</td></tr>}
+        {renderComponentInfo && (() => { const info = renderComponentInfo(component); return info ? <tr className="quick-info-row" role="row"><td role="cell" colSpan={7}>{info}</td></tr> : null; })()}
         <tr className="quick-details-row" role="row" id={`quick-options-${component.id}`} hidden={!expandedOptions.has(component.id)}><td role="cell" colSpan={7}><div className="quick-services quick-piece-options">
           {/* Uma barra: pedra desta peça | acabamentos desta peça. A pedra do projeto (em cima) não muda aqui. */}
           <div className="quick-opcoes-barra">
@@ -189,7 +209,13 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
           </div>
           <div className="quick-piece-finishes">
             {/* Um acabamento por linha: nome · lado · (altura, se saia/vista) · Qtd · ×. */}
-            {component.edges.length > 0 ? <ul className="quick-acabamentos">
+            {component.edges.length > 0 || component.raioCantosCm !== undefined ? <ul className="quick-acabamentos">
+              {component.raioCantosCm !== undefined && <li className="quick-acabamento">
+                <span className="quick-acabamento-nome">Cantos arredondados</span>
+                <span className="quick-acabamento-lado">4 pontas</span>
+                <CampoRaio component={component} rotulo="Raio dos cantos arredondados" onChange={raioCantosCm => update(component.id, { raioCantosCm })} />
+                <button type="button" className="quick-acabamento-remover" aria-label="Remover cantos arredondados" onClick={() => update(component.id, { raioCantosCm: undefined })}>×</button>
+              </li>}
               {sides.flatMap(side => component.edges.map((edge, edgeIndex) => ({ edge, edgeIndex })).filter(({ edge }) => edge.side === side)).map(({ edge, edgeIndex }) => {
                 const nome = services.find(service => service.id === edge.serviceId)?.name || 'Acabamento';
                 const alterar = (patch: Partial<typeof edge>) => update(component.id, { edges: component.edges.map((entry, i) => i === edgeIndex ? { ...entry, ...patch } : entry) });
@@ -208,11 +234,16 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
       </>}</GrupoPeca>)}
       </SortableContext>
     </table></div></DndContext>
-    {modalComponent && <DialogoServicos label={`Acabamentos de ${modalComponent.label || 'peça'}`} onClose={() => setServiceModalComponentId(null)}><header><div><strong>Acabamentos da peça</strong><small>{componentTypeLabels[modalComponent.componentType]} · escolha o acabamento e o lado</small></div><button type="button" aria-label="Fechar acabamentos" onClick={() => setServiceModalComponentId(null)}>×</button></header>{linearGroups.map(group => group.services.length > 0 && <div className="quick-modal-category" key={group.title}><h3>{group.title}</h3><div className="quick-modal-service-list">{group.services.map(service => <fieldset key={service.id}><legend>{service.name}</legend><div className="quick-inline-sides"><label className="quick-all-sides"><input type="checkbox" checked={sides.every(side => modalComponent.edges.some(edge => edge.serviceId === service.id && edge.side === side))} onChange={event => setAllServiceSides(modalComponent, service.id, event.target.checked)} />Todos os lados</label>{sides.map(side => <label key={side}><input type="checkbox" checked={modalComponent.edges.some(edge => edge.serviceId === service.id && edge.side === side)} onChange={event => setServiceSide(modalComponent, service.id, side, event.target.checked)} />{rotuloLadoBorda(side)}</label>)}</div></fieldset>)}</div></div>)}{!linearGroups.some(group => group.services.length > 0) && <p className="empty">Nenhum acabamento cadastrado para seleção por lado.</p>}<footer><button type="button" className="secondary-button" onClick={() => setServiceModalComponentId(null)}>Concluir</button></footer></DialogoServicos>}
+    {modalComponent && <DialogoServicos titulo="Acabamentos da peça" subtitulo={`${componentTypeLabels[modalComponent.componentType]} · escolha o acabamento e o lado`} rotuloFechar="Fechar acabamentos" onClose={() => setServiceModalComponentId(null)}>
+      <div className="quick-modal-category"><h3>Cantos</h3><div className="quick-modal-service-list"><fieldset><legend>Cantos arredondados</legend><div className="quick-inline-sides quick-cantos">
+        <label className="quick-all-sides"><input type="checkbox" checked={modalComponent.raioCantosCm !== undefined} onChange={event => update(modalComponent.id, { raioCantosCm: event.target.checked ? raioSugerido(modalComponent) : undefined })} />Arredondar as 4 pontas</label>
+        {modalComponent.raioCantosCm !== undefined && <CampoRaio component={modalComponent} rotulo="Raio dos cantos" onChange={raioCantosCm => update(modalComponent.id, { raioCantosCm })} />}
+      </div></fieldset></div></div>
+      {linearGroups.map(group => group.services.length > 0 && <div className="quick-modal-category" key={group.title}><h3>{group.title}</h3><div className="quick-modal-service-list">{group.services.map(service => <fieldset key={service.id}><legend>{service.name}</legend><div className="quick-inline-sides"><label className="quick-all-sides"><input type="checkbox" checked={sides.every(side => modalComponent.edges.some(edge => edge.serviceId === service.id && edge.side === side))} onChange={event => setAllServiceSides(modalComponent, service.id, event.target.checked)} />Todos os lados</label>{sides.map(side => <label key={side}><input type="checkbox" checked={modalComponent.edges.some(edge => edge.serviceId === service.id && edge.side === side)} onChange={event => setServiceSide(modalComponent, service.id, side, event.target.checked)} />{rotuloLadoBorda(side)}</label>)}</div></fieldset>)}</div></div>)}{!linearGroups.some(group => group.services.length > 0) && <p className="empty">Nenhum acabamento cadastrado para seleção por lado.</p>}</DialogoServicos>}
     <button type="button" className="secondary-button quick-add-item" onClick={add}>+ Adicionar item</button>
     <div className="quick-project-actions"><button type="button" onClick={() => item.components[0] && setServiceModalComponentId(item.components[0].id)}>+ Acabamentos</button><button type="button" onClick={() => setProjectModalCategory('CUTOUTS')}>+ Cortes e furos</button><button type="button" onClick={() => setProjectModalCategory('OTHER')}>+ Outros serviços</button></div>
     {showAssembly && assemblyService && <label className="quick-assembly-service"><span><input type="checkbox" checked={item.serviceIds.includes(assemblyService.id)} onChange={event => toggleProjectService(assemblyService.id, event.target.checked)} /> Montagem</span>{item.serviceIds.includes(assemblyService.id) && <input aria-label="Valor manual da montagem" inputMode="decimal" placeholder="Valor da montagem" value={item.serviceAppliedValues[assemblyService.id] ?? ''} onChange={event => onChange({ serviceAppliedValues: { ...item.serviceAppliedValues, [assemblyService.id]: event.target.value } })} />}</label>}
-    {projectModalCategory && <DialogoServicos label={projectModalCategory === 'CUTOUTS' ? 'Cortes e furos' : 'Outros serviços'} onClose={() => setProjectModalCategory(null)}><header><div><strong>{projectModalCategory === 'CUTOUTS' ? 'Cortes e furos' : 'Outros serviços'}</strong><small>Selecione os itens que entram neste orçamento</small></div><button type="button" aria-label="Fechar serviços" onClick={() => setProjectModalCategory(null)}>×</button></header>{projectModalCategory === 'OTHER' && onCreateService && <button type="button" className="quick-modal-add" onClick={() => { setCreatingService(value => !value); setServiceError(''); }}>+ Novo serviço</button>}{projectModalCategory === 'OTHER' && onCreateService && creatingService && <form className="quick-new-service-form" onSubmit={createService}><label>Nome<input autoFocus value={serviceForm.name} onChange={event => setServiceForm({ ...serviceForm, name: event.target.value })} placeholder="Ex.: Impermeabilização" required /></label><label>Unidade<select value={serviceForm.billingUnit} onChange={event => setServiceForm({ ...serviceForm, billingUnit: event.target.value as Service['billingUnit'] })}><option value="SQUARE_METER">m²</option><option value="LINEAR_METER">metro linear</option><option value="UNIT">unidade</option><option value="FIXED">valor fixo</option></select></label><label>Preço<input inputMode="decimal" value={serviceForm.currentPrice} onChange={event => setServiceForm({ ...serviceForm, currentPrice: event.target.value })} placeholder="0,00" required /></label>{serviceError && <p className="form-error">{serviceError}</p>}<button type="submit" className="primary-button">Criar e adicionar</button></form>}<div className="quick-modal-simple-list">{(projectModalCategory === 'CUTOUTS' ? cutoutServices : installationServices).map(service => <div className="quick-service-choice" key={service.id}><label><input type="checkbox" checked={item.serviceIds.includes(service.id)} onChange={event => toggleProjectService(service.id, event.target.checked)} />{service.name}</label>{item.serviceIds.includes(service.id) && service.billingUnit !== 'FIXED' && <input type="number" min="1" step="1" inputMode="numeric" aria-label={`Quantidade de ${service.name}`} value={item.serviceQuantities[service.id] ?? '1'} onChange={event => onChange({ serviceQuantities: { ...item.serviceQuantities, [service.id]: event.target.value } })} />}</div>)}</div><footer><button type="button" className="secondary-button" onClick={() => setProjectModalCategory(null)}>Concluir</button></footer></DialogoServicos>}
+    {projectModalCategory && <DialogoServicos titulo={projectModalCategory === 'CUTOUTS' ? 'Cortes e furos' : 'Outros serviços'} subtitulo="Selecione os itens que entram neste orçamento" rotuloFechar="Fechar serviços" onClose={() => setProjectModalCategory(null)}>{projectModalCategory === 'OTHER' && onCreateService && <button type="button" className="quick-modal-add" onClick={() => { setCreatingService(value => !value); setServiceError(''); }}>+ Novo serviço</button>}{projectModalCategory === 'OTHER' && onCreateService && creatingService && <form className="quick-new-service-form" onSubmit={createService}><label>Nome<input autoFocus value={serviceForm.name} onChange={event => setServiceForm({ ...serviceForm, name: event.target.value })} placeholder="Ex.: Impermeabilização" required /></label><label>Unidade<select value={serviceForm.billingUnit} onChange={event => setServiceForm({ ...serviceForm, billingUnit: event.target.value as Service['billingUnit'] })}><option value="SQUARE_METER">m²</option><option value="LINEAR_METER">metro linear</option><option value="UNIT">unidade</option><option value="FIXED">valor fixo</option></select></label><label>Preço<input inputMode="decimal" value={serviceForm.currentPrice} onChange={event => setServiceForm({ ...serviceForm, currentPrice: event.target.value })} placeholder="0,00" required /></label>{serviceError && <p className="form-error">{serviceError}</p>}<button type="submit" className="primary-button">Criar e adicionar</button></form>}<div className="quick-modal-simple-list">{(projectModalCategory === 'CUTOUTS' ? cutoutServices : installationServices).map(service => <div className="quick-service-choice" key={service.id}><label><input type="checkbox" checked={item.serviceIds.includes(service.id)} onChange={event => toggleProjectService(service.id, event.target.checked)} />{service.name}</label>{item.serviceIds.includes(service.id) && service.billingUnit !== 'FIXED' && <input type="number" min="1" step="1" inputMode="numeric" aria-label={`Quantidade de ${service.name}`} value={item.serviceQuantities[service.id] ?? '1'} onChange={event => onChange({ serviceQuantities: { ...item.serviceQuantities, [service.id]: event.target.value } })} />}</div>)}</div></DialogoServicos>}
     {item.cutouts.length > 0 && <details className="quick-project-services"><summary>Valores dos recortes e cubas</summary><ValoresRecortes cutouts={item.cutouts} components={item.components} services={services} calculate={calculateCutout} onChange={cutouts => onChange({ cutouts })} /></details>}
   </section>;
 }

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { PROJECT_WORKFLOW_LABELS, type ProjectWorkflowStatus } from '@inova/domain';
 import { ModalFiltros } from '../filtros/Filtros';
 import { medidaPeca, rotuloPecas, type CartaoFluxo } from '../../utilitarios/fluxo';
+import { enderecoOrcamento } from '../../utilitarios/rotas';
 import { SeletorPecas, somaQuantidades, type QuantidadesPecas } from './SeletorPecas';
 
 export type PedidoPecas = { cartao: CartaoFluxo; status: ProjectWorkflowStatus };
@@ -39,7 +40,7 @@ export function PerguntaPecas({ pedido, salvando, erro, aoTodas, aoParte, aoCanc
     </> : <>
       <p><strong>{cartao.name}</strong> · {cartao.quote.number} · {cartao.quote.customerName} tem {rotuloPecas(cartao.pieces)} neste cartão.</p>
       <ul className="modal-pecas-lista">{cartao.pieceList.map((peca) => <li key={peca.key}><span>{peca.name}</span><small>{detalhe(peca)}</small></li>)}</ul>
-      {entrega && <p>Precisa da nota para o cliente assinar? <Link href={`/orcamentos/${cartao.quote.id}?entrega=${cartao.projectId}#projeto-${cartao.projectId}`}>Gerar nota de entrega</Link> — ela já marca as peças como entregues.</p>}
+      {entrega && <p>Precisa da nota de entrega para assinatura do cliente? <Link href={enderecoOrcamento(cartao.quote.id, { de: 'fluxo', cartao: cartao.id }, { parametros: { entrega: cartao.projectId }, ancora: `projeto-${cartao.projectId}` })}>Gerar nota de entrega</Link> — a nota já registra as peças como entregues.</p>}
     </>)}
     {erro && <p role="alert" className="form-error">{erro}</p>}
   </ModalFiltros>;

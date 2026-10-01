@@ -90,7 +90,7 @@ export function NotaEntregaProjeto({ quoteId, customerName, projeto, canDeliver,
       {!canDeliver ? <p>{reason}</p>
         : !pendentes.length ? <p>Todas as peças deste projeto já foram entregues.</p>
         : <>
-          <p>Escolha o que está entregando agora. As peças vão para <strong>Entregue</strong> no Fluxo de trabalho e a nota lista as que ainda faltam.</p>
+          <p>Selecione as peças entregues nesta etapa. Elas serão movidas para <strong>Entregue</strong> no Fluxo de trabalho, e a nota listará as pendentes.</p>
           <SeletorPecas rotulo="Peças entregues nesta nota" valores={valores} aoMudar={setValores}
             pecas={pendentes.map((peca) => ({ key: peca.key, name: peca.name, detail: detalhe(peca), max: peca.quantity - peca.delivered }))} />
         </>}

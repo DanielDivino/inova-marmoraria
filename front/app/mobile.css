@@ -5,7 +5,7 @@
 @media screen {
   .quick-services-modal::backdrop, .mobile-navigation-dialog::backdrop { background: #101a16a6; backdrop-filter: blur(4px); }
   .quick-services-modal { overscroll-behavior: contain; }
-  body:has(.mobile-navigation-dialog[open], .quick-services-modal[open], .customer-dialog[open]) { overflow: hidden; }
+  body:has(.mobile-navigation-dialog[open]) { overflow: hidden; }
 }
 
 @media screen and (max-width: 760px) {
@@ -24,6 +24,8 @@
   html .inova-theme .application-frame > .application-sidebar { display: none; }
   html .inova-theme .application-header-actions { padding: 10px 12px; gap: 8px; min-height: 64px; }
   html .inova-theme .mobile-menu-toggle { display: inline-grid; place-items: center; }
+  html .inova-theme .mobile-voltar { display: inline-grid; place-items: center; flex: 0 0 40px; width: 40px; height: 44px; margin-right: -4px; border-radius: 10px; color: var(--ink); font-size: 32px; line-height: 1; text-decoration: none; }
+  html .inova-theme .mobile-voltar:active { background: var(--soft); }
   html .inova-theme .mobile-header-title { display: block; flex: 1; min-width: 0; margin-right: auto; font-size: 14px; color: var(--ink); }
   html .inova-theme .notification-bell { width: 44px; height: 44px; flex: 0 0 44px; }
   html .inova-theme .application-header-actions > .header-account,
@@ -77,9 +79,13 @@
   html .inova-theme .project-builder .quick-project-setup { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: 36px minmax(48px, auto); gap: 6px 12px; margin-bottom: 16px; }
   html .inova-theme .project-builder .quick-project-setup .quick-heading,
   html .inova-theme .project-builder .quick-project-setup .quick-project-fields { display: contents; }
-  html .inova-theme .project-builder .quick-project-setup .quick-heading > div { display: none; }
+  html .inova-theme .project-builder .quick-project-setup .quick-heading > div:not(.quick-heading-acoes) { display: none; }
   html .inova-theme .project-builder .quick-project-setup .quick-project-fields > label { grid-column: 1; grid-row: 1 / 3; display: grid; grid-template-rows: 36px minmax(48px, auto); align-items: center; gap: 6px; font-weight: 600; }
-  html .inova-theme .project-builder .quick-project-setup .quick-round-toggle { grid-column: 2; grid-row: 1; align-self: center; min-height: 36px; padding: 4px 0; border: 0; background: transparent; font-size: 12px; }
+  html .inova-theme .project-builder .quick-project-setup .quick-heading-acoes { grid-column: 2; grid-row: 1; align-self: center; flex-wrap: nowrap; justify-content: space-between; gap: 6px; min-width: 0; }
+  html .inova-theme .project-builder .quick-project-setup .quick-round-toggle { min-height: 36px; padding: 4px 0; border: 0; background: transparent; font-size: 12px; width: auto; }
+  /* No celular o botão fica só com o ícone (o nome continua "Duplicar projeto" para leitores de tela). */
+  html .inova-theme .project-builder .quick-project-setup .quick-duplicar { flex-shrink: 0; width: 36px; height: 36px; padding: 0; justify-content: center; }
+  html .inova-theme .project-builder .quick-project-setup .quick-duplicar-texto { display: none; }
   html .inova-theme .project-builder .quick-project-setup .quick-project-fields > .component-material-field { grid-column: 2; grid-row: 2; min-width: 0; align-self: stretch; }
   html .inova-theme .project-builder .quick-project-setup .component-material-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   html .inova-theme .project-builder .quick-project-setup .material-selection-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -172,12 +178,6 @@
   html .inova-theme .material-picker-panel .material strong { white-space: normal; font-size: 13px; overflow-wrap: anywhere; }
   html .inova-theme .material-picker-panel .material-price { margin-left: auto; font-size: 13px; }
   html .inova-theme .material-picker-panel .material-name { flex: 1 1 100px; }
-  html .inova-theme :is(.catalog-modal-backdrop, .quick-services-modal-backdrop) { padding: 8px; }
-  html .inova-theme :is(.catalog-modal, .quick-services-modal, .customer-dialog) { width: calc(100vw - 16px); max-width: 540px; max-height: calc(100dvh - 24px); padding: 16px; border-radius: 14px; overflow-y: auto; overscroll-behavior: contain; }
-  html .inova-theme :is(.catalog-modal > header, .quick-services-modal > header, .customer-dialog-heading) { align-items: flex-start; gap: 12px; }
-  html .inova-theme :is(.catalog-modal > header button, .quick-services-modal > header button, .customer-dialog-heading > button) { flex: 0 0 44px; min-width: 44px; min-height: 44px; }
-  html .inova-theme .quick-services-modal footer { position: sticky; bottom: -16px; margin: 16px -16px -16px; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); background: var(--surface); z-index: 1; }
-  html .inova-theme .quick-services-modal footer button { width: 100%; min-height: 48px; }
   html .inova-theme :is(.quick-modal-service-list, .quick-modal-simple-list) { grid-template-columns: minmax(0, 1fr); }
   html .inova-theme .quick-modal-service-list legend { font-size: 13px; }
   html .inova-theme :is(.quick-inline-sides label, .quick-modal-simple-list label) { min-height: 44px; font-size: 13px; white-space: normal; gap: 8px; }
@@ -213,11 +213,9 @@
   html .inova-theme .list-header { align-items: flex-start; gap: 12px; }
   html .inova-theme .list-header h1 { font-size: 28px; }
   html .inova-theme .list-header a { display: inline-flex; align-items: center; min-height: 44px; }
-  html .inova-theme :is(.quote-filter-row, .customer-toolbar, .quote-workbench-general, .quote-workbench-work, .quote-workbench-prazo-obs, .user-form) { display: grid; grid-template-columns: minmax(0, 1fr); }
+  html .inova-theme :is(.quote-filter-row, .customer-toolbar, .quote-workbench-work, .user-form) { display: grid; grid-template-columns: minmax(0, 1fr); }
   html .inova-theme .quote-filter-row label { min-width: 0; }
   html .inova-theme .quote-filter-row :is(input, select) { width: 100%; }
-  html .inova-theme .quote-workbench-tabs { display: flex; overflow-x: auto; flex-wrap: nowrap; }
-  html .inova-theme .quote-workbench-tabs button { flex: 0 0 auto; min-height: 46px; }
   html .inova-theme :is(.detail-actions, .customer-history-actions, .remount-document-actions .detail-actions, .user-form-actions) { display: flex; flex-wrap: wrap; gap: 8px; }
   html .inova-theme .detail-actions > :is(button, a, div),
   html .inova-theme .user-form-actions > button { flex: 1 1 140px; min-width: 0; }

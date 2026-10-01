@@ -129,7 +129,7 @@ try {
   for (let graus = 80; graus >= 0; graus -= 10) await toque('touchMove', [[gx + raio * Math.cos(graus * Math.PI / 180), gy - raio * Math.sin(graus * Math.PI / 180)]]);
   assert.equal((await page.locator('.tec-canvas').boundingBox()).y, topoAntes, 'o desenho não sai do lugar sob o dedo enquanto gira');
   await toque('touchEnd', []);
-  await page.getByText('Peça girada para 90°. Ctrl+Z desfaz.').waitFor();
+  await page.getByText('Peça girada para 90°. Use Ctrl+Z para desfazer.').waitFor();
   await page.waitForTimeout(2600); // salvamento automático
   await shot('03-girada-com-o-dedo');
   assert.equal(savedDocument.pieces[0].rotationDeg, 90, 'girada com o dedo');

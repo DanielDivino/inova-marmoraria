@@ -27,6 +27,10 @@
 .fluxo-vazio { display: grid; place-items: center; min-height: 90px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; }
 
 .fluxo-cartao { display: grid; gap: 3px; padding: 10px 12px 10px 13px; border: 1px solid var(--line); border-left: 5px solid var(--cor-orcamento); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); cursor: grab; touch-action: manipulation; user-select: none; -webkit-user-select: none; box-shadow: 0 1px 2px #0000000d; }
+/* Cartão do orçamento de onde se voltou: pisca um contorno para achar rápido. */
+.fluxo-cartao-destaque { animation: fluxo-destaque 2.6s ease-out; }
+@keyframes fluxo-destaque { 0%, 55% { outline: 3px solid #b89152; outline-offset: 2px; box-shadow: 0 0 0 6px #b8915233; } 100% { outline: 3px solid transparent; outline-offset: 2px; box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .fluxo-cartao-destaque { animation: none; outline: 3px solid #b89152; outline-offset: 2px; } }
 .fluxo-cartao:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .fluxo-cartao strong { font-size: 14px; overflow-wrap: anywhere; }
 .fluxo-cartao small { color: var(--muted); font-size: 12px; }

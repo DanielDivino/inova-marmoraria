@@ -47,6 +47,17 @@ describe('Dados do formulário enviados ao servidor', () => {
     expect(rascunhoParaEntradaItem(reopened, saved).drawingData).toEqual({ componentDetails: [{}, { parentComponentIndex: 0 }] });
     expect(rascunhoParaEntradaItem(reopened, saved).components[0].componentType).toBe('THRESHOLD');
   });
+  it('salva e reabre os cantos arredondados da peça (raio em cm, gravado em mm)', () => {
+    const input = draft();
+    input.components[0] = { ...input.components[0], raioCantosCm: '7,5' };
+    const payload = rascunhoParaEntradaItem(input);
+    expect(payload.drawingData).toEqual({ componentDetails: [{ cornerRadiusMm: 75 }] });
+    const saved: SavedQuoteItem = { ...payload, id: 'saved', billedQuantity: 1.52, materialNameSnapshot: 'Pedra', billingUnitSnapshot: 'SQUARE_METER', unitPriceSnapshot: 600, total: 912, cutouts: [], services: [],
+      components: payload.components.map((entry, index) => ({ ...entry, id: `saved-${index}`, calculatedTotal: 456, appliedTotal: 456, hasManualPriceOverride: false, edges: [] })) };
+    expect(itemSalvoParaRascunho(saved).components[0].raioCantosCm).toBe('7.5');
+    // Sem cantos arredondados, nada é gravado.
+    expect(rascunhoParaEntradaItem({ ...input, components: [{ ...input.components[0], raioCantosCm: '' }] }).drawingData).toBeUndefined();
+  });
   it('remove a peça com seus adicionais e atualiza os vínculos dos recortes restantes', () => {
     const input = draft();
     input.components.push({ ...input.components[0], id: 'second' }, { ...input.components[0], id: 'child', parentComponentId: 'component' });

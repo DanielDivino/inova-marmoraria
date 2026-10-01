@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { componentTypeLabels } from '@inova/domain';
 import { validarDivisao, calcularUltimaPeca, areaDaOrigemMm2, quantidadeAteAcabar, validarDivisaoPorMedida, type PecaPorMedida, type ProductionPlan, type ProductionSource, type ProductionPiece } from '../../utilitarios/production-plan';
 import { criarId } from '../../utilitarios/id';
+import { confirmar } from '../Confirmacao';
 import { CampoMetros } from './CampoMetros';
 
 type ComponentSnapshot = { label: string; componentType: ProductionPiece['componentType']; orientation: ProductionPiece['orientation']; edges: ProductionPiece['edges'] };
@@ -146,7 +147,7 @@ export function AssistenteDivisaoProducao({ plan, componentSnapshots, onSplitEqu
         {dividido ? <div className="split-assistant-result">
           <span className="split-assistant-contagem">{totalPecas} {totalPecas === 1 ? 'peça' : 'peças'}</span>
           <ul className="split-assistant-pieces">{pecas.map((piece, index) => <li key={piece.id}>{index + 1}. {metros(piece.lengthMm)} × {metros(piece.widthMm)} m{piece.quantity > 1 ? ` ×${piece.quantity}` : ''}</li>)}</ul>
-          <button type="button" className="text-button" aria-label={`Reiniciar a divisão de ${nome}`} onClick={() => { if (window.confirm('Reiniciar a divisão desta peça? As peças atuais (e seus acabamentos/recortes de produção) serão substituídas por uma peça única, para dividir de novo.')) onResetSplit(source); }}>Reiniciar</button>
+          <button type="button" className="text-button" aria-label={`Reiniciar a divisão de ${nome}`} onClick={() => void confirmar({ titulo: 'Reiniciar a divisão desta peça?', mensagem: 'As peças atuais, com seus acabamentos e recortes de produção, serão substituídas por uma peça única para uma nova divisão.', confirmar: 'Reiniciar divisão' }).then((sim) => { if (sim) onResetSplit(source); })}>Reiniciar</button>
         </div>
           : <AssistenteDivisao source={source} snapshot={snapshot} nome={nome} onSplitEqual={onSplitEqual} onSplitManual={onSplitManual} onSplitBySize={onSplitBySize} />}
         {source.needsReview && <div className="split-assistant-review" role="alert">

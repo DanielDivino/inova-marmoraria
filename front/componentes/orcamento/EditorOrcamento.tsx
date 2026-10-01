@@ -19,6 +19,8 @@ import { calcularTotalCartao, projetoTemDesenho, dadosEntradaProjeto, trocarModo
 import { EditorOrcamentoRapido } from './QuickQuoteEditor';
 import { ResumoMovel } from './MobileQuoteSummary';
 import { criarId } from '../../utilitarios/id';
+import { duplicarProjeto } from '../../utilitarios/duplicar-projeto';
+import { JanelaDuplicarProjeto } from './JanelaDuplicarProjeto';
 import { alterouOrcamentoRapido, arredondarMedidaParaCima, normalizarPedrasDasPecas, prepararItemRapido } from '../../utilitarios/quick-quote';
 import './quick-quote.css';
 import { conciliarPlanoParaSalvar, reconciliarPlano, aplicarDivisaoIgual, aplicarDivisaoManual, aplicarDivisaoPorMedida, aceitarMudancaComercial, lerPlanoDeProducao, gravarPlanoDeProducao, componenteParaPeca, planoParaDesenho, type ProductionPlan, type ProductionPiece } from '../../utilitarios/production-plan';
@@ -29,8 +31,11 @@ import { BarraAtendimento } from './BarraAtendimento';
 import { RecortesDaPeca } from './ProductionCutouts';
 import { OpcaoSemCadastro, contatoCliente, payloadCliente } from '../clientes/SemCadastro';
 import { DesenhoTecnicoNoOrcamento, type DesenhoUsado } from './DesenhoTecnicoNoOrcamento';
-import { projetoDoDesenho, vinculoDesenho } from '../../utilitarios/desenho-orcamento';
+import { projetoDoDesenho, projetoParaDesenho, vinculoDesenho } from '../../utilitarios/desenho-orcamento';
+import type { SincroniaDesenho } from '@inova/domain/technical';
 import { useRascunhoServidor } from './useRascunhoServidor';
+import { Caminho } from '../Caminho';
+import { caminhoDentroDoOrcamento, enderecoOrcamento, lerOrigem, SEM_ORIGEM } from '../../utilitarios/rotas';
 
 type BillingUnit = 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED';
 type MaterialImage = { id: string; url: string; alt?: string | null; isPrimary: boolean };
@@ -44,6 +49,8 @@ type CustomerTarget = { kind: 'WORKSPACE'; workspaceId: string } | { kind: 'NEW_
 
 const projetoPreenchido = (project: DraftItem) => !!project.projectName.trim() || !!project.materialId || !!project.manualM2 || !!project.manualJustification || project.components.length > 1 || project.cutouts.length > 0 || project.serviceIds.length > 0 || project.components.some(component => !!component.label.trim() || !!component.materialId || !!component.lengthCm || !!component.widthCm || component.quantity !== 1 || component.componentType !== 'TOP' || component.edges.length > 0 || component.appliedTotal !== undefined);
 
+import { confirmar } from '../Confirmacao';
+import { Janela } from '../Janela';
 import { formatarMoeda } from '../../utilitarios/formatadores';
 const newId = criarId;
 const decimal = (value: string) => Number(value.replace(',', '.')) || 0;
@@ -82,6 +89,8 @@ export default function EditorOrcamento() {
   const [activeClientIndex, setActiveClientIndex] = useState(0);
   const workspacesAtuais = useRef(workspaces);
   workspacesAtuais.current = workspaces;
+  // Editando um orçamento: de onde ele foi aberto (o caminho, o cancelar e o salvar voltam para lá).
+  const [origem] = useState(() => quoteId && typeof window !== 'undefined' ? lerOrigem(new URLSearchParams(window.location.search)) : SEM_ORIGEM);
   // No computador, a barra do atendimento vai para a barra de cima (ao lado do sino); no celular fica na página.
   const celular = useCelular();
   const [alvoCabecalho, setAlvoCabecalho] = useState<HTMLElement | null>(null);
@@ -120,6 +129,10 @@ export default function EditorOrcamento() {
   const [saving, setSaving] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [componentNamesVersion, setComponentNamesVersion] = useState(0);
+  // "Duplicar projeto": janela com o nome do novo projeto (e do desenho técnico copiado).
+  const [janelaDuplicar, setJanelaDuplicar] = useState(false);
+  const [duplicando, setDuplicando] = useState(false);
+  const [erroDuplicar, setErroDuplicar] = useState('');
   const savedRef = useRef(false);
   const latestDraft = useRef<string>('');
   const linearServices = useMemo(() => catalog?.services.filter((service) => service.billingUnit === 'LINEAR_METER') ?? [], [catalog]);
@@ -238,7 +251,7 @@ export default function EditorOrcamento() {
     const controller = new AbortController();
     if (quoteId) {
       api<EditingQuote>(`/quotes/${quoteId}`, { signal: controller.signal }).then((quote) => {
-        if (!podeEditarOrcamento(quote)) throw new Error('Este orçamento está encerrado. Crie um complemento ou reabra como retrabalho.');
+        if (!podeEditarOrcamento(quote)) throw new Error('Este orçamento está encerrado. Crie um complemento ou reabra-o como retrabalho.');
         setEditingQuote(quote); setCustomer(quote.customer); setCustomerMode(null);
         setItems(quote.items.map(itemSalvoParaRascunho)); setDiscount(String(quote.discountAmount));
         try {
@@ -259,9 +272,6 @@ export default function EditorOrcamento() {
         setComponentNamesVersion(1);
         setDraftHydrated(true);
       }).catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Não foi possível abrir a edição.'); });
-    } else {
-      const parent = new URLSearchParams(window.location.search).get('parent');
-      if (parent) api<QuoteLink>(`/quotes/${parent}`, { signal: controller.signal }).then((quote) => { setParentQuote(quote); setCustomer(quote.customer); setCustomerMode(null); }).catch((cause) => { if (!controller.signal.aborted) setError(cause.message); });
     }
     return () => controller.abort();
   }, [quoteId]);
@@ -453,7 +463,7 @@ export default function EditorOrcamento() {
   const productionDrawingComponents = useDeferredValue(productionPieceDraftComponents);
   const productionDrawingCutouts = useDeferredValue(productionCutoutsAsDraft);
   const changeEntryMode = (mode: QuoteEntryMode) => {
-    if (mode === 'QUICK' && item.calculationMode === 'MANUAL_M2') { setError('Este projeto usa área manual. Adicione um projeto para informar peças no orçamento rápido.'); return; }
+    if (mode === 'QUICK' && item.calculationMode === 'MANUAL_M2') { setError('Este projeto utiliza área manual. Adicione um novo projeto para informar peças no Orçamento Rápido.'); return; }
     const prepared = prepararItemRapido(item);
     updateItem({ ...(prepared.components.length ? { components: prepared.components, cutouts: prepared.cutouts } : {}), ...(mode === 'QUICK' && !item.materialId ? { materialId: item.components[0]?.materialId ?? '' } : {}), drawingData: trocarModoEntrada(item.drawingData, mode) });
     setError(''); setCurrentStep(1);
@@ -530,10 +540,36 @@ export default function EditorOrcamento() {
     finally { setSavingCustomer(false); }
   }
   function adicionarProjeto() { setItems((current) => [...current, { ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '', arredondarM2: m2Fechado, ...(quickMode ? { drawingData: dadosEntradaProjeto(undefined, 'QUICK') } : {}) }]); setActiveIndex(items.length); setReviewedSteps([]); }
-  function removerProjeto(index: number) {
+  const nomesDosProjetos = items.map((projeto, index) => projeto.projectName.trim() || `Projeto ${index + 1}`);
+  /**
+   * "Duplicar projeto" (com o nome escolhido na janela): cópia fiel do projeto atual logo depois
+   * dele, já aberta para ajustar. Com desenho técnico, a cópia ganha uma cópia do desenho, com o
+   * mesmo nome e só dela: mexer no desenho de um não muda o do outro.
+   */
+  async function duplicarProjetoAtual(nome: string) {
+    const original = items[activeIndex];
+    if (!original || duplicando) return;
+    const destino = activeIndex + 1;
+    let copia = duplicarProjeto(original, nome);
+    const vinculo = vinculoDesenho(original);
+    if (vinculo) {
+      setDuplicando(true); setErroDuplicar('');
+      try {
+        const desenho = await api<{ designId: string; nome: string; versao: number }>(`/designs/${vinculo.designId}/copy`, { method: 'POST', body: JSON.stringify({ name: nome.slice(0, 120) }) });
+        copia = duplicarProjeto(original, nome, undefined, { designId: desenho.designId, nome: desenho.nome, versao: desenho.versao });
+      } catch (cause) {
+        setErroDuplicar(cause instanceof Error ? `Não foi possível copiar o desenho técnico do projeto: ${cause.message}` : 'Não foi possível copiar o desenho técnico do projeto.');
+        return;
+      } finally { setDuplicando(false); }
+    }
+    setItems((current) => [...current.slice(0, destino), copia, ...current.slice(destino)]);
+    selectProject(destino);
+    setJanelaDuplicar(false);
+  }
+  async function removerProjeto(index: number) {
     const project = items[index];
     const filled = projetoPreenchido(project);
-    if (filled && !window.confirm(`Excluir ${project.projectName || 'Projeto ' + (index + 1)} e todos os seus dados?`)) return;
+    if (filled && !await confirmar({ titulo: `Excluir ${project.projectName || 'Projeto ' + (index + 1)}?`, mensagem: 'O projeto e todos os seus dados serão removidos deste orçamento.', confirmar: 'Excluir projeto', perigo: true })) return;
     if (items.length === 1) {
       setItems([{ ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '' }]); setActiveIndex(0); setSummarySelection(0); navigateStep(1);
     } else {
@@ -542,10 +578,10 @@ export default function EditorOrcamento() {
     }
     setReviewedSteps([]);
   }
-  function removerEspacoCliente(index: number, confirmed = false) {
+  async function removerEspacoCliente(index: number, confirmed = false) {
     const entry = workspaces[index];
     if (!entry) return;
-    if (!confirmed && workspaceHasData(entry) && !window.confirm(`Excluir ${entry.customer?.name || 'Cliente ' + (index + 1)} e todos os seus projetos?`)) return;
+    if (!confirmed && workspaceHasData(entry) && !await confirmar({ titulo: `Remover ${entry.customer?.name || 'Cliente ' + (index + 1)} deste orçamento?`, mensagem: 'Os projetos não salvos deste cliente também serão removidos. O cadastro do cliente será mantido.', confirmar: 'Remover cliente', perigo: true })) return;
     rascunhoServidor.marcarRemovido(entry.id);
     if (workspaces.length === 1) {
       const fresh = newClientWorkspace();
@@ -560,6 +596,36 @@ export default function EditorOrcamento() {
     setReviewedSteps([]);
     setCurrentStep(1);
   }
+  /**
+   * Abre um atendimento para o cliente (da tela do cliente: ?cliente=) ou para um complemento
+   * (+ Vincular complemento: ?parent=), sem mexer nos atendimentos que já estão abertos: reaproveita
+   * o que já é desse cliente (ou desse complemento) ou um vazio; senão, abre outro.
+   */
+  function abrirAtendimentoPara(cliente: Customer, parent: QuoteLink | null = null) {
+    const abertos = workspacesAtuais.current;
+    const jaAberto = abertos.findIndex(entry => parent ? entry.parentQuote?.id === parent.id : entry.customer?.id === cliente.id && !entry.parentQuote);
+    if (jaAberto >= 0) { selecionarEspacoCliente(jaAberto); return; }
+    const vazio = abertos.findIndex(entry => !workspaceHasData(entry) && !entry.parentQuote);
+    const base = vazio >= 0 ? abertos[vazio] : { ...newClientWorkspace(), items: [{ ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '' }] };
+    const aberto = { ...base, customer: cliente, parentQuote: parent };
+    setWorkspaces(current => vazio >= 0 ? current.map(entry => entry.id === base.id ? aberto : entry) : [...current, aberto]);
+    setActiveClientIndex(vazio >= 0 ? vazio : abertos.length);
+    setSummarySelection(0); setReviewedSteps([]); setCurrentStep(1); setCustomerMode(null);
+  }
+  const pedidoDoEndereco = useRef(false);
+  useEffect(() => {
+    if (quoteId || !draftHydrated || pedidoDoEndereco.current) return;
+    const parametros = new URLSearchParams(window.location.search);
+    const parent = parametros.get('parent'), cliente = parametros.get('cliente');
+    if (!parent && !cliente) return;
+    pedidoDoEndereco.current = true;
+    // Não repete ao recarregar a página.
+    window.history.replaceState(null, '', '/');
+    (parent
+      ? api<QuoteLink>(`/quotes/${parent}`).then((quote) => abrirAtendimentoPara(quote.customer as Customer, quote))
+      : api<Customer>(`/customers/${cliente}`).then((entry) => abrirAtendimentoPara(entry))
+    ).catch((cause) => setError(cause instanceof Error ? cause.message : 'Não foi possível abrir o cliente.'));
+  }, [quoteId, draftHydrated]); // eslint-disable-line react-hooks/exhaustive-deps
   function selecionarEspacoCliente(index: number) {
     if (index < 0 || index >= workspaces.length) return;
     setActiveClientIndex(index);
@@ -573,7 +639,7 @@ export default function EditorOrcamento() {
     if (!draft.productTypeId && !quickDraft) return { message: 'O catálogo de tipos de peça ainda não foi carregado. Aguarde e tente novamente.' };
     if (draft.calculationMode === 'MANUAL_M2') {
       if (!materialFor(draft)) return { message: 'Selecione o material.' };
-      if (!isSuperAdmin) return { message: 'O cálculo manual exige acesso de Super Admin.' };
+      if (!isSuperAdmin) return { message: 'O cálculo manual requer o perfil Super administrador.' };
       if (!(decimal(draft.manualM2) > 0)) return { message: 'Informe uma área manual maior que zero.' };
       if (!draft.manualJustification.trim()) return { message: 'Informe a justificativa da área manual.' };
       return null;
@@ -610,6 +676,41 @@ export default function EditorOrcamento() {
     setItems((current) => alvo < current.length ? current.map((entry, index) => index === alvo ? projeto : entry) : [...current, projeto]);
     setActiveIndex(alvo); setSummarySelection(alvo); setReviewedSteps([]); setError('');
     setAvisoDesenho(`${projeto.projectName}: ${formatarMoeda(desenho.estimativa.total)} do desenho técnico ${existente >= 0 ? 'atualizado' : 'adicionado'} no resumo do orçamento.`);
+  };
+  // Antes de abrir o desenho técnico de um projeto deste orçamento, o desenho recebe o que mudou no Orçamento Rápido.
+  const levarOrcamentoAoDesenho = async (designId: string) => {
+    const projeto = items.find((entrada) => vinculoDesenho(entrada)?.designId === designId);
+    const vinculo = projeto && vinculoDesenho(projeto);
+    if (!projeto || !vinculo) return;
+    try {
+      const troca = await api<{ sincronia?: SincroniaDesenho; avisos: string[]; versao: number; nome: string }>(`/designs/${designId}/sincronizar`, { method: 'POST',
+        body: JSON.stringify({ projeto: projetoParaDesenho(projeto), ...(vinculo.sincronia ? { sincronia: vinculo.sincronia } : {}) }) });
+      setItems((atual) => atual.map((entrada) => {
+        const ligado = entrada.id === projeto.id ? vinculoDesenho(entrada) : undefined;
+        return ligado ? { ...entrada, drawingData: { ...entrada.drawingData, desenhoTecnico: { ...ligado, nome: troca.nome, versao: troca.versao, sincronia: troca.sincronia } } } : entrada;
+      }));
+      if (troca.avisos.length) setAvisoDesenho(troca.avisos.join(' '));
+    } catch (cause) {
+      setAvisoDesenho(`As mudanças do orçamento não foram levadas ao desenho técnico agora (${cause instanceof Error ? cause.message : 'erro de conexão'}); elas entram na próxima vez que ele for aberto.`);
+    }
+  };
+  // Desenho técnico do projeto aberto: criado com o nome do projeto, já com as peças do Orçamento Rápido, e ligado a ele.
+  const criarDesenhoDoProjeto = async () => {
+    const projeto = items[activeIndex];
+    if (!customer || !projeto) throw new Error('Selecione o cliente e o projeto antes de criar o desenho.');
+    const nome = (projeto.projectName.trim() || `Projeto ${activeIndex + 1}`).slice(0, 120);
+    const criado = await api<{ designId: string }>(`/customers/${customer.id}/designs`, { method: 'POST', body: JSON.stringify({ name: nome }) });
+    const troca = await api<{ sincronia?: SincroniaDesenho; avisos: string[]; versao: number; nome: string }>(`/designs/${criado.designId}/sincronizar`, { method: 'POST', body: JSON.stringify({ projeto: projetoParaDesenho(projeto) }) });
+    const desenhoTecnico = { designId: criado.designId, nome: troca.nome, versao: troca.versao, total: 0, aceitoEm: new Date().toISOString(), ...(troca.sincronia ? { sincronia: troca.sincronia } : {}) };
+    setItems((atual) => atual.map((entrada) => entrada.id === projeto.id ? { ...entrada, drawingData: { ...entrada.drawingData, desenhoTecnico } } : entrada));
+    if (troca.avisos.length) setAvisoDesenho(troca.avisos.join(' '));
+    return criado.designId;
+  };
+  // Peça em L, U, curva ou desenho livre: a medida muda no desenho técnico, não no Orçamento Rápido.
+  const medidaPeloDesenho = (component: DraftComponent) => {
+    const origem = vinculoDesenho(item)?.sincronia?.pecas[component.id];
+    return origem && !origem.recursoId && origem.forma !== 'RETANGULO'
+      ? <p className="quick-medida-desenho"><Icone nome="esquadro" tamanho={13} />{origem.forma === 'COMPOSTA' ? 'Parte de uma peça em L ou U' : 'Peça com curva ou em desenho livre'} do desenho técnico: a medida muda no desenho.</p> : null;
   };
   const prepareDraftForSave = (draft: DraftItem) => {
     const prepared = prepararItemRapido(draft);
@@ -660,7 +761,7 @@ export default function EditorOrcamento() {
       return;
     }
     if (activeWorkspace.parentQuote && activeWorkspace.parentQuote.customerId !== activeWorkspace.customer!.id) { setError('O complemento deve usar o cliente do orçamento vinculado.'); return; }
-    if (editingQuote?.status === 'APPROVED' && !window.confirm('Salvar alterações neste orçamento aprovado? Confira os valores e as medidas antes de confirmar.')) return;
+    if (editingQuote?.status === 'APPROVED' && !await confirmar({ titulo: 'Salvar alterações no orçamento aprovado?', mensagem: 'Revise os valores e as medidas antes de confirmar.', confirmar: 'Salvar alterações' })) return;
     setSaving(true);
     try {
       const defaultProductTypeId = catalog?.productTypes[0]?.id ?? '';
@@ -675,10 +776,11 @@ export default function EditorOrcamento() {
         if (remaining.length) localStorage.setItem(quoteDraftStorageKey, JSON.stringify({ workspaces: remaining, activeClientIndex: 0, componentNamesVersion: 1 }));
         else localStorage.removeItem(quoteDraftStorageKey);
       } else localStorage.removeItem(quoteDraftStorageKey);
-      window.location.href = openPdf && savedActiveId ? `/orcamentos/${savedActiveId}?pdf=1` : '/orcamentos';
+      // Salvo: abre a tela do orçamento (editando, volta com a mesma origem de antes).
+      window.location.href = enderecoOrcamento(savedActiveId, quoteId ? origem : SEM_ORIGEM, { parametros: openPdf ? { pdf: '1' } : undefined });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o orçamento.'); } finally { setSaving(false); }
   }
-  if (quoteId && !editingQuote) return <main className="shell"><Link href="/orcamentos">← Orçamentos</Link><p className={error ? 'form-error' : 'empty'}>{error || 'Abrindo orçamento para edição…'}</p></main>;
+  if (quoteId && !editingQuote) return <main className="shell"><Link href={enderecoOrcamento(quoteId, origem)}>← Voltar ao orçamento</Link><p className={error ? 'form-error' : 'empty'}>{error || 'Abrindo orçamento para edição…'}</p></main>;
   if (!catalog) return <main className="shell"><p className="empty">{error || 'Carregando catálogo…'}</p></main>;
 
   const barraNoTopo = !celular && !!alvoCabecalho;
@@ -692,17 +794,18 @@ export default function EditorOrcamento() {
   return <main className="shell project-builder">
     <ResumoMovel total={formatarMoeda(summaries[activeIndex]?.total ?? 0)} label="Total do projeto atual" />
     <header className={`project-topbar${barraNoTopo ? ' barra-no-topo' : ''}`}>
-      {editingQuote ? <h1 className="project-edit-title">Editar {editingQuote.number}</h1> : <h1 className="sr-only">Novo orçamento</h1>}
+      {editingQuote ? <div className="project-edit-heading"><Caminho itens={caminhoDentroDoOrcamento({ id: editingQuote.id, number: editingQuote.number, customerId: editingQuote.customerId, customerNameSnapshot: editingQuote.customer.name, status: editingQuote.status, executionStatus: editingQuote.executionStatus }, origem)} /><h1 className="project-edit-title">Editar {editingQuote.number}</h1></div> : <h1 className="sr-only">Novo orçamento</h1>}
       {!barraNoTopo && barraAtendimento}
     </header>
     {barraNoTopo && alvoCabecalho && createPortal(barraAtendimento, alvoCabecalho)}
-    {customerMode && <dialog className="customer-dialog" aria-label={editingCustomerId ? 'Editar cliente' : customerMode === 'NEW' ? 'Novo cliente' : 'Selecionar cliente'} ref={node => { if (node && !node.open) node.showModal(); }} onCancel={event => { if (savingCustomer) event.preventDefault(); else closeCustomerDialog(); }}>
-      <div className="customer-dialog-heading"><strong>{editingCustomerId ? 'Editar cliente' : customerMode === 'NEW' ? 'Novo cliente' : 'Selecionar cliente'}</strong><button type="button" className="text-button" aria-label="Fechar seleção de cliente" disabled={savingCustomer} onClick={closeCustomerDialog}>×</button></div>
+    {janelaDuplicar && item && <JanelaDuplicarProjeto original={nomesDosProjetos[activeIndex]} nomesDoOrcamento={nomesDosProjetos} comDesenho={!!vinculoDesenho(item)} ocupada={duplicando} erro={erroDuplicar}
+      aoFechar={() => setJanelaDuplicar(false)} aoDuplicar={(nome) => void duplicarProjetoAtual(nome)} />}
+    {customerMode && <Janela aberta aoFechar={closeCustomerDialog} ocupada={savingCustomer} className="customer-dialog" icone="pessoa" rotuloFechar="Fechar seleção de cliente" titulo={editingCustomerId ? 'Editar cliente' : customerMode === 'NEW' ? 'Novo cliente' : 'Selecionar cliente'}>
       <div className="customer-mode-tabs"><button type="button" disabled={savingCustomer} onClick={openCustomerSearch}>Selecionar cliente</button><button type="button" disabled={savingCustomer} onClick={openNewCustomer}>Novo cliente</button></div>
       {customerError && <p className="form-error" role="alert">{customerError}</p>}
       {customerMode === 'NEW' ? <><form className="inline-form customer-form" onSubmit={salvarCliente}>
         {!editingCustomerId && <OpcaoSemCadastro ativo={clienteRapido} aoMudar={setClienteRapido} />}
-        {editandoClienteRapido && <p className="cliente-rapido-aviso">Sem cadastro: informe o telefone para completar o cadastro.</p>}
+        {editandoClienteRapido && <p className="cliente-rapido-aviso">Cliente sem cadastro: informe o telefone para concluir o cadastro.</p>}
         <input value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} placeholder={novoClienteRapido ? 'Nome (opcional)' : 'Nome'} aria-label="Nome" required={!novoClienteRapido} />
         <input value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} placeholder={novoClienteRapido || editandoClienteRapido ? 'Telefone (opcional)' : 'Telefone'} aria-label="Telefone" required={!novoClienteRapido && !editandoClienteRapido} />
         {!novoClienteRapido && <><input value={customerForm.document} onChange={(event) => setCustomerForm({ ...customerForm, document: event.target.value })} placeholder="CPF (opcional)" />
@@ -716,12 +819,12 @@ export default function EditorOrcamento() {
         <button className="primary-button" disabled={savingCustomer}>{savingCustomer ? 'Salvando…' : editingCustomerId ? 'Salvar alterações' : novoClienteRapido ? 'Criar sem cadastro e selecionar' : 'Salvar e selecionar cliente'}</button>
       </form><button type="button" className="text-button customer-back" disabled={savingCustomer} onClick={openCustomerSearch}>← Voltar para busca</button></> : <>
         <label className="customer-search-label">Buscar cliente existente<input className="search" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Digite nome, telefone ou CPF" autoFocus /></label>
-        {customerSearch.trim().length < 2 ? <p className="customer-help">Comece digitando para localizar um cliente cadastrado.</p> : customers.length ? <div className="customer-results">{customers.map((entry) => <button className="customer-result" key={entry.id} onClick={() => selectCustomer(entry)}><strong>{entry.name}</strong><small>{contatoCliente(entry)}</small></button>)}</div> : <p className="customer-help">Nenhum cliente encontrado. <button type="button" className="text-button" onClick={openNewCustomer}>Cadastrar novo cliente</button></p>}
+        {customerSearch.trim().length < 2 ? <p className="customer-help">Digite para localizar um cliente cadastrado.</p> : customers.length ? <div className="customer-results">{customers.map((entry) => <button className="customer-result" key={entry.id} onClick={() => selectCustomer(entry)}><strong>{entry.name}</strong><small>{contatoCliente(entry)}</small></button>)}</div> : <p className="customer-help">Nenhum cliente encontrado. <button type="button" className="text-button" onClick={openNewCustomer}>Cadastrar novo cliente</button></p>}
       </>}
-    </dialog>}
+    </Janela>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className={`quote-workspace${quickMode ? ' quick-workspace' : ''}`}><div className="quote-form-column" id="active-project-panel" role="region" aria-label={`Projeto: ${item.projectName.trim() || `Projeto ${activeIndex + 1}`}`}>
-    {editingQuote && <p className="customer-help">Editando o orçamento salvo. Os preços registrados e os ajustes manuais são preservados; novos materiais e serviços usam o catálogo atual. <Link href={`/orcamentos/${quoteId}`} onClick={() => { savedRef.current = true; localStorage.removeItem(quoteDraftStorageKey); }}>Cancelar edição</Link></p>}
+    {editingQuote && <p className="customer-help">Edição de orçamento salvo: os preços registrados e os ajustes manuais são preservados; novos materiais e serviços utilizam o catálogo atual. <Link href={enderecoOrcamento(quoteId!, origem)} onClick={() => { savedRef.current = true; localStorage.removeItem(quoteDraftStorageKey); }}>Cancelar edição</Link></p>}
     {/* Modo do orçamento e, no Detalhado, as etapas na mesma linha. */}
     <div className="modo-e-etapas">
     <div className={`quote-mode-switch${quickMode ? ' is-quick-mode' : ''}`} role="group" aria-label="Modo do orçamento">
@@ -729,17 +832,19 @@ export default function EditorOrcamento() {
       <button type="button" className="modo-botao" aria-pressed={!quickMode} aria-label={`Orçamento com Desenho / Detalhado (${temDesenho ? 'desenho adicionado' : 'desenho pendente'})`} onClick={() => changeEntryMode('DETAILED')}><Icone nome="esquadro" tamanho={16} />Com desenho<span className={`modo-selo${temDesenho ? ' feito' : ''}`} title={temDesenho ? 'Desenho adicionado' : 'Desenho pendente'} aria-hidden="true">{temDesenho ? '✓' : '!'}</span></button>
     </div>
     <DesenhoTecnicoNoOrcamento cliente={customer ? { id: customer.id, name: customer.name } : null} desenhosNoOrcamento={items.flatMap((projeto) => vinculoDesenho(projeto)?.designId ?? [])}
-      podeRevisar={!!currentUser && temPermissao(currentUser.role, 'technical')} aoEscolherCliente={openCustomerSearch} aoSemCadastro={() => void orcamentoSemCadastro()} aoUsar={usarDesenhoTecnico} />
+      podeRevisar={!!currentUser && temPermissao(currentUser.role, 'technical')} aoEscolherCliente={openCustomerSearch} aoSemCadastro={() => void orcamentoSemCadastro()} aoUsar={usarDesenhoTecnico} antesDeAbrir={levarOrcamentoAoDesenho}
+      projetoAtual={customer && item ? { nome: item.projectName.trim() || `Projeto ${activeIndex + 1}`, pecas: item.components.filter((component) => component.lengthCm.trim() && component.widthCm.trim()).length, designId: vinculoDesenho(item)?.designId } : null}
+      aoCriarDoProjeto={criarDesenhoDoProjeto} />
     {!quickMode && <div className="project-navigation"><EtapasProjeto current={currentStep} completed={completedSteps} onSelect={navigateStep} /><button type="button" className="view-all-button" aria-pressed={showAll} onClick={() => setShowAll((value) => !value)}>{showAll ? 'Ver por etapas' : 'Ver tudo'}</button></div>}
     {!quickMode && !temDesenho && <button type="button" className="botao-contorno botao-contorno-destaque concluir-detalhamento" onClick={concluirDetalhamento}><Icone nome="marcado" />Concluir detalhamento</button>}
     </div>
     {avisoDesenho && <p className="catalog-notice orc-desenho-aviso" role="status">{avisoDesenho}<button type="button" className="text-button" aria-label="Fechar aviso" onClick={() => setAvisoDesenho('')}>×</button></p>}
-    {vinculoDesenho(item) && <p className="customer-help orc-desenho-vinculo"><Icone nome="esquadro" tamanho={14} />Este projeto veio do desenho técnico “{vinculoDesenho(item)!.nome}”. Para mudar as peças pelo desenho, abra-o em Desenho técnico e use de novo no orçamento.</p>}
-    {quickMode && <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={item.materialId ? materialFor(item) : materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={patch => updateItem({ ...patch, drawingData: alterouOrcamentoRapido(item, { ...item, ...patch }) ? dadosEntradaProjeto(item.drawingData, 'QUICK') : item.drawingData })} m2Fechado={arredondaM2(item)} area={component => calculateDraftComponent(component, arredondaM2(item))?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
+    {vinculoDesenho(item) && <p className="customer-help orc-desenho-vinculo"><Icone nome="esquadro" tamanho={14} />Desenho técnico deste projeto: “{vinculoDesenho(item)!.nome}”. Para mudar as peças pelo desenho, abra-o em Desenho técnico e use-o de novo no orçamento.</p>}
+    {quickMode && <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={item.materialId ? materialFor(item) : materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={patch => updateItem({ ...patch, drawingData: alterouOrcamentoRapido(item, { ...item, ...patch }) ? dadosEntradaProjeto(item.drawingData, 'QUICK') : item.drawingData })} m2Fechado={arredondaM2(item)} onDuplicate={() => { setErroDuplicar(''); setJanelaDuplicar(true); }} renderComponentInfo={medidaPeloDesenho} area={component => calculateDraftComponent(component, arredondaM2(item))?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
     {!quickMode && <>
     <div className="project-stage-group project-setup-grid" hidden={quickMode || (!showAll && currentStep !== 1)}>
     <section className="section measurements-card" id="project-step-1" tabIndex={-1} onFocusCapture={() => setCurrentStep(1)}>
-      <TituloEtapaProjeto number={1} title="Divisão e peças" description="Divida cada componente comercial em peças físicas para fabricar. Isso não muda o valor do orçamento." />
+      <TituloEtapaProjeto number={1} title="Divisão e peças" description="Divida cada componente comercial nas peças físicas a serem fabricadas. Essa divisão não altera o valor do orçamento." />
       <AssistenteDivisaoProducao plan={productionPlan} componentSnapshots={productionSourceSnapshots}
         onSplitEqual={(source, snapshot, parts) => updateProductionPlan((plan) => aplicarDivisaoIgual(plan, source, snapshot, parts))}
         onSplitManual={(source, snapshot, lengths) => updateProductionPlan((plan) => aplicarDivisaoManual(plan, source, snapshot, lengths))}
@@ -757,14 +862,14 @@ export default function EditorOrcamento() {
     <div className="project-stage-group" id="project-step-2" tabIndex={-1} hidden={quickMode || (!showAll && currentStep !== 2)}>
     {/* Etapa 2: só o desenho e a ordem de serviço, para conferir. */}
     <section className="section">
-      <TituloEtapaProjeto number={2} title="Conferência / produção" description="Confira o desenho e a ordem de serviço antes de salvar o orçamento. As alterações deste desenho não alteram o valor do orçamento." />
+      <TituloEtapaProjeto number={2} title="Conferência / produção" description="Revise o desenho e a ordem de serviço antes de salvar o orçamento. Alterações neste desenho não modificam o valor do orçamento." />
       {(showAll || currentStep === 2) && <DesenhoTecnico components={productionDrawingComponents} cutouts={productionDrawingCutouts} materialNames={Object.fromEntries(productionPlan.pieces.map((piece) => [piece.id, materialFor(item, item.components.find((entry) => entry.id === piece.sourceComponentId) ?? item.components[0])?.name ?? 'Material não selecionado']))} linearServices={drawingServices} services={activeServices} additionalServices={item.serviceIds.flatMap((id) => { const service = activeServices.find((entry) => entry.id === id); return service ? [{ name: service.name, quantity: service.billingUnit === 'UNIT' ? item.serviceQuantities[id] : undefined }] : []; })} notes={editingQuote?.notes ?? ''} />}
     </section>
     </div>
     <div className="project-stage-actions" hidden={quickMode}><button type="button" className="secondary-button" onClick={() => navigateStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>← Voltar</button><span>{`Etapa ${currentStep} de 2`}</span>{currentStep < 2 ? <button type="button" className="save-quote-button" onClick={nextStep}>Conferir produção <span aria-hidden="true">→</span></button> : <button type="button" className="save-quote-button" onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'} <span aria-hidden="true">✓</span></button>}</div>
     </>}
     </div>
-<aside id="quote-summary-card" className="quote-summary-card" aria-label="Resumo do orçamento"><div className="quote-visual-card"><p>Projetos únicos<br />para espaços<br />incríveis.</p><i /></div><strong>Resumo do orçamento</strong><label className="summary-project-select">Projeto em edição<select aria-label="Projeto em edição" value={summarySelection} onChange={(event) => { const value = event.target.value; if (value === 'TOTAL') { setSummarySelection('TOTAL'); return; } selectProject(Number(value)); }}>{items.map((draft, index) => <option key={draft.id} value={index}>{draft.projectName || `Projeto ${index + 1}`}</option>)}<option value="TOTAL">Total</option></select></label>{summaryIsTotal ? <div className="summary-project-totals">{items.map((draft, index) => <span key={draft.id}><span>{draft.projectName || `Projeto ${index + 1}`}</span><b>{formatarMoeda(summaries[index]?.total ?? 0)}</b></span>)}<span className="summary-grand-total"><span>Total dos projetos</span><b>{formatarMoeda(gross)}</b></span></div> : <><span>Projetos adicionados <b>{items.length}</b></span><span>Área total <b>{(selectedSummary?.area ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²</b></span>{selectedComponentBreakdown.length ? selectedComponentBreakdown.map((component) => <span key={component.id}>{component.name} <b>{formatarMoeda(component.amount)}</b></span>) : <span>Material <b>{formatarMoeda(selectedSummary?.materialSubtotal ?? 0)}</b></span>}{selectedServiceBreakdown.length ? selectedServiceBreakdown.map((service) => <span key={service.id}>{service.name} <b>{formatarMoeda(service.amount)}</b></span>) : <span>Serviços, recortes e cubas <b>{formatarMoeda(0)}</b></span>}<span>Descontos individuais <b>{formatarMoeda(selectedSummary?.individualDiscountTotal ?? 0)}</b></span><span className="summary-grand-total">Total do projeto <b>{formatarMoeda(selectedSummary?.total ?? 0)}</b></span></>}{/* Validade: sempre 10 dias úteis após a emissão (sai no PDF). Observações do orçamento: na tela do orçamento salvo. */}{!quoteId && <VincularOrcamento customer={customer} value={parentQuote} onChange={(quote) => { setParentQuote(quote); if (quote) selectCustomer(quote.customer); }} />}<small className="quote-summary-note">As medidas e os acabamentos atualizam o orçamento automaticamente.</small>{quickMode && <label>Desconto autorizado (R$)<input aria-label="Desconto geral rápido" inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>}{quickMode && <><span>Total no Pix (10% de desconto) <b>{formatarMoeda(total)}</b></span><span>No cartão (+10%) <b>{formatarMoeda(calcularTotalCartao(total))}</b></span></>}<div className="quote-summary-actions">{quickMode && <><button type="button" className="save-quote-button" disabled={saving} onClick={() => salvarOrcamento(true)}>Salvar e abrir PDF</button><button type="button" className="save-draft-button" onClick={() => changeEntryMode('DETAILED')}>Adicionar desenhos</button></>}{!quickMode && currentStep < 3 && <button type="button" className="save-quote-button" onClick={nextStep}>Continuar <span aria-hidden="true">→</span></button>}<button type="button" className={currentStep < 3 ? 'save-draft-button' : 'save-quote-button'} onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'}</button><small>{quoteId ? 'Seu preenchimento é mantido neste navegador.' : 'Seu preenchimento fica guardado e aparece também no celular e no computador.'}</small></div></aside>
+<aside id="quote-summary-card" className="quote-summary-card" aria-label="Resumo do orçamento"><div className="quote-visual-card"><p>Projetos únicos<br />para espaços<br />incríveis.</p><i /></div><strong>Resumo do orçamento</strong><label className="summary-project-select">Projeto em edição<select aria-label="Projeto em edição" value={summarySelection} onChange={(event) => { const value = event.target.value; if (value === 'TOTAL') { setSummarySelection('TOTAL'); return; } selectProject(Number(value)); }}>{items.map((draft, index) => <option key={draft.id} value={index}>{draft.projectName || `Projeto ${index + 1}`}</option>)}<option value="TOTAL">Total</option></select></label>{summaryIsTotal ? <div className="summary-project-totals">{items.map((draft, index) => <span key={draft.id}><span>{draft.projectName || `Projeto ${index + 1}`}</span><b>{formatarMoeda(summaries[index]?.total ?? 0)}</b></span>)}<span className="summary-grand-total"><span>Total dos projetos</span><b>{formatarMoeda(gross)}</b></span></div> : <><span>Projetos adicionados <b>{items.length}</b></span><span>Área total <b>{(selectedSummary?.area ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²</b></span>{selectedComponentBreakdown.length ? selectedComponentBreakdown.map((component) => <span key={component.id}>{component.name} <b>{formatarMoeda(component.amount)}</b></span>) : <span>Material <b>{formatarMoeda(selectedSummary?.materialSubtotal ?? 0)}</b></span>}{selectedServiceBreakdown.length ? selectedServiceBreakdown.map((service) => <span key={service.id}>{service.name} <b>{formatarMoeda(service.amount)}</b></span>) : <span>Serviços, recortes e cubas <b>{formatarMoeda(0)}</b></span>}<span>Descontos individuais <b>{formatarMoeda(selectedSummary?.individualDiscountTotal ?? 0)}</b></span><span className="summary-grand-total">Total do projeto <b>{formatarMoeda(selectedSummary?.total ?? 0)}</b></span></>}{/* Validade: sempre 10 dias úteis após a emissão (sai no PDF). Observações do orçamento: na tela do orçamento salvo. */}{!quoteId && <VincularOrcamento customer={customer} value={parentQuote} onChange={(quote) => { setParentQuote(quote); if (quote) selectCustomer(quote.customer); }} />}<small className="quote-summary-note">O orçamento é atualizado automaticamente conforme as medidas e os acabamentos.</small>{quickMode && <label>Desconto autorizado (R$)<input aria-label="Desconto geral rápido" inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>}{quickMode && <><span>Total no Pix (10% de desconto) <b>{formatarMoeda(total)}</b></span><span>No cartão (+10%) <b>{formatarMoeda(calcularTotalCartao(total))}</b></span></>}<div className="quote-summary-actions">{quickMode && <><button type="button" className="save-quote-button" disabled={saving} onClick={() => salvarOrcamento(true)}>Salvar e abrir PDF</button><button type="button" className="save-draft-button" onClick={() => changeEntryMode('DETAILED')}>Adicionar desenhos</button></>}{!quickMode && currentStep < 3 && <button type="button" className="save-quote-button" onClick={nextStep}>Continuar <span aria-hidden="true">→</span></button>}<button type="button" className={currentStep < 3 ? 'save-draft-button' : 'save-quote-button'} onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'}</button><small>{quoteId ? 'O preenchimento é salvo automaticamente neste navegador.' : 'O preenchimento é salvo automaticamente e fica disponível no celular e no computador.'}</small></div></aside>
     </div>
   </main>;
 }

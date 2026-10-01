@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './component-material-picker.css';
 
 export type ComponentMaterial = { id: string; name: string; category: string; billingUnit: 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED'; currentPrice: number; images?: { url: string; isPrimary: boolean }[] };
+import { Janela } from '../Janela';
 import { formatarMoeda } from '../../utilitarios/formatadores';
 const unit = { SQUARE_METER: 'm²', LINEAR_METER: 'm', UNIT: 'un', FIXED: 'fixo' };
 export const componentMaterialImage = (material?: Pick<ComponentMaterial, 'images'>) => material?.images?.find(image => image.isPrimary)?.url ?? material?.images?.[0]?.url;
@@ -12,17 +13,15 @@ export const materialImageSrc = (url?: string) => !url ? undefined : url.startsW
 export function SeletorMaterialComponente({ materials, selected, onSelect, emJanela = false }: { materials: ComponentMaterial[]; selected?: ComponentMaterial; onSelect: (id: string) => void; emJanela?: boolean }) {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  const dialog = useRef<HTMLDialogElement>(null);
   const details = useRef<HTMLDetailsElement>(null);
   const trigger = useRef<HTMLElement>(null);
   const labelId = useId();
   const selectionId = useId();
   const shown = materials.filter(material => material.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')));
-  useEffect(() => { if (modalOpen) dialog.current?.showModal(); }, [modalOpen]);
   const selectMaterial = (id: string) => {
     onSelect(id);
     if (details.current) details.current.open = false;
-    dialog.current?.close();
+    if (modalOpen) { setModalOpen(false); trigger.current?.focus({ preventScroll: true }); }
   };
   const choices = (inModal: boolean) => shown.map(material => <button type="button" className={`${inModal ? 'material-dialog-option' : 'material'}${selected?.id === material.id ? ' selected' : ''}`} aria-pressed={selected?.id === material.id} key={material.id} onClick={() => selectMaterial(material.id)}>
     {materialImageSrc(componentMaterialImage(material)) ? <img className="stone material-sample-image material-thumbnail" src={materialImageSrc(componentMaterialImage(material))} alt="" /> : inModal && <span className="material-dialog-placeholder" aria-hidden="true">◇</span>}
@@ -40,9 +39,8 @@ export function SeletorMaterialComponente({ materials, selected, onSelect, emJan
       {choices(false)}{!shown.length && <p className="customer-help">Nenhum material encontrado.</p>}
     </div>}
   </details></div>
-  {modalOpen && createPortal(<dialog ref={dialog} className="material-selection-dialog" aria-label="Escolher material" onClose={() => { setModalOpen(false); trigger.current?.focus({ preventScroll: true }); }}>
-    <header><h2>Escolher material</h2><button type="button" aria-label="Fechar materiais" onClick={() => dialog.current?.close()}>×</button></header>
-    <input autoFocus aria-label="Buscar material" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar pedra pelo nome" />
+  {modalOpen && createPortal(<Janela aberta aoFechar={() => { setModalOpen(false); trigger.current?.focus({ preventScroll: true }); }} className="material-selection-dialog" icone="pedra" titulo="Escolher material" rotuloFechar="Fechar materiais">
+    <input autoFocus aria-label="Buscar material" className="material-dialog-busca" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar pedra pelo nome" />
     <div className="material-dialog-list">{choices(true)}{!shown.length && <p role="status">Nenhum material encontrado.</p>}</div>
-  </dialog>, document.body)}</>;
+  </Janela>, document.body)}</>;
 }

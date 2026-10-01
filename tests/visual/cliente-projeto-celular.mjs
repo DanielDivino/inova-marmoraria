@@ -52,8 +52,13 @@ const clientesAbertos = async () => {
 };
 const clienteAtivo = name => expect(page.getByRole('button', { name: /^Cliente:/ })).toHaveAccessibleName(`Cliente: ${name}`);
 const escolherCliente = async name => { await menuCliente(); await page.getByRole('menu').getByRole('menuitemradio', { name: new RegExp(name) }).click(); };
-let confirmar = true;
-page.on('dialog', dialog => confirmar ? dialog.accept() : dialog.dismiss());
+// Confirmações são janelas do sistema (não o confirm do navegador): responde clicando no botão.
+const responder = async botao => {
+  const janela = page.getByRole('alertdialog');
+  await expect(janela).toBeVisible();
+  await janela.getByRole('button', { name: botao, exact: true }).click();
+  await expect(janela).toHaveCount(0);
+};
 const choose = async name => {
   await page.getByPlaceholder('Digite nome, telefone ou CPF').fill(name);
   await page.locator('.customer-result').filter({ hasText: name }).click();
@@ -102,13 +107,13 @@ try {
   await expect(page.locator('#project-name')).toHaveValue('Banheiro');
 
   // Remover pede confirmação; cancelar mantém o cliente.
-  confirmar = false;
   await menuCliente();
   await acao('Remover este cliente');
+  await responder('Cancelar');
   assert.equal(await clientesAbertos(), 2);
-  confirmar = true;
   await menuCliente();
   await acao('Remover este cliente');
+  await responder('Remover cliente');
   assert.equal(await clientesAbertos(), 1);
   await clienteAtivo('Clara Souza');
   await expect(page.locator('#project-name')).toHaveValue('Cozinha');
@@ -150,6 +155,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await menuCliente();
   await acao('Remover este cliente');
+  await responder('Remover cliente');
   await expect(page.getByRole('button', { name: /^Cliente:/ })).toHaveAccessibleName('Cliente: selecionar');
   await expect(page.locator('#project-name')).toHaveValue('');
   assert(!requests.some(request => request.startsWith('DELETE ')), 'Excluir aba preserva o cadastro de clientes');

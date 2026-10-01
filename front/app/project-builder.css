@@ -28,9 +28,6 @@
 .project-tab .close-project-tab { padding: 6px 9px; margin-right: 3px; border-radius: 50%; font-size: 17px; }
 .close-project-tab:hover { background: #e9e4db; }
 .add-project-tab { flex: none; border: 0; background: transparent; color: #776348; font-size: 23px; padding: 5px 10px; cursor: pointer; }
-.customer-dialog { width: min(530px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; border: 1px solid #ded7ca; border-radius: 10px; padding: 18px; color: var(--ink); }
-.customer-dialog::backdrop { background: #24201a55; }
-.customer-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
 .client-tab-dialog-actions { display: grid; gap: 8px; margin-top: 16px; }
 .client-tab-dialog-actions button { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); color: var(--ink); padding: 10px 12px; cursor: pointer; text-align: left; }
 .client-tab-dialog-actions .client-tab-delete-action { border-color: #d9b9b3; color: #a34237; }

@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Janela } from '../Janela';
 import './filtros.css';
 
 /** Ícones de traço usados nas abas, nos campos e nos botões das listas. */
-const ICONES = {
+// Montados na primeira vez que um ícone aparece (sem JSX ao carregar o módulo).
+const desenharIcones = () => ({
   todos: <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />,
   andamento: <><circle cx="12" cy="12" r="3" /><path d="M12 2.5v3M12 18.5v3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M2.5 12h3M18.5 12h3M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" /></>,
   aprovado: <><circle cx="12" cy="12" r="9" /><path d="m8 12.2 2.8 2.8L16 9.2" /></>,
@@ -47,11 +49,18 @@ const ICONES = {
   download: <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />,
   mais: <path d="M12 5v14M5 12h14" />,
   seta: <path d="m6 9 6 6 6-6" />,
-} satisfies Record<string, ReactNode>;
-export type NomeIcone = keyof typeof ICONES;
+  opcoes: <><circle cx="5" cy="12" r="1.3" fill="currentColor" /><circle cx="12" cy="12" r="1.3" fill="currentColor" /><circle cx="19" cy="12" r="1.3" fill="currentColor" /></>,
+  lixeira: <><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7" /></>,
+  vinculo: <><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2" /><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2" /></>,
+  info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>,
+  paleta: <><path d="M12 3a9 9 0 0 0 0 18c1.4 0 2-1 2-2 0-1.5-1.3-1.8-1.3-3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.3 17 3 12 3Z" /><circle cx="7.5" cy="11" r="1" fill="currentColor" /><circle cx="10" cy="7" r="1" fill="currentColor" /><circle cx="15" cy="7.5" r="1" fill="currentColor" /></>,
+  copiar: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>,
+}) satisfies Record<string, ReactNode>;
+let icones: ReturnType<typeof desenharIcones> | null = null;
+export type NomeIcone = keyof ReturnType<typeof desenharIcones>;
 
 export function Icone({ nome, tamanho = 18 }: { nome: NomeIcone; tamanho?: number }) {
-  return <svg width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONES[nome]}</svg>;
+  return <svg width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{(icones ??= desenharIcones())[nome]}</svg>;
 }
 
 export type OpcaoAba<T extends string> = { valor: T; rotulo: string; icone: NomeIcone; total?: number };
@@ -165,20 +174,12 @@ export function MenuSelecao<T extends string>({ rotulo, icone, valor, opcoes, ao
   </div>;
 }
 
-/** Janela de filtros do celular (dialog nativo): fecha no Esc, no X ou tocando fora. */
-export function ModalFiltros({ aberto, aoFechar, titulo, children, rodape, rotuloFechar = 'Fechar filtros', className }: { aberto: boolean; aoFechar: () => void; titulo: string; children: ReactNode; rodape: ReactNode; rotuloFechar?: string; className?: string }) {
-  const dialogo = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const elemento = dialogo.current;
-    if (!elemento) return;
-    if (aberto && !elemento.open) elemento.showModal();
-    if (!aberto && elemento.open) elemento.close();
-  }, [aberto]);
-  return <dialog ref={dialogo} className={`modal-filtros${className ? ` ${className}` : ''}`} aria-label={titulo} onClose={aoFechar} onMouseDown={(event) => { if (event.target === event.currentTarget) aoFechar(); }}>
-    <header><strong>{titulo}</strong><button type="button" className="modal-filtros-fechar" aria-label={rotuloFechar} onClick={aoFechar}><Icone nome="fechar" /></button></header>
-    <div className="modal-filtros-campos">{children}</div>
-    <footer>{rodape}</footer>
-  </dialog>;
+/**
+ * Janela com título, campos e rodapé (filtros do celular, período, perguntas do fluxo…): é a Janela
+ * padrão do sistema. Fecha no Esc, no X ou tocando fora.
+ */
+export function ModalFiltros({ aberto, aoFechar, titulo, children, rodape, rotuloFechar = 'Fechar filtros', className, icone, subtitulo, dica, largura, ocupada }: { aberto: boolean; aoFechar: () => void; titulo: string; children: ReactNode; rodape: ReactNode; rotuloFechar?: string; className?: string; icone?: NomeIcone; subtitulo?: ReactNode; dica?: ReactNode; largura?: 'pequena' | 'media' | 'grande'; ocupada?: boolean }) {
+  return <Janela aberta={aberto} aoFechar={aoFechar} titulo={titulo} icone={icone} subtitulo={subtitulo} dica={dica} largura={largura} ocupada={ocupada} rotuloFechar={rotuloFechar} className={`modal-filtros${className ? ` ${className}` : ''}`} rodape={rodape}>{children}</Janela>;
 }
 
 /** Atalhos no cabeçalho das páginas de cadastro. */

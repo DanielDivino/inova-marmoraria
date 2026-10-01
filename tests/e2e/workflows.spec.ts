@@ -70,14 +70,15 @@ async function save(page: Page) {
   await expect(page).toHaveURL(/\/orcamentos$/);
   return result.json();
 }
-async function openQuote(page: Page, id: string) { await page.goto(`/orcamentos/${id}`); await expect(page.getByRole('link', { name: 'Editar orçamento', exact: true })).toBeVisible(); }
-/** Observações do orçamento (as do PDF): na tela do orçamento, aba "Equipe, prazo e observação". */
+async function openQuote(page: Page, id: string) { await page.goto(`/orcamentos/${id}`); await expect(page.getByRole('button', { name: 'Mais ações do orçamento' })).toBeVisible(); }
+/** Ações menos usadas do orçamento (Editar, Desenho técnico, Vincular complemento…) ficam no menu "⋯". */
+async function acaoDoOrcamento(page: Page, nome: string) { await page.getByRole('button', { name: 'Mais ações do orçamento' }).click(); await page.getByRole('menu').getByRole('menuitem', { name: nome, exact: true }).click(); }
+/** Observações do orçamento (as do PDF): na tela do orçamento, cartão "Equipe, prazo e observação". */
 async function salvarObservacoes(page: Page, id: string, texto: string) {
   await openQuote(page, id);
-  await page.getByRole('button', { name: /Equipe, prazo e observação/ }).click();
   await page.getByRole('textbox', { name: 'Observações do orçamento' }).fill(texto);
   const salvo = page.waitForResponse((response) => response.url().endsWith(`/api/quotes/${id}/tracking`) && response.request().method() === 'PATCH');
-  await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+  await page.getByRole('button', { name: 'Salvar alterações', exact: true }).click();
   expect((await salvo).status()).toBe(200);
 }
 const nbsp = String.fromCharCode(160);
@@ -209,7 +210,7 @@ test('salvar, editar, restaurar valor, cancelar e preservar rascunho após atual
   expect(saved.notes).toBeNull();
   expect(saved.validUntil).toBeTruthy();
   await salvarObservacoes(page, saved.id, notes);
-  await page.getByRole('link', { name: 'Editar orçamento', exact: true }).click();
+  await acaoDoOrcamento(page, 'Editar orçamento');
   await expect(page.locator('#project-name')).toHaveValue(name);
   await detailFirstRow(page);
   await expect(page.getByLabel('Valor final da peça (material + acabamentos)', { exact: true })).toHaveValue('650,00');
@@ -232,14 +233,14 @@ test('salvar, editar, restaurar valor, cancelar e preservar rascunho após atual
   await page.getByLabel('Valor final da peça (material + acabamentos)', { exact: true }).fill('');
   await expectTotal(page, 792);
   await page.getByRole('link', { name: 'Cancelar edição', exact: true }).click();
-  await page.getByRole('link', { name: 'Editar orçamento', exact: true }).click(); await expectTotal(page, 650);
+  await acaoDoOrcamento(page, 'Editar orçamento'); await expectTotal(page, 650);
   await salvarObservacoes(page, saved.id, '');
   expect((await (await api(page, 'GET', `/quotes/${saved.id}`)).json()).notes).toBeNull();
 });
 
 test('complemento abaixo da validade, cliente vinculado e total original intacto', async ({ page }) => {
   await login(page); const name = `Complemento ${Date.now()}`; await configure(page, name); const parent = await save(page);
-  await openQuote(page, parent.id); await page.getByRole('link', { name: '+ Vincular complemento', exact: true }).click();
+  await openQuote(page, parent.id); await acaoDoOrcamento(page, 'Vincular complemento');
   await expect(page.locator('.quote-summary-card .quote-linker')).toBeVisible();
   await expect(page.locator('.quote-linker')).toContainText(parent.number); await expect(page.locator('.atendimento-barra')).toContainText(name);
   await page.locator('#project-name').fill('Saia adicional');
@@ -305,14 +306,14 @@ test('aprovação, entrega, histórico, retrabalho e notificações em telas men
   await page.getByRole('button', { name: 'Confirmar aprovação' }).click(); await expect(page.getByRole('button', { name: 'Iniciar serviço' })).toBeVisible();
   await page.getByRole('button', { name: 'Iniciar serviço' }).click(); await expect(page.locator('.quote-detail-heading')).toContainText('Em produção');
   await page.getByRole('button', { name: 'Marcar como entregue' }).click(); await expect(page.locator('.quote-detail-heading')).toContainText('Entregue');
-  await expect(page.getByRole('link', { name: 'Editar orçamento', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mais ações do orçamento' }).click(); await expect(page.getByRole('menu').getByRole('menuitem', { name: 'Editar orçamento', exact: true })).toHaveCount(0); await page.keyboard.press('Escape');
   await page.goto('/historico'); await page.getByRole('textbox', { name: 'Buscar orçamentos' }).fill(saved.number);
   const deliveredCard = page.locator('.saved-quote-card').filter({ hasText: saved.number });
   await expect(deliveredCard).toContainText(name);
   await deliveredCard.getByRole('link', { name: 'Ver detalhes' }).click();
-  page.once('dialog', (dialog) => dialog.accept()); await page.getByRole('button', { name: 'Marcar em retrabalho' }).click();
+  await acaoDoOrcamento(page, 'Marcar em retrabalho'); await page.getByRole('alertdialog').getByRole('button', { name: 'Marcar em retrabalho', exact: true }).click();
   await expect(page.locator('.quote-detail-heading')).toContainText('Retrabalho');
-  await page.getByRole('link', { name: 'Editar orçamento', exact: true }).click(); await expect(page.locator('#project-name')).toBeVisible();
+  await acaoDoOrcamento(page, 'Editar orçamento'); await expect(page.locator('#project-name')).toBeVisible();
   for (const [width, height] of [[1440, 1000], [1024, 700], [768, 600], [390, 844], [360, 500]]) {
     await page.setViewportSize({ width, height });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Rolagem horizontal em ${width}`).toBe(true);
@@ -390,7 +391,7 @@ test('fluxo completo: salvar rápido, dividir em 3, adicionar 45°, salvar de no
   await login(page); await configure(page, `Fluxo completo ${Date.now()}`);
   const initial = await save(page);
   await openQuote(page, initial.id);
-  await page.getByRole('link', { name: 'Editar orçamento', exact: true }).click();
+  await acaoDoOrcamento(page, 'Editar orçamento');
   await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Concluir detalhamento', exact: true })).toBeVisible();
   const assistant = page.locator('.split-assistant-card').first();

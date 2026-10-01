@@ -1,6 +1,7 @@
 import { chromium, expect } from '@playwright/test';
 import { existsSync, mkdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { orcamentoSalvo } from './apoio/orcamento-salvo.mjs';
 
 // Exercises the real form with a mocked API, without changing customer records.
 const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
@@ -28,6 +29,9 @@ await page.route('**/api/**', async route => {
     return route.fulfill({ status: 201, json: { id: 'saved' } });
   }
   if (path === '/api/quotes/saved/status') return route.fulfill({ json: { status: 'SENT' } });
+  // Depois de salvar abre a tela do orçamento salvo.
+  if (path === '/api/quotes/saved' && route.request().method() === 'GET') return route.fulfill({ json: orcamentoSalvo('saved') });
+  if (path === '/api/workers') return route.fulfill({ json: [] });
   if (path === '/api/quotes') return route.fulfill({ json: { data: [], total: 0 } });
   return route.fulfill({ status: 404, json: {} });
 });
@@ -49,7 +53,7 @@ try {
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('0,70');
   await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,50');
   await page.getByRole('button', { name: '+ Acabamentos', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: /^Acabamentos de/ });
+  const dialog = page.getByRole('dialog', { name: 'Acabamentos da peça' });
   await dialog.locator('fieldset').filter({ hasText: 'Vista' }).getByLabel('Direito', { exact: true }).check();
   await dialog.locator('fieldset').filter({ hasText: 'Acabamento 45°' }).getByLabel('Direito', { exact: true }).check();
   await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
@@ -106,7 +110,7 @@ try {
   await expect(peca.getByRole('button', { name: 'Remover Rodabanca — Superior', exact: true })).toHaveCount(0);
   await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('332,50');
   await page.getByRole('button', { name: 'Salvar orçamento', exact: true }).first().click();
-  await page.waitForURL('**/orcamentos');
+  await page.waitForURL('**/orcamentos/saved');
   const item = saved.items[0];
   assert.deepEqual(item.components.map((peca) => [peca.componentType, peca.lengthMm, peca.widthMm]), [['TOP', 700, 500], ['BACKSPLASH', 500, 100]], 'Bancada e rodabanca cobrada');
   assert.equal(item.components[0].edges.length, 2);

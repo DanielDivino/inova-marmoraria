@@ -88,7 +88,7 @@ try {
   assert.equal(await resumo.getAttribute('aria-expanded'), 'false', 'estimativa fechada por padrão');
   assert.equal(await estimativa.locator('.tec-totais').count(), 0, 'sem o corpo da estimativa até abrir');
   await resumo.click();
-  await page.getByText('Estimativa com as regras do orçamento. Não muda o valor de nenhum orçamento.').waitFor();
+  await page.getByText('Estimativa calculada com as regras do orçamento. Não altera o valor de nenhum orçamento.').waitFor();
   const total = await estimativa.locator('.tec-totais div').first().locator('dd').innerText();
   await estimativa.getByLabel('Adicionar serviço do projeto').selectOption('s-montagem');
   const comMontagem = await estimativa.locator('.tec-totais div').first().locator('dd').innerText();
@@ -120,7 +120,7 @@ try {
   const medida = (contorno, i) => { const a = contorno[i], b = contorno[(i + 1) % contorno.length]; return Math.round(Math.hypot(b.x - a.x, b.y - a.y)); };
   // Reta com os lados 2 e 4 travados: puxar o lado 1 mudaria os dois, então avisa e não mexe.
   await puxar(page.locator('.tec-peca').nth(1).locator('.tec-lado').nth(0), 0, 40);
-  assert.match(await page.locator('.tec-mensagem').innerText(), /lados vizinhos estão travados/);
+  assert.match(await page.locator('.tec-mensagem').innerText(), /lados adjacentes estão travados/);
   // U: puxar o lado de fora do braço direito para a direita alarga a peça.
   const antes = savedDocument.pieces[0].contour.map((vertice) => ({ ...vertice }));
   await puxar(page.locator('.tec-peca').nth(0).locator('.tec-lado').nth(5), 45, 0);

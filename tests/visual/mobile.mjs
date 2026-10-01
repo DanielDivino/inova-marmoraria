@@ -3,6 +3,7 @@ import { expect } from '@playwright/test';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { orcamentoSalvo } from './apoio/orcamento-salvo.mjs';
 
 // Intercepta todas as APIs: o fluxo de preenchimento/salvamento não altera dados reais.
 const output = resolve('.test-artifacts/mobile');
@@ -26,6 +27,8 @@ let saved;
 await page.route('**/api/**', async route => {
   const path = new URL(route.request().url()).pathname;
   if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'mobile-user', name: 'Vendedor de demonstração', role: 'SELLER', maxDiscountPercent: 10 } } });
+  // Projetos com desenho técnico (Exportar do orçamento): nenhum.
+  if (/^\/api\/quotes\/[^/]+\/desenhos-tecnicos$/.test(path)) return route.fulfill({ json: { projetos: [] } });
   // Rascunho do Novo orçamento no servidor (vazio: vale o deste navegador).
   if (path === '/api/quote-draft') return route.fulfill({ json: route.request().method() === 'GET' ? { version: null } : { saved: true, version: 1 } });
   if (path === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
@@ -38,6 +41,9 @@ await page.route('**/api/**', async route => {
     return route.fulfill({ json: { id: 'mobile-saved' }, status: 201 });
   }
   if (path === '/api/quotes/mobile-saved/status') return route.fulfill({ json: { status: 'SENT' } });
+  // Depois de salvar abre a tela do orçamento salvo.
+  if (path === '/api/quotes/mobile-saved' && route.request().method() === 'GET') return route.fulfill({ json: orcamentoSalvo('mobile-saved') });
+  if (path === '/api/workers') return route.fulfill({ json: [] });
   if (path === '/api/quotes') return route.fulfill({ json: { data: [], meta: { pages: 0 }, counts: {} } });
   errors.push('API não prevista: ' + path);
   return route.fulfill({ status: 404, json: {} });
@@ -90,7 +96,7 @@ try {
   await page.getByRole('button', { name: 'Opções da peça 1', exact: true }).click();
   await expect(page.locator('.mobile-quote-bar strong')).toContainText('1.164,00');
   await page.getByRole('button', { name: '+ Acabamentos', exact: true }).click();
-  const services = page.getByRole('dialog', { name: /^Acabamentos de/ });
+  const services = page.getByRole('dialog', { name: 'Acabamentos da peça' });
   await expect(services).toBeVisible();
   await services.getByLabel('Inferior', { exact: true }).check();
   for (let i = 0; i < 8; i++) {
@@ -147,7 +153,7 @@ try {
   // No celular o botão de salvar fica no resumo, que abre pela barra de baixo.
   await page.locator('.mobile-quote-bar').getByRole('button', { name: /Ver resumo/ }).click();
   await page.locator('.quote-summary-card').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
-  await page.waitForURL('**/orcamentos');
+  await page.waitForURL('**/orcamentos/mobile-saved');
   assert.equal(saved.items[0].components.length, 1);
   assert.equal(saved.items[0].components[0].lengthMm, 2000);
   assert.equal(saved.items[0].components[0].widthMm, 600);
