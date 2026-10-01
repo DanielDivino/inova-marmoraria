@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { PROJECT_WORKFLOW_LABELS, type ProjectWorkflowStatus } from '@inova/domain';
 import { QuadroProjetos, type ColunaId } from '../../componentes/fluxo/QuadroProjetos';
 import { useFiltrosNaUrl } from '../../componentes/useFiltrosNaUrl';
@@ -66,6 +67,15 @@ function FluxoTrabalho() {
   // Mesmo padrão de Orçamentos: menus na barra; no celular, janela de filtros.
   const celular = useCelular();
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  // No computador, o título vai para a barra de cima do app e os filtros podem ser recolhidos ("Filtros").
+  const [alvoCabecalho, setAlvoCabecalho] = useState<HTMLElement | null>(null);
+  useEffect(() => { setAlvoCabecalho(document.getElementById('application-header-tabs')); }, []);
+  const [barraFiltros, setBarraFiltros] = useState(true);
+  useEffect(() => { try { setBarraFiltros(window.localStorage.getItem('inova-fluxo-filtros') !== 'recolhidos'); } catch { /* Sem armazenamento local, os filtros ficam à mostra. */ } }, []);
+  const alternarBarraFiltros = () => setBarraFiltros((atual) => {
+    try { window.localStorage.setItem('inova-fluxo-filtros', atual ? 'recolhidos' : 'abertos'); } catch { /* Só não lembra na próxima vez. */ }
+    return !atual;
+  });
   useEffect(() => () => window.clearTimeout(temporizadorAviso.current), []);
   /** Avisos de movimento somem sozinhos; o de entrega fica até ser fechado. */
   const avisar = (texto: string, temporario = false) => {
@@ -151,27 +161,39 @@ function FluxoTrabalho() {
     } finally { setSalvandoPecas(false); }
   }
 
+  const titulo = <h1 className="fluxo-titulo">Fluxo de trabalho</h1>;
   return <main className="list-page fluxo-page">
-    <header className="list-header"><h1>Fluxo de trabalho</h1></header>
-    <AbasFiltro rotulo="Visualização do fluxo" valor={aba} aoEscolher={setAba} grupos={[{ opcoes: [
-      { valor: 'QUADRO', rotulo: 'Quadro de projetos', icone: 'camadas', total: visiveis.length },
-      { valor: 'RESUMO', rotulo: 'Resumo por orçamento', icone: 'documento', total: new Set(visiveis.map((cartao) => cartao.quote.id)).size },
-    ] }]} />
-    <form className="barra-filtros" aria-label="Filtros do fluxo" onSubmit={(event) => event.preventDefault()}>
+    {!celular && alvoCabecalho ? createPortal(titulo, alvoCabecalho) : <header className="list-header">{titulo}</header>}
+    {/* Uma linha: visualização, filtros e o botão que recolhe os filtros. */}
+    <div className="fluxo-barra">
+      <AbasFiltro rotulo="Visualização do fluxo" valor={aba} aoEscolher={setAba} grupos={[{ opcoes: [
+        { valor: 'QUADRO', rotulo: 'Quadro de projetos', icone: 'camadas' },
+        { valor: 'RESUMO', rotulo: 'Resumo por orçamento', icone: 'documento' },
+      ] }]} />
       {celular
-        ? <button type="button" className="botao-contorno" aria-expanded={filtrosAbertos} onClick={() => setFiltrosAbertos(true)}><Icone nome="filtro" />Filtros{filtrosAtivos ? <b>{filtrosAtivos}</b> : null}</button>
+        ? <form className="barra-filtros" aria-label="Filtros do fluxo" onSubmit={(event) => event.preventDefault()}>
+          <button type="button" className="botao-contorno" aria-expanded={filtrosAbertos} onClick={() => setFiltrosAbertos(true)}><Icone nome="filtro" />Filtros{filtrosAtivos ? <b>{filtrosAtivos}</b> : null}</button>
+          <button type="button" className="botao-contorno barra-filtros-fim" disabled={!filtrosAtivos} onClick={limparFiltros}><Icone nome="limpar" />Limpar</button>
+        </form>
         : <>
-          <MenuSelecao rotulo="Funcionário" icone="equipe" valor={filtro.workerId} aoEscolher={(valor) => setFiltro((atual) => ({ ...atual, workerId: valor, quoteId: '' }))}
-            opcoes={[{ valor: '', rotulo: 'Todos os funcionários' }, ...funcionarios.map((funcionario) => ({ valor: funcionario.id, rotulo: nomeResponsavel(funcionario), cor: funcionario.color })), ...(temSemResponsavel ? [{ valor: SEM_RESPONSAVEL, rotulo: 'Sem responsável' }] : [])]} />
-          <MenuSelecao rotulo="Cliente" icone="pessoa" valor={filtro.customerId} aoEscolher={(valor) => setFiltro((atual) => ({ ...atual, customerId: valor, quoteId: '' }))}
-            opcoes={[{ valor: '', rotulo: 'Todos os clientes' }, ...clientes.map(([id, nome]) => ({ valor: id, rotulo: nome }))]} />
-          <MenuSelecao rotulo="Orçamento" icone="documento" valor={filtro.quoteId} aoEscolher={(valor) => setFiltro((atual) => ({ ...atual, quoteId: valor }))}
-            opcoes={[{ valor: '', rotulo: 'Todos os orçamentos' }, ...orcamentos.map((quote) => ({ valor: quote.id, rotulo: `${quote.number} · ${quote.customerName}` }))]} />
-          <MenuSelecao rotulo="Entrega" icone="calendario" valor={filtro.entrega ?? 'TODAS'} rotuloValor={rotuloEntrega} opcoes={OPCOES_ENTREGA} aoEscolher={escolherEntrega} />
-          <MenuSelecao rotulo="Material" icone="material" valor={filtro.material ?? ''} opcoes={OPCOES_MATERIAL} aoEscolher={escolherMaterial} />
+          {barraFiltros && <form id="fluxo-filtros" className="fluxo-filtros" aria-label="Filtros do fluxo" onSubmit={(event) => event.preventDefault()}>
+            <MenuSelecao rotulo="Funcionário" icone="equipe" valor={filtro.workerId} rotuloValor={filtro.workerId ? undefined : 'Todos'} aoEscolher={(valor) => setFiltro((atual) => ({ ...atual, workerId: valor, quoteId: '' }))}
+              opcoes={[{ valor: '', rotulo: 'Todos os funcionários' }, ...funcionarios.map((funcionario) => ({ valor: funcionario.id, rotulo: nomeResponsavel(funcionario), cor: funcionario.color })), ...(temSemResponsavel ? [{ valor: SEM_RESPONSAVEL, rotulo: 'Sem responsável' }] : [])]} />
+            <MenuSelecao rotulo="Cliente" icone="pessoa" valor={filtro.customerId} rotuloValor={filtro.customerId ? undefined : 'Todos'} aoEscolher={(valor) => setFiltro((atual) => ({ ...atual, customerId: valor, quoteId: '' }))}
+              opcoes={[{ valor: '', rotulo: 'Todos os clientes' }, ...clientes.map(([id, nome]) => ({ valor: id, rotulo: nome }))]} />
+            <MenuSelecao rotulo="Orçamento" icone="documento" valor={filtro.quoteId} rotuloValor={filtro.quoteId ? undefined : 'Todos'} aoEscolher={(valor) => setFiltro((atual) => ({ ...atual, quoteId: valor }))}
+              opcoes={[{ valor: '', rotulo: 'Todos os orçamentos' }, ...orcamentos.map((quote) => ({ valor: quote.id, rotulo: `${quote.number} · ${quote.customerName}` }))]} />
+            <MenuSelecao rotulo="Entrega" icone="calendario" valor={filtro.entrega ?? 'TODAS'} rotuloValor={rotuloEntrega} opcoes={OPCOES_ENTREGA} aoEscolher={escolherEntrega} />
+            <MenuSelecao rotulo="Material" icone="material" valor={filtro.material ?? ''} opcoes={OPCOES_MATERIAL} aoEscolher={escolherMaterial} />
+          </form>}
+          <div className="fluxo-barra-acoes">
+            {filtrosAtivos > 0 && <button type="button" className="text-button fluxo-limpar" onClick={limparFiltros}><Icone nome="limpar" />Limpar</button>}
+            <button type="button" className="botao-contorno fluxo-filtros-botao" aria-expanded={barraFiltros} aria-controls={barraFiltros ? 'fluxo-filtros' : undefined} onClick={alternarBarraFiltros}>
+              <Icone nome="filtro" />Filtros{filtrosAtivos ? <b>{filtrosAtivos}</b> : null}<span className="fluxo-filtros-seta" aria-hidden="true"><Icone nome="seta" tamanho={16} /></span>
+            </button>
+          </div>
         </>}
-      <button type="button" className="botao-contorno barra-filtros-fim" disabled={!filtrosAtivos} onClick={limparFiltros}><Icone nome="limpar" />Limpar</button>
-    </form>
+    </div>
     {celular && <ModalFiltros aberto={filtrosAbertos} aoFechar={() => setFiltrosAbertos(false)} titulo="Filtros do fluxo"
       rodape={<><button type="button" className="botao-contorno" disabled={!filtrosAtivos} onClick={limparFiltros}><Icone nome="limpar" />Limpar</button><button type="button" className="botao-destaque" onClick={() => setFiltrosAbertos(false)}>Ver resultados</button></>}>
       <CampoFiltro rotulo="Funcionário" icone="equipe"><select value={filtro.workerId} onChange={(event) => setFiltro((atual) => ({ ...atual, workerId: event.target.value, quoteId: '' }))}><option value="">Todos os funcionários</option>{funcionarios.map((funcionario) => <option key={funcionario.id} value={funcionario.id}>{nomeResponsavel(funcionario)}</option>)}{temSemResponsavel && <option value={SEM_RESPONSAVEL}>Sem responsável</option>}</select></CampoFiltro>
@@ -187,7 +209,6 @@ function FluxoTrabalho() {
       <CampoFiltro rotulo="Até" icone="calendario"><input type="date" value={rascunho.ate} min={rascunho.de || undefined} onChange={(event) => setRascunho((atual) => ({ ...atual, ate: event.target.value }))} /></CampoFiltro>
       {periodoInvalido && <p role="alert" className="form-error">A data final deve ser igual ou posterior à inicial.</p>}
     </ModalFiltros>
-    <p className="fluxo-legenda"><span className="legenda-vencido">Prazo vencido</span><span className="legenda-proximo">Vence em até 7 dias</span></p>
     {aviso && <p role="status" className="fluxo-aviso">{aviso} <button type="button" className="text-button" aria-label="Fechar aviso" onClick={() => avisar('')}>✕</button></p>}
     {erro && <p role="alert" className="form-error">{erro} {!cartoes && <button type="button" className="text-button" onClick={() => { setErro(''); setTentativa((valor) => valor + 1); }}>Tentar novamente</button>}</p>}
     <PerguntaPecas pedido={pergunta} salvando={salvandoPecas} erro={erroPecas} aoCancelar={() => { if (!salvandoPecas) setPergunta(null); }} aoParte={(pecas) => void moverParte(pecas)}

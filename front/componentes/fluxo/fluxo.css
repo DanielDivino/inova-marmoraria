@@ -1,47 +1,78 @@
 /* Fluxo de trabalho: Kanban de projetos e resumo por orçamento. */
-.fluxo-legenda { display: flex; gap: 16px; margin: 0 0 14px; color: var(--muted); font-size: 11px; }
-.fluxo-legenda span::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
-.fluxo-legenda .legenda-vencido::before { background: #f6d5d1; border: 1px solid #d9796e; }
-.fluxo-legenda .legenda-proximo::before { background: #fbecc0; border: 1px solid #d8b24e; }
+.application-content .list-page.fluxo-page { max-width: none; padding-left: 24px; padding-right: 24px; container: fluxo / inline-size; }
+/* No computador o título fica na barra de cima do app, ao lado do sino. */
+.fluxo-titulo { margin: 0; color: #303a31; font: 400 clamp(28px, 2.4vw, 36px)/1.2 Georgia, 'Times New Roman', serif; letter-spacing: -.7px; white-space: nowrap; }
+.application-header-tabs > .fluxo-titulo { margin-right: auto; }
+
+/* Uma linha: visualização (Quadro / Resumo), filtros num bloco só e o botão que recolhe os filtros.
+   Sem espaço para os três, os filtros descem para a linha de baixo, inteiros. */
+.fluxo-barra { display: flex; flex-wrap: wrap; align-items: stretch; gap: 14px 18px; margin: 0 0 22px; container-type: inline-size; }
+.fluxo-page .fluxo-barra .abas-filtro { flex: none; margin: 0; padding: 5px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); box-shadow: 0 1px 2px #0000000a; }
+.fluxo-page .fluxo-barra .abas-filtro-grupo { flex-wrap: nowrap; gap: 4px; }
+.fluxo-page .fluxo-barra .abas-filtro button { min-height: 50px; padding: 0 18px; border: 0; border-radius: 10px; background: transparent; box-shadow: none; font-size: 15px; font-weight: 500; }
+.fluxo-page .fluxo-barra .abas-filtro button > svg { color: var(--ink); }
+.fluxo-page .fluxo-barra .abas-filtro button:hover { background: var(--soft); }
+.fluxo-page .fluxo-barra .abas-filtro button[aria-pressed='true'] { background: #5c3a1e; color: #fff; font-weight: 600; }
+.fluxo-page .fluxo-barra .abas-filtro button[aria-pressed='true'] > svg { color: #fff; }
+.fluxo-filtros { display: flex; flex: 1 1 600px; min-width: 0; padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); box-shadow: 0 1px 2px #0000000a; }
+.fluxo-filtros .menu-selecao { flex: 1 1 auto; max-width: none; }
+.fluxo-filtros .menu-selecao + .menu-selecao { border-left: 1px solid var(--line); }
+.fluxo-filtros .seletor-compacto { min-height: 58px; padding: 0 34px 0 16px; border: 0; border-radius: 0; background: transparent; }
+.fluxo-filtros .menu-selecao:first-child .seletor-compacto { border-radius: 13px 0 0 13px; }
+.fluxo-filtros .menu-selecao:last-child .seletor-compacto { border-radius: 0 13px 13px 0; }
+.fluxo-filtros .seletor-compacto:hover, .fluxo-filtros .seletor-compacto.aberto { background: var(--soft); }
+.fluxo-filtros .seletor-compacto strong { font-size: 15px; }
+.fluxo-barra-acoes { display: flex; align-items: stretch; gap: 8px; margin-left: auto; }
+.fluxo-limpar { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; white-space: nowrap; }
+.fluxo-page .fluxo-filtros-botao { display: inline-flex; align-items: center; gap: 9px; min-height: 58px; padding: 0 18px; border-color: color-mix(in srgb, var(--green) 55%, var(--line)); border-radius: 12px; background: var(--accent-soft, #f1eade); color: var(--ink); font-size: 15px; font-weight: 600; }
+.fluxo-filtros-botao b { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--destaque-fundo); color: var(--destaque-texto); font-size: 12px; }
+.fluxo-filtros-seta { display: inline-flex; transition: transform .15s; }
+.fluxo-filtros-botao[aria-expanded='true'] .fluxo-filtros-seta { transform: rotate(180deg); }
+@container (max-width: 1180px) {
+  .fluxo-filtros { order: 3; flex-basis: 100%; }
+}
 
 .fluxo-aviso { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid #b9dcc4; border-radius: 10px; background: #eef7f0; color: var(--ink); font-size: 13px; }
 .fluxo-aviso .text-button { padding: 0; }
 
 /* As colunas esticam até a mais alta: dá para soltar um cartão em qualquer altura de uma coluna vazia.
    As 5 etapas ficam sempre lado a lado; se a tela não comporta, o quadro rola para o lado (nunca quebra linha). */
-.fluxo-quadro { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 10px; align-items: stretch; overflow-x: auto; padding-bottom: 6px; }
-.fluxo-coluna { display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); transition: box-shadow .15s; }
+.fluxo-quadro { display: grid; grid-template-columns: repeat(5, minmax(190px, 1fr)); gap: 14px; align-items: stretch; overflow-x: auto; padding-bottom: 6px; }
+.fluxo-coluna { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 14px 12px 12px; border: 1px solid var(--line); border-radius: 16px; background: color-mix(in srgb, var(--soft) 70%, var(--surface, #fff)); transition: box-shadow .15s; }
 .fluxo-coluna-alvo { box-shadow: 0 0 0 2px var(--green); }
-.fluxo-coluna > header { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
-.fluxo-coluna h2 { margin: 0; font-size: 14px; }
-.fluxo-coluna > header span { min-width: 24px; padding: 2px 8px; border-radius: 999px; background: var(--surface, #fff); color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; }
-/* "Aguardando início" é só consulta: borda tracejada, sem fundo, cartões sem arrastar. */
-.fluxo-coluna-aguardando { border-style: dashed; background: transparent; }
-.fluxo-coluna-nota { margin: -6px 4px 0; color: var(--muted); font-size: 11px; }
+.fluxo-coluna > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 2px 4px; }
+.fluxo-coluna h2 { margin: 0; font-size: 17px; line-height: 1.4; }
+.fluxo-coluna > header span { display: grid; flex: none; place-items: center; min-width: 30px; height: 30px; padding: 0 8px; border-radius: 999px; background: var(--surface, #fff); box-shadow: 0 1px 3px #0000001a; color: var(--ink); font-size: 13px; font-weight: 700; }
+/* "Aguardando início" é só consulta: os cartões não arrastam. */
+.fluxo-coluna-nota { margin: -4px 4px 2px; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .fluxo-cartao-fixo { cursor: pointer; }
-.fluxo-fase { justify-self: start; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-style: normal; font-weight: 700; }
+.fluxo-fase { justify-self: start; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-style: normal; font-weight: 700; }
 .fluxo-fase.fase-awaiting_approval { background: #eceae4; color: #5f5a52; }
 .fluxo-fase.fase-awaiting_start { background: #dcecf8; color: #24527a; }
 .fluxo-fase.fase-paused { background: #f6e3c9; color: #8a5a12; }
-.fluxo-lista { display: grid; align-content: start; gap: 8px; flex: 1; min-height: 90px; margin: 0; padding: 0; list-style: none; }
-.fluxo-vazio { display: grid; place-items: center; min-height: 90px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; }
+.fluxo-lista { display: grid; align-content: start; gap: 12px; flex: 1; min-height: 90px; margin: 0; padding: 0; list-style: none; }
+.fluxo-vazio { display: grid; place-items: center; min-height: 118px; border: 1px dashed var(--line); border-radius: 12px; background: color-mix(in srgb, var(--surface, #fff) 55%, transparent); color: var(--muted); font-size: 14px; }
+/* "+ Adicionar projeto": no pé de cada coluna, abre o Novo orçamento. */
+.fluxo-adicionar { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); color: var(--ink); font-size: 15px; text-decoration: none; }
+.fluxo-adicionar:hover { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); color: var(--green); }
+.fluxo-adicionar:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
-.fluxo-cartao { display: grid; gap: 3px; padding: 10px 12px 10px 13px; border: 1px solid var(--line); border-left: 5px solid var(--cor-orcamento); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); cursor: grab; touch-action: manipulation; user-select: none; -webkit-user-select: none; box-shadow: 0 1px 2px #0000000d; }
+.fluxo-cartao { display: grid; gap: 5px; padding: 14px 14px 14px 16px; border: 1px solid var(--line); border-left: 5px solid var(--cor-orcamento); border-radius: 12px; background: var(--surface, #fff); color: var(--ink); cursor: grab; touch-action: manipulation; user-select: none; -webkit-user-select: none; box-shadow: 0 1px 3px #00000012; }
 /* Cartão do orçamento de onde se voltou: pisca um contorno para achar rápido. */
 .fluxo-cartao-destaque { animation: fluxo-destaque 2.6s ease-out; }
 @keyframes fluxo-destaque { 0%, 55% { outline: 3px solid #b89152; outline-offset: 2px; box-shadow: 0 0 0 6px #b8915233; } 100% { outline: 3px solid transparent; outline-offset: 2px; box-shadow: none; } }
 @media (prefers-reduced-motion: reduce) { .fluxo-cartao-destaque { animation: none; outline: 3px solid #b89152; outline-offset: 2px; } }
 .fluxo-cartao:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
-.fluxo-cartao strong { font-size: 14px; overflow-wrap: anywhere; }
-.fluxo-cartao small { color: var(--muted); font-size: 12px; }
-.fluxo-cartao-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; }
-.fluxo-pecas { flex: none; color: var(--ink); font-size: 11px; font-weight: 700; }
+.fluxo-cartao strong { font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
+.fluxo-cartao small { color: var(--muted); font-size: 14px; }
+.fluxo-cartao-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; margin-bottom: 2px; }
+.fluxo-pecas { flex: none; color: var(--ink); font-size: 13px; font-weight: 700; }
 /* Projeto dividido: "2 de 5 peças" em destaque, para lembrar que o resto está em outra etapa. */
 .fluxo-pecas-parte { padding: 1px 7px; border: 1px dashed var(--green); border-radius: 999px; color: var(--green); }
 .fluxo-responsavel { display: inline-flex; align-items: center; gap: 6px; }
 .fluxo-responsavel i { flex: none; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1px #0000001f; }
 .fluxo-responsavel.sem-responsavel { font-style: italic; }
-.fluxo-etiqueta { justify-self: start; padding: 2px 8px; border-radius: 999px; background: var(--cor-orcamento); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .02em; }
+.fluxo-etiqueta { justify-self: start; padding: 3px 10px; border-radius: 999px; background: var(--cor-orcamento); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
 .fluxo-cartao-origem { opacity: .35; }
 .fluxo-cartao-arrastando { cursor: grabbing; box-shadow: 0 12px 28px #0000002e; transform: rotate(1.5deg); }
 
@@ -71,6 +102,23 @@
 .fluxo-status.status-done { background: #d7eedd; color: #1d6b39; }
 .fluxo-status.status-delivered { background: #dcecf8; color: #24527a; }
 
+/* Quadro estreito (notebook): as 5 colunas continuam lado a lado, com cartões mais compactos. */
+@container fluxo (max-width: 1180px) {
+  .fluxo-quadro { grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 10px; }
+  .fluxo-coluna { gap: 10px; padding: 12px 10px 10px; }
+  .fluxo-coluna h2 { font-size: 15px; }
+  .fluxo-coluna-nota { font-size: 12px; }
+  .fluxo-lista { gap: 10px; }
+  .fluxo-cartao { gap: 3px; padding: 11px 11px 11px 13px; }
+  .fluxo-cartao strong { font-size: 15px; }
+  .fluxo-cartao small { font-size: 13px; }
+  .fluxo-etiqueta, .fluxo-fase { padding: 2px 8px; font-size: 11px; }
+  .fluxo-pecas { font-size: 12px; }
+  .fluxo-material-botao { right: 9px; bottom: 9px; width: 30px; height: 30px; }
+  .fluxo-cartao-caixa .fluxo-prazo { padding-right: 36px; }
+  .fluxo-adicionar { min-height: 42px; font-size: 14px; }
+}
+
 /* No celular as colunas ficam lado a lado com rolagem, uma por vez na tela. */
 .fluxo-atalhos { display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px; }
 .fluxo-atalhos button { flex: none; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
@@ -84,7 +132,13 @@
 /* Celular: o título fica só no cabeçalho do app, filtros recolhidos, barra fixa de etapas e uma etapa por vez. */
 @media (max-width: 760px) {
   .fluxo-page > .list-header { display: none; }
-  .fluxo-legenda { margin-bottom: 8px; }
+  .application-content .list-page.fluxo-page { padding-left: 16px; padding-right: 16px; }
+  .fluxo-barra { gap: 10px; margin-bottom: 12px; }
+  .fluxo-page .fluxo-barra .abas-filtro { flex: 1 1 100%; overflow: visible; padding: 4px; }
+  .fluxo-page .fluxo-barra .abas-filtro-grupo { width: 100%; }
+  .fluxo-page .fluxo-barra .abas-filtro button { flex: 1 1 0; justify-content: center; min-width: 0; min-height: 44px; padding: 0 8px; font-size: 14px; white-space: normal; text-align: center; }
+  .fluxo-page .fluxo-barra .abas-filtro button > svg { display: none; }
+  .fluxo-barra > .barra-filtros { flex: 1 1 100%; margin: 0; }
   .fluxo-etapas { position: sticky; top: 0; z-index: 5; margin: 0 0 10px; padding: 8px 0; background: var(--surface, #fffdf9); box-shadow: 0 8px 8px -10px #00000059; }
   .fluxo-etapas button { padding: 9px 13px; font-size: 13px; }
   .fluxo-etapas button[aria-pressed='true'] { border-color: var(--green); background: var(--accent-soft, #fff3d8); font-weight: 700; }
@@ -95,6 +149,7 @@
   .fluxo-coluna-nota { margin: 0 2px; }
   .fluxo-cartao { padding: 12px 14px 12px 15px; }
   .fluxo-cartao strong { font-size: 16px; }
+  .fluxo-coluna-aguardando { border: 0; }
 }
 
 @media screen {
@@ -111,16 +166,17 @@
   html.inova-dark .inova-theme .fluxo-fase.fase-awaiting_approval { background: #2c302d; color: var(--muted); }
   html.inova-dark .inova-theme .fluxo-fase.fase-awaiting_start { background: #1f2f3d; color: #a9c9e6; }
   html.inova-dark .inova-theme .fluxo-fase.fase-paused { background: #3a2e17; color: #e6c17a; }
-  html.inova-dark .inova-theme .fluxo-legenda .legenda-vencido::before { background: #3a2422; border-color: #7a3d36; }
-  html.inova-dark .inova-theme .fluxo-legenda .legenda-proximo::before { background: #372f1c; border-color: #75622f; }
+  html.inova-dark .inova-theme .fluxo-titulo { color: var(--ink); }
+  html.inova-dark .inova-theme .fluxo-page .fluxo-barra .abas-filtro button[aria-pressed='true'] { background: var(--green); color: #1b1d1b; }
+  html.inova-dark .inova-theme .fluxo-page .fluxo-barra .abas-filtro button[aria-pressed='true'] > svg { color: #1b1d1b; }
 }
 
 /* Falta de material: selo no cartão e botão no canto (fora do cartão, para não arrastar nem abrir). */
 .fluxo-cartao-caixa { position: relative; }
-.fluxo-cartao-caixa .fluxo-prazo { padding-right: 34px; }
+.fluxo-cartao-caixa .fluxo-prazo { padding-right: 42px; }
 .fluxo-falta-material { display: inline-flex; align-items: center; gap: 5px; justify-self: start; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, #d65a4a 12%, transparent); color: #b4493d; font-size: 11px; font-weight: 700; }
 html.inova-dark .inova-theme .fluxo-falta-material { color: #eb9a8f; }
-.fluxo-material-botao { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface, #fff); color: var(--muted); cursor: pointer; }
+.fluxo-material-botao { position: absolute; right: 12px; bottom: 12px; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--muted); cursor: pointer; }
 .fluxo-material-botao:hover { border-color: #d65a4a; color: #b4493d; }
 .fluxo-material-botao.ativo { border-color: #d65a4a; background: color-mix(in srgb, #d65a4a 16%, var(--surface, #fff)); color: #b4493d; }
 html.inova-dark .inova-theme .fluxo-material-botao.ativo, html.inova-dark .inova-theme .fluxo-material-botao:hover { color: #eb9a8f; }
