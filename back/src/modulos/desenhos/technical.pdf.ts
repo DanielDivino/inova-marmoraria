@@ -1,9 +1,12 @@
 import { dataAtualEmpresa } from '@inova/domain';
 import { areasDaPeca, contourArea, nomeDaPeca, distanciasAteBordas, edgeLength, formatMeasure, NOME_AREA, rotate, sampleContour, type Feature, type Piece, type TechnicalDocument } from '@inova/domain/technical';
-import { cabecalhoEmpresaPdf, CNPJ_EMPRESA, normalizarNomeMaterial, pdfDate } from '../orcamentos/pdf-layout.js';
+import { cabecalhoEmpresaPdf, cabecalhoOrdemServicoPdf, CNPJ_EMPRESA, normalizarNomeMaterial, pdfDate } from '../orcamentos/pdf-layout.js';
 import { COR, ROTULO_RECURSO, centimetros, desenharPlanta, ehRecursoDeBorda, planejarPlanta } from './technical-planta.pdf.js';
 
-export type DadosPdfTecnico = { customer: string; project: string; design: string; revision: number; hash: string; status?: string; createdAt?: Date | string };
+/** `revision`: número da revisão enviada à conferência, ou o rótulo do desenho atual (ex.: "Versão 12"). */
+export type DadosPdfTecnico = { customer: string; project: string; design: string; revision: number | string; hash: string; status?: string; createdAt?: Date | string;
+  /** Impresso pelo orçamento: folha no padrão das OS (data de entrega, cliente e número da OS; projeto e pedra). */
+  ordemServico?: { numero: string; entrega: string } };
 
 /** Conteúdo vai até aqui; abaixo fica o rodapé de cada página. */
 const LIMITE = 790;
@@ -51,38 +54,56 @@ type Celula = string | { fraco: string };
  * PDF de uma revisão do desenho técnico, no mesmo padrão do orçamento e da
  * nota de entrega: cabeçalho da empresa, dados, resumo, a planta em escala e
  * as tabelas de peças, recortes e bordas. Sem valores comerciais. O documento
- * precisa de `bufferPages` para o rodapé "Página x de y".
+ * precisa de `bufferPages` para o rodapé "Página x de y". Começa na folha atual (A4), que pode vir
+ * depois do orçamento e das OS no mesmo PDF: o rodapé conta só as folhas do desenho. Impresso pelo
+ * orçamento (`ordemServico`), segue o padrão das folhas de OS em vez do cabeçalho da empresa.
  */
 export function renderizarPdfTecnico(pdf: PDFKit.PDFDocument, documento: TechnicalDocument, dados: DadosPdfTecnico) {
-  const revisao = `Revisão ${dados.revision}`;
-  cabecalhoEmpresaPdf(pdf, 'DESENHO TÉCNICO', { number: revisao.toUpperCase() });
+  const revisao = typeof dados.revision === 'number' ? `Revisão ${dados.revision}` : dados.revision;
+  const primeiraFolha = pdf.bufferedPageRange().start + pdf.bufferedPageRange().count - 1;
+  const os = dados.ordemServico;
+  const pedras = [...new Set(documento.pieces.map((peca) => normalizarNomeMaterial(peca.material?.name)).filter(Boolean))];
   let y = 130;
+  // Padrão das OS: cabeçalho de OS e, embaixo, o projeto (em destaque) e a pedra.
+  const folhaDeOs = (continuacao: boolean) => {
+    y = cabecalhoOrdemServicoPdf(pdf, { entrega: os!.entrega, cliente: dados.customer, numero: os!.numero });
+    pdf.font('Helvetica-Bold').fontSize(10).fillColor(COR.dourado).text(`Desenho técnico · ${normalizarNomeMaterial(dados.project)}${continuacao ? ' (continuação)' : ''}`, 36, y, { width: 523 });
+    y = pdf.y + 3;
+    if (pedras.length && !continuacao) { pdf.font('Helvetica-Bold').fontSize(9).fillColor(COR.tinta).text(`Pedra: ${pedras.join(' · ')}`, 36, y, { width: 523 }); y = pdf.y + 3; }
+    y += 9;
+  };
   const novaPagina = () => {
-    pdf.addPage();
+    pdf.addPage({ size: 'A4', margin: 36 });
+    if (os) { folhaDeOs(true); return; }
     pdf.font('Helvetica-Bold').fontSize(9).fillColor(COR.tinta).text(`${dados.design} · ${revisao} · Continuação`, 36, 36, { lineBreak: false });
     y = 58;
   };
   const espaco = (altura: number) => { if (y + altura > LIMITE) novaPagina(); };
   const titulo = (texto: string) => { pdf.font('Helvetica-Bold').fontSize(10).fillColor(COR.tinta).text(texto, 36, y, { lineBreak: false }); y += 18; };
 
-  // Dados em duas colunas: rótulo discreto e valor; o que não foi informado fica apagado.
-  const situacao = dados.status ? ROTULO_SITUACAO[dados.status] ?? dados.status : null;
-  const linhasDados: [string, string | null, boolean][][] = [
-    [['Cliente', dados.customer, true], ['Data', dados.createdAt ? pdfDate(dataAtualEmpresa(new Date(dados.createdAt))) : null, false]],
-    [['Projeto', dados.project, false], ['Situação', situacao, false]],
-    [['Desenho', dados.design, false], ['Código', dados.hash.slice(0, 12), false]],
-  ];
-  for (const linha of linhasDados) {
-    let altura = 0;
-    linha.forEach(([rotulo, valor, negrito], coluna) => {
-      const [xRotulo, xValor, largura] = coluna ? [382, 436, 123] : [36, 92, 270];
-      pdf.font('Helvetica').fontSize(8.5).fillColor(COR.rotulo).text(rotulo, xRotulo, y, { lineBreak: false });
-      pdf.font(negrito && valor ? 'Helvetica-Bold' : 'Helvetica').fillColor(valor ? COR.tinta : COR.apagado).text(valor || 'Não informado', xValor, y, { width: largura });
-      altura = Math.max(altura, pdf.heightOfString(valor || 'Não informado', { width: largura }));
-    });
-    y += altura + 5;
+  if (os) folhaDeOs(false);
+  else {
+    // Revisão do desenho (conferência): cabeçalho da empresa e dados da revisão.
+    cabecalhoEmpresaPdf(pdf, 'DESENHO TÉCNICO', { number: revisao.toUpperCase() });
+    // Dados em duas colunas: rótulo discreto e valor; o que não foi informado fica apagado.
+    const situacao = dados.status ? ROTULO_SITUACAO[dados.status] ?? dados.status : null;
+    const linhasDados: [string, string | null, boolean][][] = [
+      [['Cliente', dados.customer, true], ['Data', dados.createdAt ? pdfDate(dataAtualEmpresa(new Date(dados.createdAt))) : null, false]],
+      [['Projeto', dados.project, false], ['Situação', situacao, false]],
+      [['Desenho', dados.design, false], ['Código', dados.hash.slice(0, 12), false]],
+    ];
+    for (const linha of linhasDados) {
+      let altura = 0;
+      linha.forEach(([rotulo, valor, negrito], coluna) => {
+        const [xRotulo, xValor, largura] = coluna ? [382, 436, 123] : [36, 92, 270];
+        pdf.font('Helvetica').fontSize(8.5).fillColor(COR.rotulo).text(rotulo, xRotulo, y, { lineBreak: false });
+        pdf.font(negrito && valor ? 'Helvetica-Bold' : 'Helvetica').fillColor(valor ? COR.tinta : COR.apagado).text(valor || 'Não informado', xValor, y, { width: largura });
+        altura = Math.max(altura, pdf.heightOfString(valor || 'Não informado', { width: largura }));
+      });
+      y += altura + 5;
+    }
+    y += 10;
   }
-  y += 10;
 
   const pecas = documento.pieces;
   if (!pecas.length) {
@@ -93,25 +114,27 @@ export function renderizarPdfTecnico(pdf: PDFKit.PDFDocument, documento: Technic
     const bordas = documento.features.filter(ehRecursoDeBorda);
     const quantos = (tipos: Feature['type'][]) => documento.features.filter((recurso) => tipos.includes(recurso.type)).length;
 
-    // Faixa de destaque com o resumo da revisão.
-    const resumo = ` — ${emLista([
-      ...contagem(pecas.length, 'peça', 'peças'), ...contagem(quantos(['SINK', 'SCULPTED_SINK']), 'cuba', 'cubas'), ...contagem(quantos(['CUTOUT']), 'recorte', 'recortes'),
-      ...contagem(quantos(['HOLE']), 'furo', 'furos'), ...contagem(quantos(['SKIRT']), 'saia', 'saias'), ...contagem(quantos(['BACKSPLASH']), 'rodabanca', 'rodabancas'),
-      ...contagem(quantos(['EDGE_FINISH']), 'acabamento de borda', 'acabamentos de borda'),
-    ])}. Medidas em metros: 2m44 = 2,44 m; espessuras em centímetros.`;
-    pdf.font('Helvetica').fontSize(9);
-    const alturaResumo = pdf.heightOfString(revisao + resumo, { width: 499 }) + 14;
-    pdf.lineWidth(.8).roundedRect(36, y, 523, alturaResumo, 4).fillAndStroke(COR.creme, COR.borda);
-    pdf.font('Helvetica-Bold').fillColor(COR.ouro).text(revisao, 48, y + 7, { width: 499, continued: true }).font('Helvetica').fillColor(COR.tinta).text(resumo);
-    y += alturaResumo + 14;
+    // Faixa de destaque com o resumo da revisão (a folha de OS vai direto à planta).
+    if (!os) {
+      const resumo = ` — ${emLista([
+        ...contagem(pecas.length, 'peça', 'peças'), ...contagem(quantos(['SINK', 'SCULPTED_SINK']), 'cuba', 'cubas'), ...contagem(quantos(['CUTOUT']), 'recorte', 'recortes'),
+        ...contagem(quantos(['HOLE']), 'furo', 'furos'), ...contagem(quantos(['SKIRT']), 'saia', 'saias'), ...contagem(quantos(['BACKSPLASH']), 'rodabanca', 'rodabancas'),
+        ...contagem(quantos(['EDGE_FINISH']), 'acabamento de borda', 'acabamentos de borda'),
+      ])}. Medidas em metros: 2m44 = 2,44 m; espessuras em centímetros.`;
+      pdf.font('Helvetica').fontSize(9);
+      const alturaResumo = pdf.heightOfString(revisao + resumo, { width: 499 }) + 14;
+      pdf.lineWidth(.8).roundedRect(36, y, 523, alturaResumo, 4).fillAndStroke(COR.creme, COR.borda);
+      pdf.font('Helvetica-Bold').fillColor(COR.ouro).text(revisao, 48, y + 7, { width: 499, continued: true }).font('Helvetica').fillColor(COR.tinta).text(resumo);
+      y += alturaResumo + 14;
+    }
 
-    // A planta fica inteira numa folha; se sobrar pouco espaço, vai para a próxima.
-    if (LIMITE - y - 18 < 240) novaPagina();
-    const planta = planejarPlanta(documento, Math.min(470, LIMITE - y - 18));
-    titulo('Planta');
-    desenharPlanta(pdf, documento, planta, y);
-    y += planta.altura + 18;
-
+    // Altura de cada linha e o que a tabela precisa para começar na folha: curta, inteira; longa, com pelo menos três linhas.
+    const medirTabela = (colunas: Coluna[], linhas: Celula[][], total?: [string, string]) => {
+      pdf.font('Helvetica').fontSize(8.5);
+      const alturas = linhas.map((linha) => Math.max(26, ...linha.map((celula, coluna) => pdf.heightOfString(typeof celula === 'string' ? celula : celula.fraco, { width: colunas[coluna].w - 16 }) + 14)));
+      const soma = (lista: number[]) => lista.reduce((acumulado, altura) => acumulado + altura, 0);
+      return { alturas, inicio: 18 + 22 + (alturas.length <= 4 ? soma(alturas) + (total ? 22 : 0) : soma(alturas.slice(0, 3))) };
+    };
     const tabela = (nome: string, colunas: Coluna[], linhas: Celula[][], total?: [string, string]) => {
       const xs = colunas.map((_, indice) => 36 + colunas.slice(0, indice).reduce((soma, coluna) => soma + coluna.w, 0));
       const cabecalho = () => {
@@ -120,11 +143,9 @@ export function renderizarPdfTecnico(pdf: PDFKit.PDFDocument, documento: Technic
         colunas.forEach((coluna, indice) => pdf.text(coluna.rotulo, xs[indice] + 8, y + 7, { width: coluna.w - 16, align: coluna.alinhar ?? 'left', lineBreak: false }));
         y += 22;
       };
-      // Tabela curta fica inteira na mesma folha; a longa começa com pelo menos três linhas.
-      pdf.font('Helvetica').fontSize(8.5);
-      const alturas = linhas.map((linha) => Math.max(26, ...linha.map((celula, coluna) => pdf.heightOfString(typeof celula === 'string' ? celula : celula.fraco, { width: colunas[coluna].w - 16 }) + 14)));
-      const rodape = total ? 22 : 0, soma = (lista: number[]) => lista.reduce((acumulado, altura) => acumulado + altura, 0);
-      espaco(18 + 22 + (alturas.length <= 4 ? soma(alturas) + rodape : soma(alturas.slice(0, 3))));
+      const { alturas, inicio } = medirTabela(colunas, linhas, total);
+      const rodape = total ? 22 : 0;
+      espaco(inicio);
       titulo(nome);
       cabecalho();
       linhas.forEach((linha, indice) => {
@@ -149,10 +170,21 @@ export function renderizarPdfTecnico(pdf: PDFKit.PDFDocument, documento: Technic
 
     const nomePeca = (id: string) => pecas.find((peca) => peca.id === id)?.name ?? '';
     const areas = pecas.map((peca) => contourArea(peca.contour) / 1e6);
-    tabela('Peças', [{ rotulo: 'Item', w: 34 }, { rotulo: 'Peça', w: 130 }, { rotulo: 'Medidas', w: 96 }, { rotulo: 'Espessura', w: 58 }, { rotulo: 'Material', w: 135 }, { rotulo: 'Área', w: 70, alinhar: 'right' }],
-      pecas.map((peca, indice) => [String(indice + 1).padStart(2, '0'), nomeDaPeca(peca, pecas), medidasDaPeca(peca), centimetros(peca.thicknessMm),
-        peca.material?.name ? normalizarNomeMaterial(peca.material.name) : { fraco: 'Não informado' }, metrosQuadrados(areas[indice])]),
-      ['Área total', metrosQuadrados(areas.reduce((soma, area) => soma + area, 0))]);
+    const colunasPecas: Coluna[] = [{ rotulo: 'Item', w: 34 }, { rotulo: 'Peça', w: 130 }, { rotulo: 'Medidas', w: 96 }, { rotulo: 'Espessura', w: 58 }, { rotulo: 'Material', w: 135 }, { rotulo: 'Área', w: 70, alinhar: 'right' }];
+    const linhasPecas: Celula[][] = pecas.map((peca, indice) => [String(indice + 1).padStart(2, '0'), nomeDaPeca(peca, pecas), medidasDaPeca(peca), centimetros(peca.thicknessMm),
+      peca.material?.name ? normalizarNomeMaterial(peca.material.name) : { fraco: 'Não informado' }, metrosQuadrados(areas[indice])]);
+    const totalPecas: [string, string] = ['Área total', metrosQuadrados(areas.reduce((soma, area) => soma + area, 0))];
+
+    // A planta fica inteira numa folha e, se puder encolher um pouco (até 240 pt), deixa a tabela de
+    // peças começar logo abaixo dela, na mesma folha; se sobrar pouco espaço, vai para a próxima.
+    if (LIMITE - y - 18 < 240) novaPagina();
+    const comTabela = LIMITE - y - 18 - 18 - medirTabela(colunasPecas, linhasPecas, totalPecas).inicio;
+    const planta = planejarPlanta(documento, Math.min(470, comTabela >= 240 ? comTabela : LIMITE - y - 18));
+    titulo('Planta');
+    desenharPlanta(pdf, documento, planta, y);
+    y += planta.altura + 18;
+
+    tabela('Peças', colunasPecas, linhasPecas, totalPecas);
 
     if (recortes.length) tabela('Cubas, recortes e furos', [{ rotulo: 'Item', w: 34 }, { rotulo: 'Tipo', w: 110 }, { rotulo: 'Peça', w: 100 }, { rotulo: 'Medidas', w: 115 }, { rotulo: 'Distância até as bordas', w: 164 }],
       recortes.map((recurso, indice) => {
@@ -191,13 +223,14 @@ export function renderizarPdfTecnico(pdf: PDFKit.PDFDocument, documento: Technic
 
   // Rodapé de todas as folhas, escrito no fim para saber o total de páginas.
   const { start, count } = pdf.bufferedPageRange();
-  for (let pagina = start; pagina < start + count; pagina++) {
+  const total = start + count - primeiraFolha;
+  for (let pagina = primeiraFolha; pagina < start + count; pagina++) {
     pdf.switchToPage(pagina);
     const margem = pdf.page.margins.bottom;
     pdf.page.margins.bottom = 0; // Escrever abaixo da margem sem abrir outra folha.
     pdf.lineWidth(.5).moveTo(36, 808).lineTo(559, 808).stroke(COR.linha);
     pdf.font('Helvetica').fontSize(7).fillColor(COR.apagado).text(`Inova Marmoraria · CNPJ ${CNPJ_EMPRESA} · Documento técnico, sem valores comerciais`, 36, 814, { lineBreak: false })
-      .text(`${revisao} · Página ${pagina - start + 1} de ${count}`, 380, 814, { width: 179, align: 'right', lineBreak: false });
+      .text(`${revisao} · Página ${pagina - primeiraFolha + 1} de ${total}`, 380, 814, { width: 179, align: 'right', lineBreak: false });
     pdf.page.margins.bottom = margem;
   }
 }

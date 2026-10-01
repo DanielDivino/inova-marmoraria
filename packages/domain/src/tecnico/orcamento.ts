@@ -32,7 +32,22 @@ export type ComponenteDoDesenho = {
   paiId?: string; ladoPai?: LadoRetangulo;
   /** Peça curva ou diagonal cobrada pelo retângulo que a envolve. */
   envolvente: boolean; retangulo?: Retangulo;
+  /** Como a peça do desenho pode receber mudanças do orçamento e qual parte dela este componente é. */
+  forma: FormaNoDesenho; parte: number;
+  /** Peça arredondada do desenho: cantos arredondados nas 4 pontas no orçamento. */
+  raioCantosMm?: number;
 };
+/**
+ * Forma da peça do desenho para receber mudanças do orçamento: RETANGULO (reta, inclusive com cantos
+ * arredondados) muda de medida pelo orçamento; COMPOSTA (L, U, desenho em esquadro) e LIVRE (curva,
+ * diagonal) só no desenho.
+ */
+export type FormaNoDesenho = 'RETANGULO' | 'COMPOSTA' | 'LIVRE';
+export function formaDaPeca(peca: Piece): FormaNoDesenho {
+  if (peca.geometryMode === 'PARAMETRIC' && (peca.parameters?.shape === 'RECTANGLE' || peca.parameters?.shape === 'ROUNDED')) return 'RETANGULO';
+  const { retangulos, envolvente } = retangulosDaPeca(peca);
+  return envolvente ? 'LIVRE' : retangulos.length === 1 ? 'RETANGULO' : 'COMPOSTA';
+}
 export type TipoRecorteOrcamento = 'SINK' | 'SCULPTED_SINK' | 'OVAL_SINK' | 'COOKTOP' | 'FAUCET_HOLE';
 export type RecorteDoDesenho = {
   recursoId: string; pecaId: string; componente: number; cutoutType: TipoRecorteOrcamento; label: string;
@@ -163,11 +178,14 @@ export function desenhoParaOrcamento(doc: TechnicalDocument, servicos: ServicoPa
     const nome = nomeDaPeca(peca, doc.pieces);
     const materialId = peca.material?.id;
     const { retangulos, envolvente } = retangulosDaPeca(peca);
+    const forma = formaDaPeca(peca);
+    const raioCantos = peca.geometryMode === 'PARAMETRIC' && peca.parameters?.shape === 'ROUNDED' && peca.parameters.radius > 0 ? mm(Math.min(peca.parameters.radius, peca.parameters.width / 2, peca.parameters.length / 2)) : 0;
     const partes = retangulos.map((retangulo, indice) => {
       const componente: ComponenteDoDesenho = {
         id: indice ? `${peca.id}#${indice + 1}` : peca.id, pecaId: peca.id, label: retangulos.length > 1 ? `${nome} · parte ${indice + 1}` : nome,
         componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: retangulo.x1 - retangulo.x0, widthMm: retangulo.y1 - retangulo.y0,
-        materialId, bordas: [], envolvente, retangulo,
+        materialId, bordas: [], envolvente, retangulo, forma, parte: indice,
+        ...(raioCantos ? { raioCantosMm: raioCantos } : {}),
       };
       componentes.push(componente);
       return componente;
@@ -195,7 +213,7 @@ export function desenhoParaOrcamento(doc: TechnicalDocument, servicos: ServicoPa
         const presa = trechos.trechos.length === 1 ? trechos.trechos[0] : undefined;
         componentes.push({
           id: recurso.id, pecaId: peca.id, recursoId: recurso.id, label: nomeDoRecurso(recurso) === 'Rodabanca' ? `Rodabanca · ${nome}` : nomeDoRecurso(recurso),
-          componentType: 'BACKSPLASH', orientation: 'VERTICAL', lengthMm: trechos.total, widthMm: Math.max(1, mm(recurso.heightMm)), materialId, bordas: [], envolvente: false,
+          componentType: 'BACKSPLASH', orientation: 'VERTICAL', lengthMm: trechos.total, widthMm: Math.max(1, mm(recurso.heightMm)), materialId, bordas: [], envolvente: false, forma, parte: 0,
           ...(presa ? { paiId: partes[presa.indice].id, ladoPai: presa.side } : {}),
         });
         continue;

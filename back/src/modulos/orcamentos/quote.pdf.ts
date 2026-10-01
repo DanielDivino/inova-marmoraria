@@ -1,7 +1,9 @@
 import PDFDocument from 'pdfkit';
-import { cabecalhoEmpresaPdf as header, assinaturasPdf, normalizarNomeMaterial, pdfDate } from './pdf-layout.js';
+import { cabecalhoEmpresaPdf as header, assinaturasPdf, cabecalhoOrdemServicoPdf, normalizarNomeMaterial, pdfDate, rotuloEntregaPdf } from './pdf-layout.js';
 import { montarLinhasPdf, type QuotePdfLine } from './quote.pdf-lines.js';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
+import { renderizarPdfTecnico } from '../desenhos/technical.pdf.js';
+import type { DesenhoTecnicoDoProjeto } from '../desenhos/desenho-tecnico-do-orcamento.js';
 import { projetoTemDesenho, calcularTotalCartao, planoDeProducao, nomeProjeto, validadeOrcamento } from '@inova/domain';
 import { formatoRecorte, detalheDesenhoComponente, descricaoProducaoComponente, descricaoProducaoRecorte, tituloComponenteProducao, escalasDesenhoTecnico, isMiterFinish, miterJointPath, posicaoMarcadorMeiaEsquadria, acabamentoBordaPedra, faixasBordaPedra, rotuloMedidaDesenho, posicaoMedidaFaixa, type ManufacturingLine } from '@inova/domain';
 
@@ -143,8 +145,11 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
   }
   pdf.restore();
 
-  pdf.save().fillColor('#fff7e5').strokeColor('#b6811e').lineWidth(1.4)
-    .rect(x, y, width, height).fillAndStroke().restore();
+  // Cantos arredondados nas 4 pontas, na mesma escala do desenho.
+  const raio = component.cornerRadiusMm ? Math.min(component.cornerRadiusMm * Math.min(scaleX, scaleY), width / 2, height / 2) : 0;
+  pdf.save().fillColor('#fff7e5').strokeColor('#b6811e').lineWidth(1.4);
+  (raio > 0 ? pdf.roundedRect(x, y, width, height, raio) : pdf.rect(x, y, width, height)).fillAndStroke();
+  pdf.restore();
   for (const [stripIndex, { edge, offsetMm }] of strips.entries()) {
     const horizontal = edge.side === 'FRONT' || edge.side === 'BACK';
     if (!['FRONT', 'BACK', 'LEFT', 'RIGHT'].includes(edge.side)) continue;
@@ -278,13 +283,15 @@ function pecasParaOrdemDeServico(item: any): { components: any[]; cutouts: any[]
 
 /** Validade: 10 dias úteis após a emissão (a gravada; nos orçamentos antigos sem ela, calculada). */
 const rotuloValidade = (quote: any) => quote.validUntil ? pdfDate(quote.validUntil) : quote.createdAt ? pdfDate(validadeOrcamento(new Date(quote.createdAt))) : 'Não definida';
-const rotuloEntrega = (quote: any) => {
-  const deliveryDate = quote.deliveryDeadline ?? quote.dueDate;
-  return deliveryDate ? pdfDate(deliveryDate) : 'A definir';
-};
 
-export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: QuotePdfOptions = { individualPrices: false, drawings: true }) {
-  const deliveryLabel = rotuloEntrega(quote);
+/**
+ * PDF comercial do orçamento. Com `projetoId`, sai só aquele projeto (botão "PDF do projeto"):
+ * mesma folha, com o total do projeto; o desconto final vale para o orçamento completo e não entra.
+ */
+export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pick<QuotePdfOptions, 'individualPrices' | 'drawings'> = { individualPrices: false, drawings: true }, projetoId?: string) {
+  const deliveryLabel = rotuloEntregaPdf(quote);
+  const projeto = projetoId ? quote.items.find((item: any) => item.id === projetoId) : undefined;
+  const itens: any[] = projeto ? [projeto] : quote.items;
   header(pdf, 'ORÇAMENTO', quote);
   pdf.font('Helvetica-Bold').fontSize(8).fillColor('#17251f').text('CLIENTE:', 36, 124).font('Helvetica').text(quote.customerNameSnapshot, 92, 124);
   pdf.font('Helvetica-Bold').text('ENDEREÇO:', 36, 137).font('Helvetica').text(quote.workAddressSnapshot ?? 'Não informado', 92, 137);
@@ -293,14 +300,14 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
   pdf.fontSize(7.5).text(`VÁLIDO ATÉ: ${rotuloValidade(quote)}  ·  APROVAÇÃO: ${date(quote.approvedAt)}`, 36, 164, { width: 523, align: 'right' });
   pdf.text(`PRAZO DE EXECUÇÃO: ${quote.estimatedBusinessDays ? `${quote.estimatedBusinessDays} dias úteis após aprovação` : 'A definir'}  ·  ENTREGA: ${deliveryLabel}`, 36, 175, { width: 523, align: 'right' });
   let y = 190;
-  const commercial = montarLinhasPdf(quote.items);
+  const commercial = montarLinhasPdf(itens);
   // Keep linear services in the same project table as the other commercial
   // lines.  The helper still exposes the aggregated `linear` collection for
   // callers that need the quote-wide total, while the PDF presents each
   // project's values together in one place.
   // Vista is a component/description in the commercial quote. Do not repeat
   // it as a separate linear-meter service line in the PDF.
-  const linearByItem = quote.items.map((item: any) => montarLinhasPdf([item]).linear.filter((entry) => !(/^vista(?:\s|$)/i.test(entry.description) || /^vista\s*[·-]/i.test(entry.description))));
+  const linearByItem = itens.map((item: any) => montarLinhasPdf([item]).linear.filter((entry) => !(/^vista(?:\s|$)/i.test(entry.description) || /^vista\s*[·-]/i.test(entry.description))));
   const columns = options.individualPrices
     ? [{ label: 'DESCRIÇÃO', x: 40, width: 167 }, { label: 'COMP. m', x: 210, width: 44 }, { label: 'LARG. m', x: 258, width: 44 }, { label: 'MEDIDA', x: 306, width: 75 }, { label: 'QTDE', x: 385, width: 60 }, { label: 'VALOR TOTAL', x: 449, width: 106 }]
     : [{ label: 'DESCRIÇÃO', x: 40, width: 205 }, { label: 'COMP. m', x: 250, width: 55 }, { label: 'LARG. m', x: 310, width: 55 }, { label: 'MEDIDA', x: 370, width: 70 }, { label: 'QTDE', x: 445, width: 100 }];
@@ -363,7 +370,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     y += height + 2;
     commercialHeader();
   };
-  quote.items.forEach((item: any, index: number) => {
+  itens.forEach((item: any, index: number) => {
     const materialNames = [...new Set((item.components ?? []).map((component: any) => normalizarNomeMaterial(component.materialNameSnapshot ?? item.materialNameSnapshot)).filter(Boolean))];
     const materialHeading = materialNames.length > 1 ? 'MATERIAIS POR COMPONENTE' : `MATERIAL: ${normalizarNomeMaterial(materialNames[0] ?? item.materialNameSnapshot).toUpperCase()}`;
     commercialTitle(item.projectName ?? '', materialHeading);
@@ -390,24 +397,27 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
   // observations stay on the left, while totals stay close to their values on
   // the right. This avoids a separate footer section on the first sheet.
   const notes = String(quote.notes ?? '').trim();
+  // Medidas na mesma largura e fonte em que os textos são escritos, para nada encostar.
+  const leftX = 36;
+  const leftWidth = 270;
   pdf.font('Helvetica-Bold').fontSize(7.5);
   const paymentText = 'CONDIÇÃO DE PAGAMENTO: 50% do valor deve ser pago antecipadamente para iniciar o trabalho.';
-  const paymentHeight = pdf.heightOfString(paymentText, { width: 292 });
+  const paymentHeight = pdf.heightOfString(paymentText, { width: leftWidth });
   pdf.font('Helvetica').fontSize(7);
-  const caveatText = 'Valores sujeitos à conferência de medidas em obra. Pedras naturais podem\napresentar variação de tonalidade e veios.';
-  const caveatHeight = pdf.heightOfString(caveatText, { width: 292 });
-  const notesHeight = notes ? pdf.heightOfString(`Observação: ${notes}`, { width: 292 }) : 0;
-  const discountHeight = options.individualPrices && Number(quote.discountAmount) > 0 ? 19 : 0;
+  const desconto = projeto ? 0 : Number(quote.discountAmount);
+  const avisoProjeto = projeto ? `\nProposta referente apenas ao projeto “${nomeProjeto(projeto)}” do orçamento ${quote.number}.${Number(quote.discountAmount) > 0 ? ' O desconto final do orçamento vale para a contratação completa e não está incluído neste valor.' : ''}` : '';
+  const caveatText = `Valores sujeitos à conferência de medidas em obra. Pedras naturais podem\napresentar variação de tonalidade e veios.${avisoProjeto}`;
+  const caveatHeight = pdf.heightOfString(caveatText, { width: leftWidth });
+  const notesHeight = notes ? pdf.fontSize(7.5).heightOfString(`Observação: ${notes}`, { width: leftWidth }) : 0;
+  const discountHeight = options.individualPrices && desconto > 0 ? 19 : 0;
   const footerSignatureY = 735;
   const closingHeight = Math.max(
     Math.max(paymentHeight + caveatHeight + 16 + (notes ? 16 + notesHeight : 0), 57 + discountHeight) + 70,
     footerSignatureY - y + 20,
   );
   if (y + closingHeight > 770) { pdf.addPage(); y = 52; }
-  const cashTotal = Number(quote.netTotal);
+  const cashTotal = projeto ? Number(projeto.total) : Number(quote.netTotal);
   const cardTotal = calcularTotalCartao(cashTotal);
-  const leftX = 36;
-  const leftWidth = 270;
   const totalsX = 285;
   const totalsLabelWidth = 165;
   const totalsValueX = 455;
@@ -423,10 +433,10 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
     pdf.font('Helvetica').fontSize(7.5).fillColor('#5f5a52').text(`Observação: ${notes}`, leftX, observationsTop + 13, { width: leftWidth });
   }
   let totalsY = blockTop;
-  if (Number(quote.discountAmount) > 0) {
+  if (desconto > 0) {
     pdf.font('Helvetica').fontSize(8).fillColor('#5f5a52')
       .text('DESCONTO FINAL', totalsX, totalsY, { width: totalsLabelWidth, align: 'right' })
-      .text('- ' + money(Number(quote.discountAmount)), totalsValueX, totalsY, { width: totalsValueWidth, align: 'right' });
+      .text('- ' + money(desconto), totalsValueX, totalsY, { width: totalsValueWidth, align: 'right' });
     totalsY += 19;
   }
   pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(10)
@@ -438,12 +448,41 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Qu
   // The signatures belong to the footer of the commercial sheet, regardless
   // of how much content the closing block has above them.
   assinaturasPdf(pdf, footerSignatureY);
-  if (options.drawings) renderizarFolhasDesenho(pdf, quote, deliveryLabel);
+  if (options.drawings) renderizarFolhasDesenho(pdf, quote, deliveryLabel, projeto ? { itemId: projeto.id } : {});
+}
+
+export type PartesExportacao = { orcamento: boolean; valoresIndividuais: boolean; desenhos: boolean; tecnicos: Pick<DesenhoTecnicoDoProjeto, 'documento' | 'dados'>[] };
+
+/** Folha inicial do PDF do Exportar: A4 quando ele começa pelo desenho técnico; senão, a do orçamento. */
+export function novoPdfExportacao(partes: PartesExportacao) {
+  const comecaPeloTecnico = !partes.orcamento && !partes.desenhos;
+  return new PDFDocument({ margin: 36, bufferPages: true, ...(comecaPeloTecnico ? { size: 'A4' } : {}) });
+}
+
+/**
+ * Exportar (do orçamento todo ou, com `projetoId`, de um projeto): as partes marcadas no mesmo
+ * PDF, nesta ordem — orçamento, desenhos em ordem de serviço e desenho técnico.
+ */
+export function renderizarExportacao(pdf: PdfDocument, quote: any, partes: PartesExportacao, projetoId?: string) {
+  let folhaEmUso = false;
+  if (partes.orcamento) {
+    renderizarPdfOrcamento(pdf, quote, { individualPrices: partes.valoresIndividuais, drawings: false }, projetoId);
+    folhaEmUso = true;
+  }
+  if (partes.desenhos) {
+    renderizarFolhasDesenho(pdf, quote, rotuloEntregaPdf(quote), { itemId: projetoId, aproveitarFolhaAtual: !folhaEmUso });
+    folhaEmUso = true;
+  }
+  for (const tecnico of partes.tecnicos) {
+    if (folhaEmUso) pdf.addPage({ size: 'A4', margin: 36 });
+    renderizarPdfTecnico(pdf, tecnico.documento, tecnico.dados);
+    folhaEmUso = true;
+  }
 }
 
 /** Só as folhas de OS de um projeto, para imprimir o desenho sem a folha comercial. */
 export function renderizarPdfDesenhoProjeto(pdf: PdfDocument, quote: any, itemId: string) {
-  renderizarFolhasDesenho(pdf, quote, rotuloEntrega(quote), { itemId, aproveitarFolhaAtual: true });
+  renderizarFolhasDesenho(pdf, quote, rotuloEntregaPdf(quote), { itemId, aproveitarFolhaAtual: true });
 }
 
 /** Folhas de OS: desenho e descrição de fabricação de cada projeto com desenho. */
@@ -460,19 +499,7 @@ function renderizarFolhasDesenho(pdf: PdfDocument, quote: any, deliveryLabel: st
   const newDrawingPage = () => {
     if (folhaVazia) folhaVazia = false;
     else pdf.addPage();
-    pdf.font('Helvetica-Bold').fontSize(10).fillColor('#17251f').text('OS', 451, 36, { width: 108, align: 'right' });
-    const orderHeight = pdf.fontSize(10).heightOfString(quote.number, { width: 108 });
-    pdf.text(quote.number, 451, 52, { width: 108, align: 'right' });
-    pdf.fontSize(8).text('DATA DE ENTREGA', 36, 36, { width: 108 });
-    pdf.fontSize(10).text(deliveryLabel, 36, 52, { width: 108 });
-    const customer = normalizarNomeMaterial(quote.customerNameSnapshot);
-    const customerSize = materialFontSize(pdf, customer, 283, 18, 14);
-    pdf.font('Helvetica-Bold').fontSize(customerSize);
-    const customerHeight = pdf.heightOfString(customer, { width: 283 });
-    pdf.text(customer, 156, 36, { width: 283, align: 'center' });
-    const headerBottom = Math.max(72, 36 + customerHeight + 12, 52 + orderHeight + 12);
-    pdf.lineWidth(0.7).moveTo(36, headerBottom).lineTo(559, headerBottom).stroke('#b8b2a8');
-    y = headerBottom + 12;
+    y = cabecalhoOrdemServicoPdf(pdf, { entrega: deliveryLabel, cliente: quote.customerNameSnapshot, numero: quote.number });
   };
   newDrawingPage();
   const ensureSpace = (height: number) => {

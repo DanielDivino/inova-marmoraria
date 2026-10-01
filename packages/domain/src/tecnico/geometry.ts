@@ -73,6 +73,16 @@ export function inside(p:Point,poly:Point[]) {let yes=false;for(let i=0,j=poly.l
 export function contornoValido(vertices: Vertex[]) { const poly=sampleContour(vertices,.5); return poly.length>=3 && contourArea(vertices)>EPS && !selfIntersects(poly) && !vertices.some((p,i)=>Math.hypot(p.x-vertices[(i+1)%vertices.length].x,p.y-vertices[(i+1)%vertices.length].y)<EPS); }
 function selfIntersects(poly:Point[]) { for(let i=0;i<poly.length;i++) for(let j=i+2;j<poly.length;j++){if(i===0&&j===poly.length-1)continue;if(intersects(poly[i],poly[(i+1)%poly.length],poly[j],poly[(j+1)%poly.length]))return true;}return false; }
 function distanceSegment(p:Point,a:Point,b:Point) {const l=(b.x-a.x)**2+(b.y-a.y)**2;const t=l?Math.max(0,Math.min(1,((p.x-a.x)*(b.x-a.x)+(p.y-a.y)*(b.y-a.y))/l)):0;return Math.hypot(p.x-a.x-t*(b.x-a.x),p.y-a.y-t*(b.y-a.y));}
+/**
+ * O contorno gravado é o dos parâmetros? Com folga de arredondamento: o banco guarda os números com
+ * menos casas (a curvatura do canto arredondado, 0.41421356237309503, volta como 0.414213562373095).
+ */
+export function contornoConfere(esperado: Vertex[], contorno: Vertex[]) {
+  return esperado.length === contorno.length && esperado.every((vertice, indice) => {
+    const outro = contorno[indice];
+    return vertice.id === outro.id && Math.abs(vertice.x - outro.x) < 1e-6 && Math.abs(vertice.y - outro.y) < 1e-6 && Math.abs(vertice.bulge - outro.bulge) < 1e-9;
+  });
+}
 export function validateTechnicalDocument(doc:TechnicalDocument):Diagnostic[] {
   const result:Diagnostic[]=[]; const add=(severity:Diagnostic['severity'],code:string,message:string,elementId?:string)=>result.push({severity,code,message,elementId});
   const ids=new Set<string>(); for(const entry of [...doc.pieces,...doc.features,...doc.layers,...doc.assemblies,...doc.dimensions,...doc.annotations,...doc.constraints,...doc.views,...doc.pieces.flatMap(p=>p.contour)]) {if(ids.has(entry.id))add('STRUCTURAL','DUPLICATE_ID','Identificador repetido.',entry.id);ids.add(entry.id);}
@@ -85,7 +95,7 @@ export function validateTechnicalDocument(doc:TechnicalDocument):Diagnostic[] {
     if(piece.contour.some((p,i)=>Math.hypot(p.x-piece.contour[(i+1)%piece.contour.length].x,p.y-piece.contour[(i+1)%piece.contour.length].y)<EPS))add('STRUCTURAL','ZERO_EDGE','Aresta de comprimento zero.',piece.id);
     if(piece.thicknessMm<=0)add('TECHNICAL','THICKNESS','A espessura deve ser positiva.',piece.id);
     if(!doc.layers.some(l=>l.id===piece.layerId))add('STRUCTURAL','MISSING_LAYER','Camada inexistente.',piece.id);
-    if(piece.geometryMode==='PARAMETRIC') {const p=piece.parameters;if(!p||JSON.stringify(contornoDosParametros(piece.id,p))!==JSON.stringify(piece.contour))add('STRUCTURAL','PARAMETER_MISMATCH','Contorno diverge dos parâmetros.',piece.id);else if(problemaParametros(p))add('TECHNICAL','PARAMETERS','Dimensões incompatíveis.',piece.id);}
+    if(piece.geometryMode==='PARAMETRIC') {const p=piece.parameters;if(!p||!contornoConfere(contornoDosParametros(piece.id,p),piece.contour))add('STRUCTURAL','PARAMETER_MISMATCH','Contorno diverge dos parâmetros.',piece.id);else if(problemaParametros(p))add('TECHNICAL','PARAMETERS','Dimensões incompatíveis.',piece.id);}
   }
   for(const f of doc.features) {
     const piece=doc.pieces.find(p=>p.id===f.pieceId),poly=shapes.get(f.pieceId);if(!piece||!poly){add('STRUCTURAL','MISSING_PARENT','Componente sem peça-pai.',f.id);continue;}

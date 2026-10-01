@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
 
 const item = { materialNameSnapshot: 'Branco Dallas', productType: { name: 'Bancada' }, billedQuantity: 1, services: [], components: [], cutouts: [] };
-async function render(netTotal: number, items: any[] = [item], artifact?: string, notes?: string, options?: QuotePdfOptions, details?: { customerNameSnapshot?: string; dueDate?: string; deliveryDeadline?: string | null }) {
+async function render(netTotal: number, items: any[] = [item], artifact?: string, notes?: string, options?: Pick<QuotePdfOptions, 'individualPrices' | 'drawings'>, details?: { customerNameSnapshot?: string; dueDate?: string; deliveryDeadline?: string | null }) {
   const quote = { number: 'TESTE-PIX', customerNameSnapshot: 'Cliente', netTotal, grossTotal: 2000, discountAmount: 100, items, notes, ...details };
   const pdf = new PDFDocument({ margin: 36 });
   const printed = vi.spyOn(pdf, 'text');
@@ -15,6 +15,7 @@ async function render(netTotal: number, items: any[] = [item], artifact?: string
   const pages = vi.spyOn(pdf, 'addPage');
   const rectangles = vi.spyOn(pdf, 'rect');
   const ellipses = vi.spyOn(pdf, 'ellipse');
+  const arredondados = vi.spyOn(pdf, 'roundedRect');
   const chunks: Buffer[] = [];
   const buffer = new Promise<void>((resolve, reject) => { pdf.on('data', (chunk) => chunks.push(chunk)); pdf.on('end', resolve); pdf.on('error', reject); });
   renderizarPdfOrcamento(pdf, quote, options);
@@ -22,7 +23,7 @@ async function render(netTotal: number, items: any[] = [item], artifact?: string
   await buffer;
   if (artifact) { mkdirSync('.test-artifacts/pdf', { recursive: true }); writeFileSync(`.test-artifacts/pdf/${artifact}.pdf`, Buffer.concat(chunks)); }
   // PDFKit's last overload omits coordinates, but these calls use text(text, x, y, options).
-  return { quote, fragments: fragments.mock.calls as [string, number, number][], calls: printed.mock.calls as unknown as [string, number?, number?, unknown?][], pages: pages.mock.calls.length, rectangles: rectangles.mock.calls, ellipses: ellipses.mock.calls };
+  return { quote, fragments: fragments.mock.calls as [string, number, number][], calls: printed.mock.calls as unknown as [string, number?, number?, unknown?][], pages: pages.mock.calls.length, rectangles: rectangles.mock.calls, arredondados: arredondados.mock.calls, ellipses: ellipses.mock.calls };
 }
 
 describe('Opções e agrupamento comercial do PDF', () => {
@@ -329,3 +330,17 @@ describe('Desenho de um único projeto', () => {
     }
   });
 });
+
+describe('Cantos arredondados na folha de OS', () => {
+  it('a peça sai com os cantos arredondados e a descrição diz o raio', async () => {
+    const projeto = { ...item, projectName: 'Cozinha', drawingData: { componentDetails: [{ cornerRadiusMm: 100 }] },
+      components: [{ id: 'top', label: 'Bancada', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 2000, widthMm: 600, quantity: 1, billableArea: 1.2, edges: [] }] };
+    const result = await render(1000, [projeto], 'os-cantos-arredondados', undefined, { individualPrices: false, drawings: true });
+    expect(result.arredondados).toHaveLength(1);
+    const [, , largura, altura, raio] = result.arredondados[0] as number[];
+    expect(raio).toBeCloseTo(largura * 100 / 2000, 1);
+    expect(raio).toBeLessThan(altura / 2);
+    expect(result.calls.map(([texto]) => texto)).toContain('Cantos: arredondados nas 4 pontas · raio 10 cm');
+  });
+});
+
