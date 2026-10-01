@@ -41,23 +41,31 @@ describe('Linhas comerciais do PDF', () => {
       { ...edge(.025, 17.5, 'Vista'), billingUnitSnapshot: 'SQUARE_METER' },
       { ...edge(.06, 42, 'Vista'), billingUnitSnapshot: 'SQUARE_METER' },
     ])] }]);
-    const vistas = result.items[0].filter((line) => line.description.toLocaleLowerCase('pt-BR') === 'vista');
-    expect(vistas).toHaveLength(1);
-    expect(vistas[0]).toMatchObject({ measure: .11, unit: 'm²', total: 77 });
+    const vistas = result.items[0].filter((line) => line.description.startsWith('Vista'));
+    expect(vistas).toEqual([{ description: 'Vista - Inferior', measure: .11, unit: 'm²', total: 77 }]);
   });
-  it('rodabancas: mesma medida vira uma linha com área, quantidade e valor somados; medidas diferentes ficam em linhas próprias com comprimento e largura', () => {
+  it('rodabancas: uma linha só, com área, quantidade e valor somados; a largura comum aparece, o comprimento diferente não', () => {
     const result = montarLinhasPdf([{ components: [
       { componentType: 'BACKSPLASH', label: 'Rodabanca 1', lengthMm: 1200, widthMm: 80, quantity: 1, billableArea: .096, subtotal: 57.60, edges: [] },
       { componentType: 'BACKSPLASH', label: 'Rodabanca 2', lengthMm: 700, widthMm: 80, quantity: 2, billableArea: .112, subtotal: 67.20, edges: [] },
       { componentType: 'BACKSPLASH', label: 'Rodabanca 3', lengthMm: 1200, widthMm: 80, quantity: 1, billableArea: .096, subtotal: 57.60, edges: [] },
     ] }]);
     const rodabancas = result.items[0].filter((line) => line.description === 'Rodabanca');
-    expect(rodabancas).toEqual([
-      expect.objectContaining({ lengthMm: 1200, widthMm: 80, measure: .192, quantity: 2, total: 115.20 }),
-      expect.objectContaining({ lengthMm: 700, widthMm: 80, measure: .112, quantity: 2, total: 67.20 }),
-    ]);
+    expect(rodabancas).toEqual([{ description: 'Rodabanca', widthMm: 80, measure: .304, unit: 'm²', quantity: 4, total: 182.40 }]);
   });
-  it('junta só peças com a mesma descrição e a mesma medida (somando quantidade, m² e valor); comprimento e largura nunca somem', () => {
+  it('saia: uma linha só no projeto, somando m² e valores das peças; os lados aparecem quando é de uma peça', () => {
+    const saia = (side: string, billedQuantity: number, appliedSubtotal: number) => ({ side, serviceNameSnapshot: 'Saia', billingUnitSnapshot: 'SQUARE_METER', billedQuantity, appliedSubtotal });
+    const result = montarLinhasPdf([
+      { components: [
+        piece([saia('FRONT', .3, 210), saia('BACK', .3, 210), saia('LEFT', .0825, 57.75), saia('RIGHT', .0825, 57.75)], { label: 'Bancada' }),
+        piece([saia('FRONT', .2, 140), saia('BACK', .2, 140), saia('RIGHT', .0136, 9.52)], { label: 'Lavatório' }),
+      ] },
+      { components: [piece([saia('FRONT', .2, 140), saia('LEFT', .05, 35)])] },
+    ]);
+    expect(result.items[0].filter((line) => line.description.startsWith('Saia'))).toEqual([{ description: 'Saia', measure: 1.1786, unit: 'm²', total: 825.02 }]);
+    expect(result.items[1].filter((line) => line.description.startsWith('Saia'))).toEqual([{ description: 'Saia - Inferior / Esquerdo', measure: .25, unit: 'm²', total: 175 }]);
+  });
+  it('junta só peças com a mesma descrição e a mesma medida (somando quantidade, m² e valor); vistas viram uma linha só, como saia e rodabanca', () => {
     const result = montarLinhasPdf([{ components: [
       { componentType: 'COUNTER', label: 'Bancada', lengthMm: 1200, widthMm: 600, quantity: 1, billableArea: .72, subtotal: 432, edges: [] },
       { componentType: 'COUNTER', label: 'Bancada', lengthMm: 900, widthMm: 600, quantity: 2, billableArea: 1.08, subtotal: 648, edges: [] },
@@ -69,8 +77,20 @@ describe('Linhas comerciais do PDF', () => {
     expect(result.items[0]).toEqual([
       expect.objectContaining({ description: 'Bancada', lengthMm: 1200, widthMm: 600, measure: 1.44, quantity: 2, total: 864 }),
       expect.objectContaining({ description: 'Bancada', lengthMm: 900, widthMm: 600, measure: 1.08, quantity: 2, total: 648 }),
-      expect.objectContaining({ description: 'Vista', lengthMm: 900, widthMm: 50, measure: .045, quantity: 1, total: 27 }),
-      expect.objectContaining({ description: 'Vista', lengthMm: 700, widthMm: 50, measure: .035, quantity: 1, total: 21 }),
+      { description: 'Vista', widthMm: 50, measure: .08, unit: 'm²', quantity: 2, total: 48 },
+    ]);
+  });
+  it('saia no Tipo/descrição e saia antiga (acabamento) somam na mesma linha, depois da rodabanca e da vista', () => {
+    const result = montarLinhasPdf([{ components: [
+      piece([{ side: 'FRONT', serviceNameSnapshot: 'Saia', billingUnitSnapshot: 'SQUARE_METER', billedQuantity: .08, appliedSubtotal: 56 }], { label: 'Bancada', quantity: 1 }),
+      { componentType: 'SKIRT', label: 'Saia · Bancada', lengthMm: 2000, widthMm: 40, quantity: 1, billableArea: .08, subtotal: 56, edges: [] },
+      { componentType: 'VISTA', label: '', lengthMm: 2000, widthMm: 50, quantity: 1, billableArea: .1, subtotal: 70, edges: [] },
+      { componentType: 'BACKSPLASH', label: '', lengthMm: 2000, widthMm: 100, quantity: 1, billableArea: .2, subtotal: 140, edges: [] },
+    ] }]);
+    expect(result.items[0].slice(1)).toEqual([
+      { description: 'Rodabanca', lengthMm: 2000, widthMm: 100, measure: .2, unit: 'm²', quantity: 1, total: 140 },
+      { description: 'Vista', lengthMm: 2000, widthMm: 50, measure: .1, unit: 'm²', quantity: 1, total: 70 },
+      { description: 'Saia', measure: .16, unit: 'm²', total: 112 },
     ]);
   });
   it('preserva valores zero, área manual, recortes e precisão decimal', () => {
@@ -87,14 +107,10 @@ describe('Linhas comerciais do PDF', () => {
     const expected = appliedTotal + 8.01 + 2.01;
     expect(Math.round(lineTotal * 100)).toBe(Math.round(expected * 100));
   });
-  it('apresenta a montagem pelo valor base e desconta a diferença uma única vez', () => {
+  it('apresenta a montagem pelo valor digitado, sem linha de desconto', () => {
     const result = montarLinhasPdf([{ components: [], services: [{ serviceNameSnapshot: 'Montagem', billingUnitSnapshot: 'FIXED', billedQuantity: 1, calculatedSubtotal: 300, appliedSubtotal: 250 }] }]);
     const assemblyLines = result.items[0].filter(line => line.description !== 'Material · área informada');
-    expect(assemblyLines).toEqual([
-      { description: 'Desconto montagem', total: -50, discount: true },
-      { description: 'Montagem', measure: 1, unit: 'serviço', total: 300 },
-    ]);
-    expect(assemblyLines.reduce((sum, line) => sum + line.total, 0)).toBe(250);
+    expect(assemblyLines).toEqual([{ description: 'Montagem', measure: 1, unit: 'serviço', total: 250 }]);
   });
 });
 

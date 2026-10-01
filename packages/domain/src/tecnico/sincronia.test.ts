@@ -175,6 +175,35 @@ describe('orçamento → desenho técnico', () => {
     expect(sincronizarDesenho(doc, pedra, sincronia, catalogo, novoId).documento.pieces[0].material?.id).toBe('m2');
   });
 
+  it('saia no Tipo/descrição presa à bancada entra no lado dela; muda altura, extensão e tipo junto com o orçamento', () => {
+    const { doc, sincronia, projeto } = cenario();
+    projeto.pecas.push({ id: 'c4', label: '', componentType: 'SKIRT', lengthMm: 600, widthMm: 40, materialId: 'm1', paiId: 'c1', ladoPai: 'LEFT', bordas: [] });
+    const { documento, sincronia: depois } = sincronizarDesenho(doc, projeto, sincronia, catalogo, novoId);
+    const saia = documento.features.find((recurso) => recurso.type === 'SKIRT' && recurso.id !== 'f1')!;
+    expect(saia).toMatchObject({ pieceId: 'p1', name: 'Saia', edgeId: ladoDaPeca(documento.pieces[0], 'LEFT'), extentMm: 600, heightMm: 40 });
+    expect(depois.pecas.c4).toMatchObject({ pecaId: 'p1', recursoId: saia.id });
+    valido(documento);
+
+    const mudou = structuredClone(projeto);
+    mudou.pecas[1] = { ...mudou.pecas[1], componentType: 'BACKSPLASH', widthMm: 100, lengthMm: 500 };
+    const depoisDaMudanca = sincronizarDesenho(documento, mudou, depois, catalogo, novoId);
+    expect(depoisDaMudanca.documento.features.find((recurso) => recurso.id === saia.id)).toMatchObject({ type: 'BACKSPLASH', name: 'Rodabanca', extentMm: 500, heightMm: 100 });
+    valido(depoisDaMudanca.documento);
+  });
+
+  it('desenho → orçamento → desenho: a saia vira peça (Tipo/descrição) presa ao lado e volta como saia, sem duplicar', () => {
+    const { doc } = cenario();
+    const item = desenhoParaOrcamento(doc, catalogo.servicos.map((servico) => ({ ...servico, billingUnit: 'LINEAR_METER' as const })));
+    const saia = item.componentes.find((componente) => componente.componentType === 'SKIRT')!;
+    expect(saia).toMatchObject({ label: 'Saia · Bancada', lengthMm: 2000, widthMm: 100, paiId: 'p1', ladoPai: 'FRONT', recursoId: 'f1' });
+    expect(item.componentes[0].bordas).toEqual([]);
+    const projeto: ProjetoNoOrcamento = { nome: 'Cozinha', recortes: [], pecas: item.componentes.map((componente) => ({ id: componente.id, label: componente.label, componentType: componente.componentType, lengthMm: componente.lengthMm, widthMm: componente.widthMm, materialId: componente.materialId, ...(componente.paiId ? { paiId: componente.paiId, ladoPai: componente.ladoPai } : {}), bordas: [] })) };
+    const sincronia: SincroniaDesenho = { pecas: Object.fromEntries(item.componentes.map((componente) => [componente.id, { pecaId: componente.pecaId, ...(componente.recursoId ? { recursoId: componente.recursoId } : {}), forma: componente.forma, parte: componente.parte }])), bordas: {}, recortes: {}, base: projeto };
+    const semMudanca = sincronizarDesenho(doc, projeto, sincronia, catalogo, novoId);
+    expect(semMudanca.alterado).toBe(false);
+    expect(semMudanca.documento.features.filter((recurso) => recurso.type === 'SKIRT')).toHaveLength(1);
+  });
+
   it('desenho vazio recebe o projeto inteiro; desenho já feito, sem troca anterior, só passa a acompanhar', () => {
     const { projeto, doc } = cenario();
     const vazio = sincronizarDesenho(emptyTechnicalDocument(), projeto, undefined, catalogo, novoId);

@@ -4,12 +4,12 @@ import { useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode
 import { closestCenter, DndContext, KeyboardSensor, MouseSensor, pointerWithin, TouchSensor, useSensor, useSensors, type CollisionDetection, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { componentTypeLabels, rotuloLadoBorda, acabamentoBordaPedra } from '@inova/domain';
+import { componentTypeLabels, rotuloLadoBorda, acabamentoBordaPedra, tipoPresoAoLado } from '@inova/domain';
 import type { DraftComponent, DraftCutout, DraftItem, EdgeSide } from './types';
 import { SeletorMaterialComponente, componentMaterialImage, materialImageSrc, type ComponentMaterial } from './ComponentMaterialPicker';
 import { Icone } from '../filtros/Filtros';
 import { ValoresRecortes } from './CutoutValues';
-import { moverComponente, removerGrupoComponentes } from '../../utilitarios/component-groups';
+import { moverComponente, pecasParaPrender, prenderNaPeca, removerGrupoComponentes } from '../../utilitarios/component-groups';
 import { servicoDeRecorte } from '../../utilitarios/service-groups';
 import { SeletorTipoDescricao } from './TypeDescriptionSelector';
 import { aplicarMaterialProjeto, criarComponenteRapido, escolherPedraDaPeca } from '../../utilitarios/quick-quote';
@@ -45,6 +45,30 @@ function CampoRaio({ component, onChange, rotulo }: { component: DraftComponent;
 }
 
 /** Janela dos acabamentos, cortes e furos e outros serviços (a Janela padrão, com "Concluir" no rodapé). */
+/**
+ * Rodabanca, saia e vista (Tipo/descrição, cobradas pela área): em que peça e lado ficam. É por aqui
+ * que elas vão para o lado certo no desenho técnico e na ordem de serviço.
+ */
+function PresaNaPeca({ item, component, numero, onChange }: { item: DraftItem; component: DraftComponent; numero: number; onChange: (patch: Pick<DraftItem, 'components' | 'cutouts'>) => void }) {
+  const pecas = pecasParaPrender(item, component.id);
+  const tipo = componentTypeLabels[component.componentType].toLocaleLowerCase('pt-BR');
+  const nome = (peca: DraftComponent) => `Peça ${item.components.indexOf(peca) + 1} · ${peca.label.trim() || componentTypeLabels[peca.componentType]}`;
+  const lado = component.parentSide ?? (component.componentType === 'BACKSPLASH' ? 'BACK' : 'FRONT');
+  if (!pecas.length) return null;
+  return <div className="quick-presa">
+    <span aria-hidden="true">↳ Fica em</span>
+    <select aria-label={`Peça onde fica a ${tipo} ${numero}`} value={component.parentComponentId ?? ''}
+      onChange={(event) => onChange(prenderNaPeca(item, component.id, event.target.value ? { id: event.target.value, side: lado } : undefined))}>
+      <option value="">Sem peça</option>
+      {pecas.map((peca) => <option key={peca.id} value={peca.id}>{nome(peca)}</option>)}
+    </select>
+    {component.parentComponentId && <><span aria-hidden="true">lado</span><select aria-label={`Lado da ${tipo} ${numero}`} value={lado}
+      onChange={(event) => onChange(prenderNaPeca(item, component.id, { id: component.parentComponentId!, side: event.target.value as typeof lado }))}>
+      {sides.map((side) => <option key={side} value={side}>{rotuloLadoBorda(side)}</option>)}
+    </select></>}
+  </div>;
+}
+
 function DialogoServicos({ titulo, subtitulo, rotuloFechar, onClose, children }: { titulo: string; subtitulo: string; rotuloFechar: string; onClose: () => void; children: ReactNode }) {
   return <Janela aberta aoFechar={onClose} className="quick-services-modal" titulo={titulo} subtitulo={subtitulo} rotuloFechar={rotuloFechar}
     rodape={<button type="button" className="botao-principal" onClick={onClose}>Concluir</button>}>{children}</Janela>;
@@ -74,7 +98,8 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
   const [focusRow, setFocusRow] = useState<string | null>(null);
   const linearServices = services.filter(service => service.billingUnit === 'LINEAR_METER');
   const miterServices = linearServices.filter(service => /45\s*(?:°|º|graus?)/i.test(service.name));
-  const otherLinearServices = linearServices.filter(service => !miterServices.includes(service));
+  // Saia e vista não são acabamento: entram no Tipo/descrição, cobradas pela área como as outras peças.
+  const otherLinearServices = linearServices.filter(service => !miterServices.includes(service) && !acabamentoBordaPedra(service.name));
   const cutoutServices = services.filter(service => service.billingUnit !== 'LINEAR_METER' && servicoDeRecorte(service));
   const additionalServices = services.filter(service => service.billingUnit !== 'LINEAR_METER' && !servicoDeRecorte(service));
   const installationServices = additionalServices.filter(service => !/montagem/i.test(service.name));
@@ -184,7 +209,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
           </div>
         </div></td></tr>
         <tr data-quick-row={component.id} role="row">
-          <td role="cell" className="quick-description">{alca(true)}<span className="quick-mobile-label">Peça {index + 1} · Tipo / descrição</span><button type="button" className="quick-collapse-toggle" aria-expanded={mobileExpanded.has(component.id)} aria-controls={`quick-fields-${component.id}`} onClick={() => toggleMobileRow(component.id)}><span>Peça {index + 1} · {component.label.trim() || componentTypeLabels[component.componentType]}</span><span aria-hidden="true">{mobileExpanded.has(component.id) ? '⌃' : '⌄'}</span></button><SeletorTipoDescricao component={component} descriptions={item.components.map((entry) => entry.label)} ariaLabel={`Tipo da peça ${index + 1}`} onChange={(patch) => update(component.id, patch)} />{component.parentComponentId && <small>↳ {item.components.find(parent => parent.id === component.parentComponentId)?.label || 'Peça principal'}{component.parentSide ? ` · ${rotuloLadoBorda(component.parentSide)}` : ''}</small>}</td>
+          <td role="cell" className="quick-description">{alca(true)}<span className="quick-mobile-label">Peça {index + 1} · Tipo / descrição</span><button type="button" className="quick-collapse-toggle" aria-expanded={mobileExpanded.has(component.id)} aria-controls={`quick-fields-${component.id}`} onClick={() => toggleMobileRow(component.id)}><span>Peça {index + 1} · {component.label.trim() || componentTypeLabels[component.componentType]}</span><span aria-hidden="true">{mobileExpanded.has(component.id) ? '⌃' : '⌄'}</span></button><SeletorTipoDescricao component={component} descriptions={item.components.map((entry) => entry.label)} ariaLabel={`Tipo da peça ${index + 1}`} onChange={(patch) => update(component.id, patch)} />{!tipoPresoAoLado(component.componentType) && component.parentComponentId && <small>↳ {item.components.find(parent => parent.id === component.parentComponentId)?.label || 'Peça principal'}{component.parentSide ? ` · ${rotuloLadoBorda(component.parentSide)}` : ''}</small>}</td>
           <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-length`}>Comprimento (m)</label><CampoMetros id={`quick-${component.id}-length`} label={`Comprimento da peça ${index + 1} (m)`} value={component.lengthCm} onChange={lengthCm => update(component.id, { lengthCm })} onKeyDown={event => enter(event, index, 'length')} /></td>
           <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-width`}>Largura (m)</label><CampoMetros id={`quick-${component.id}-width`} label={`Largura da peça ${index + 1} (m)`} value={component.widthCm} onChange={widthCm => update(component.id, { widthCm })} onKeyDown={event => enter(event, index, 'width')} /></td>
           <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-quantity`}>Quantidade</label><input id={`quick-${component.id}-quantity`} aria-label={`Quantidade da peça ${index + 1}`} inputMode="numeric" enterKeyHint="next" type="number" min="1" step="1" value={component.quantity || ''} onChange={event => update(component.id, { quantity: Number(event.target.value) })} onKeyDown={event => enter(event, index, 'quantity')} /></td>
@@ -192,6 +217,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
           <td role="cell" className="quick-number quick-item-total"><span className="quick-mobile-label">Valor</span><strong>{formatarMoeda(value(component))}</strong>{component.appliedTotal !== undefined && <small>Valor ajustado</small>}</td>
           <td role="cell" className="quick-actions"><div className="quick-row-actions"><button type="button" className="quick-options-button" aria-expanded={expandedOptions.has(component.id)} aria-controls={`quick-options-${component.id}`} onClick={() => toggleOptions(component.id)}>Opções</button><button type="button" aria-label={`Remover peça ${index + 1}`} onClick={() => remove(index)}>×</button>{marcasDaPeca(component)}</div></td>
         </tr>
+        {tipoPresoAoLado(component.componentType) && pecasParaPrender(item, component.id).length > 0 && <tr className="quick-presa-row" role="row"><td role="cell" colSpan={7}><PresaNaPeca item={item} component={component} numero={index + 1} onChange={onChange} /></td></tr>}
         {renderComponentInfo && (() => { const info = renderComponentInfo(component); return info ? <tr className="quick-info-row" role="row"><td role="cell" colSpan={7}>{info}</td></tr> : null; })()}
         <tr className="quick-details-row" role="row" id={`quick-options-${component.id}`} hidden={!expandedOptions.has(component.id)}><td role="cell" colSpan={7}><div className="quick-services quick-piece-options">
           {/* Uma barra: pedra desta peça | acabamentos desta peça. A pedra do projeto (em cima) não muda aqui. */}

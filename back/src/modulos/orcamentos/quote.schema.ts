@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { arredondarMoeda, EXECUTION_STATUSES, WORK_STATUSES, WORK_STATUS_STORAGE, QUOTE_ENTRY_MODES, DETAILING_STATUSES } from '@inova/domain';
+import { arredondarMoeda, tipoPresoAoLado, EXECUTION_STATUSES, WORK_STATUSES, WORK_STATUS_STORAGE, QUOTE_ENTRY_MODES, DETAILING_STATUSES } from '@inova/domain';
 import { trackingSchema } from './quote.tracking.js';
 
 const billingUnitSchema = z.enum(['SQUARE_METER', 'LINEAR_METER', 'UNIT', 'FIXED']);
@@ -33,7 +33,7 @@ export const quoteItemSchema = quoteItemBaseSchema.superRefine((value, context) 
     if (parsed.data.length > value.components.length) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Detalhe sem componente correspondente.', path: ['drawingData', 'componentDetails'] });
     parsed.data.forEach((detail, index) => {
       const parent = detail.parentComponentIndex;
-      if (detail.parentSide !== undefined && (parent === undefined || value.components[index]?.componentType !== 'BACKSPLASH')) context.addIssue({ code: z.ZodIssueCode.custom, message: 'O lado deve pertencer a uma rodabanca vinculada a um componente.', path: ['drawingData', 'componentDetails', index, 'parentSide'] });
+      if (detail.parentSide !== undefined && (parent === undefined || !tipoPresoAoLado(value.components[index]?.componentType ?? ''))) context.addIssue({ code: z.ZodIssueCode.custom, message: 'O lado deve pertencer a uma rodabanca, saia ou vista vinculada a um componente.', path: ['drawingData', 'componentDetails', index, 'parentSide'] });
       if (parent !== undefined && (parent >= index || parsed.data[parent]?.parentComponentIndex !== undefined)) context.addIssue({ code: z.ZodIssueCode.custom, message: 'A peça adicional deve pertencer a um componente principal anterior.', path: ['drawingData', 'componentDetails', index, 'parentComponentIndex'] });
       for (const field of ['sillDetailMm', 'sillDetailHeightMm', 'sillTopWidthMm', 'sillBottomWidthMm', 'sillFinalWidthMm', 'sillOverlapMm'] as const) {
         if (detail[field] !== undefined && value.components[index]?.componentType !== 'SILL') context.addIssue({ code: z.ZodIssueCode.custom, message: 'As medidas do detalhe são exclusivas do peitoril.', path: ['drawingData', 'componentDetails', index, field] });

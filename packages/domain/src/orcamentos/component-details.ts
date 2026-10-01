@@ -37,6 +37,12 @@ export function rotuloLadoBorda(side: string): string {
   return edgeSideLabels[(key === 'UP' ? 'BACK' : key === 'DOWN' ? 'FRONT' : key) as EdgeSide] ?? edgeSideLabels.CUSTOM;
 }
 
+/**
+ * Peças que ficam presas a um lado de outra (rodabanca, saia e vista): entram no Tipo/descrição e
+ * são cobradas pela área (m²) como as outras, não como acabamento.
+ */
+export const TIPOS_PRESOS_AO_LADO: readonly ComponentType[] = ['BACKSPLASH', 'SKIRT', 'VISTA'];
+export const tipoPresoAoLado = (tipo: string) => (TIPOS_PRESOS_AO_LADO as readonly string[]).includes(tipo);
 export const componentTypeLabels: Record<ComponentType, string> = { TOP: 'Tampo', COUNTER: 'Bancada', BASE: 'Base', VISTA: 'Vista', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', SIDE_LEFT: `Lateral — ${edgeSideLabels.LEFT}`, SIDE_RIGHT: `Lateral — ${edgeSideLabels.RIGHT}`, SILL: 'Peitoril', THRESHOLD: 'Soleira', STEP: 'Degrau', OTHER: 'Componente' };
 export type ComponentDrawingDetail = { parentComponentIndex?: number; parentSide?: Exclude<EdgeSide, 'CUSTOM'>; sillDetailMm?: number; sillDetailHeightMm?: number;
   /** Peitoril de duas pedras sobrepostas (Orçamento Rápido) — comprimento é o

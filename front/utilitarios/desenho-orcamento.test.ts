@@ -28,7 +28,7 @@ const dados = (m2Fechado: boolean) => ({ id: 'projeto-1', projectName: 'Cozinha'
   vinculo: { designId: 'cm000000000000000000design', nome: 'Cozinha', versao: 3, total: 0, aceitoEm: '2026-09-29T12:00:00.000Z' } });
 
 describe('desenho técnico usado no orçamento', () => {
-  it('vira o projeto do Orçamento Rápido com as partes, bordas, rodabanca presa e cuba posicionada', () => {
+  it('vira o projeto do Orçamento Rápido com as partes, acabamentos, saia e rodabanca no Tipo/descrição e cuba posicionada', () => {
     const estimativa = estimarDesenho(cozinhaEmU(), catalogo);
     const projeto = projetoDoDesenho(estimativa.item, dados(false));
     expect(vinculoDesenho(projeto)).toMatchObject({ designId: 'cm000000000000000000design', versao: 3 });
@@ -37,18 +37,16 @@ describe('desenho técnico usado no orçamento', () => {
       { label: 'Bancada · parte 1', componentType: 'TOP', lengthCm: '260', widthCm: '60' },
       { label: 'Bancada · parte 2', componentType: 'TOP', lengthCm: '60', widthCm: '90' },
       { label: 'Bancada · parte 3', componentType: 'TOP', lengthCm: '60', widthCm: '90' },
+      { label: 'Saia · Bancada', componentType: 'SKIRT', lengthCm: '150', widthCm: '4' },
       { label: 'Rodabanca · Bancada', componentType: 'BACKSPLASH', lengthCm: '260', widthCm: '10' },
     ]);
-    expect(projeto.components[3]).toMatchObject({ parentComponentId: projeto.components[0].id, parentSide: 'BACK' });
+    expect(projeto.components[4]).toMatchObject({ parentComponentId: projeto.components[0].id, parentSide: 'BACK' });
 
     const entrada = rascunhoParaEntradaItem(projeto);
-    // Lado inteiro sem comprimento (acompanha a peça); trecho parcial com o comprimento dele.
-    expect(entrada.components[0].edges).toEqual([
-      expect.objectContaining({ side: 'LEFT', lengthMm: undefined, heightMm: 40, serviceId: catalogo.services[1].id }),
-      expect.objectContaining({ side: 'FRONT', lengthMm: 1400, heightMm: undefined, serviceId: catalogo.services[2].id }),
-    ]);
+    // Trecho parcial do acabamento com o comprimento dele; a saia não é mais acabamento.
+    expect(entrada.components[0].edges).toEqual([expect.objectContaining({ side: 'FRONT', lengthMm: 1400, heightMm: undefined, serviceId: catalogo.services[2].id })]);
     expect(entrada.cutouts).toEqual([expect.objectContaining({ componentIndex: 0, cutoutType: 'SINK', lengthMm: 500, widthMm: 400, positionX: 1300, positionY: 300, serviceId: catalogo.services[0].id })]);
-    expect(entrada.drawingData).toMatchObject({ desenhoTecnico: { designId: 'cm000000000000000000design' }, componentDetails: [{}, {}, {}, { parentComponentIndex: 0, parentSide: 'BACK' }] });
+    expect(entrada.drawingData).toMatchObject({ desenhoTecnico: { designId: 'cm000000000000000000design' }, componentDetails: [{}, {}, {}, {}, { parentComponentIndex: 0, parentSide: 'BACK' }] });
     expect(entrada.materialId).toBe('cm0000000000000000granito');
   });
 

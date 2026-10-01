@@ -83,24 +83,26 @@ try {
   await page.getByLabel('Comprimento da peça 2 (m)', { exact: true }).fill('1,00');
   await page.getByLabel('Largura da peça 2 (m)', { exact: true }).fill('0,20');
   await rowMaterial(2, 'Branco Itaúnas');
-  const opcoesPeca2 = await abrirOpcoes(2);
-  await opcoesPeca2.getByRole('button', { name: 'Adicionar acabamento', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Acabamentos da peça' });
-  await dialog.locator('fieldset').filter({ hasText: 'Vista' }).getByLabel('Inferior', { exact: true }).check();
-  await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
-  await opcoesPeca2.locator('.quick-acabamento').filter({ hasText: 'Vista' }).getByLabel(/Altura do acabamento/).fill('5');
+  // Vista é uma peça própria (Tipo/descrição), presa ao lado Inferior da soleira: pega o comprimento
+  // do lado e a pedra da soleira, e é cobrada pela área.
+  await page.getByRole('button', { name: '+ Adicionar item', exact: true }).click();
+  await page.getByLabel('Tipo da peça 3', { exact: true }).focus();
+  await page.getByLabel('Tipo da peça 3', { exact: true }).selectOption('VISTA');
+  await page.getByLabel('Peça onde fica a vista 3', { exact: true }).selectOption({ label: 'Peça 2 · Soleira' });
+  await expect(page.getByLabel('Comprimento da peça 3 (m)', { exact: true })).toHaveValue('1,00');
+  await page.getByLabel('Largura da peça 3 (m)', { exact: true }).fill('0,05');
   await expect(page.locator('.summary-grand-total')).toContainText('970,00');
   // Rodabanca é uma peça própria (tipo "Rodabanca"), da mesma pedra da soleira e cobrada pela área.
   await page.getByRole('button', { name: '+ Adicionar item', exact: true }).click();
-  await expect(page.locator('[data-quick-row]')).toHaveCount(3);
-  await page.getByLabel('Tipo da peça 3', { exact: true }).selectOption('BACKSPLASH');
-  await page.getByLabel('Comprimento da peça 3 (m)', { exact: true }).fill('1,00');
-  await page.getByLabel('Largura da peça 3 (m)', { exact: true }).fill('0,10');
-  await rowMaterial(3, 'Branco Itaúnas');
+  await expect(page.locator('[data-quick-row]')).toHaveCount(4);
+  await page.getByLabel('Tipo da peça 4', { exact: true }).selectOption('BACKSPLASH');
+  await page.getByLabel('Comprimento da peça 4 (m)', { exact: true }).fill('1,00');
+  await page.getByLabel('Largura da peça 4 (m)', { exact: true }).fill('0,10');
+  await rowMaterial(4, 'Branco Itaúnas');
   await expect(page.locator('.summary-grand-total')).toContainText('1.070,00');
   await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
   await step(2);
-  await expect(page.locator('.technical-drawing .drawing-description')).toHaveCount(3);
+  await expect(page.locator('.technical-drawing .drawing-description')).toHaveCount(4);
   await expect(page.locator('.technical-drawing')).toContainText('Branco Itaúnas');
   await expect(page.locator('.manufacturing-description')).toContainText('100 × 10 cm');
   await step(1);
@@ -140,7 +142,7 @@ try {
   await expect(root(0).getByLabel('Comprimento (m)', { exact: true })).toHaveValue('2,00');
   // O material por peça (definido no Orçamento Rápido) aparece na legenda do
   // desenho de cada peça de produção — a divisão nunca o altera.
-  await expect(root(1).locator('.map-caption')).toContainText('Branco Itaúnas');
+  await expect(root(1).locator('.map-caption').first()).toContainText('Branco Itaúnas');
   mkdirSync('.test-artifacts/projeto-compacto', { recursive: true });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -155,10 +157,12 @@ try {
   await page.getByRole('button', { name: 'Salvar orçamento', exact: true }).first().click();
   await page.waitForURL('**/orcamentos/saved');
   assert.equal(saved.items.length, 2);
-  assert.deepEqual(saved.items[0].components.map(piece => piece.materialId), ['stone-a', 'stone-b', 'stone-b']);
+  assert.deepEqual(saved.items[0].components.map(piece => piece.materialId), ['stone-a', 'stone-b', 'stone-b', 'stone-b'], 'A vista pega a pedra da soleira');
+  assert.deepEqual(saved.items[0].components.map(piece => [piece.componentType, piece.lengthMm, piece.widthMm]).slice(1, 3), [['THRESHOLD', 1000, 200], ['VISTA', 1000, 50]]);
+  assert.deepEqual(saved.items[0].drawingData.componentDetails[2], { parentComponentIndex: 1, parentSide: 'FRONT' }, 'Vista presa ao lado Inferior da soleira');
   assert.equal(saved.items[1].components[0].materialId, 'stone-b');
   assert.equal(saved.items[0].environment, null);
   assert.equal(saved.customerId, 'customer');
   assert.deepEqual(errors, []);
-  console.log('OK: cliente compacto, abas independentes, exclusão condicional, materiais e preços por peça, rodabanca no acabamento, desenho por peça, rascunho e envio pelo Orçamento Rápido.');
+  console.log('OK: cliente compacto, abas independentes, exclusão condicional, materiais e preços por peça, vista no Tipo/descrição presa à soleira, rodabanca, desenho por peça, rascunho e envio pelo Orçamento Rápido.');
 } finally { await browser.close(); }

@@ -88,7 +88,7 @@ export function projetoSalvoParaDesenho(item: ProjetoSalvo): ProjetoNoOrcamento 
       return {
         id: componente.id, label: componente.label, componentType: componente.componentType, lengthMm: componente.lengthMm, widthMm: componente.widthMm,
         materialId: componente.materialId ?? item.materialId, ...mm('raioCantosMm', detalhe.cornerRadiusMm ?? null),
-        ...(pai ? { paiId: pai.id } : {}), ...(pai && componente.componentType === 'BACKSPLASH' && detalhe.parentSide ? { ladoPai: detalhe.parentSide } : {}),
+        ...(pai ? { paiId: pai.id } : {}), ...(pai && detalhe.parentSide ? { ladoPai: detalhe.parentSide } : {}),
         bordas: componente.edges.map((borda) => ({ side: borda.side as ProjetoNoOrcamento['pecas'][number]['bordas'][number]['side'], serviceId: borda.serviceId, lengthMm: borda.lengthMm, ...mm('heightMm', borda.heightMm) })),
       };
     }),

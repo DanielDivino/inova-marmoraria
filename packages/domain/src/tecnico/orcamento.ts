@@ -1,4 +1,3 @@
-import { acabamentoBordaPedra } from '../orcamentos/edge-finishes.js';
 import { EPS, edgeLength, edgePoint, sampleContour } from './geometry.js';
 import { nomeDaPeca, type Feature, type Piece, type Point, type TechnicalDocument } from './schema.js';
 
@@ -10,8 +9,9 @@ import { nomeDaPeca, type Feature, type Piece, type Point, type TechnicalDocumen
  *   ou um U (três partes): a área é exatamente a do contorno;
  * - peça com curva ou corte diagonal (redonda, cantos arredondados, livre torta)
  *   é cobrada pelo retângulo que a envolve — a pedra sai inteira da chapa;
- * - rodabanca vira peça da mesma pedra (extensão × altura), presa ao lado;
- * - saia e acabamento viram bordas no lado da parte onde estão;
+ * - rodabanca e saia viram peças da mesma pedra (extensão × altura), presas ao lado, cobradas pela
+ *   área como as outras (no Orçamento Rápido ficam no Tipo/descrição, não nos acabamentos);
+ * - acabamento vira borda no lado da parte onde está;
  * - cuba, cooktop e furo viram recortes na parte onde estão, com a posição.
  * Medidas em mm inteiros, como o orçamento guarda. Este é o único lugar da
  * regra: a estimativa do desenho e o projeto que vai para o orçamento saem
@@ -21,14 +21,14 @@ export type LadoRetangulo = 'FRONT' | 'BACK' | 'LEFT' | 'RIGHT';
 /** Retângulo no eixo da peça (mm, y para cima): FRONT embaixo, BACK em cima. */
 export type Retangulo = { x0: number; y0: number; x1: number; y1: number };
 export type BordaDoDesenho = {
-  recursoId: string; tipo: 'SKIRT' | 'EDGE_FINISH'; side: LadoRetangulo | 'CUSTOM';
+  recursoId: string; tipo: 'EDGE_FINISH'; side: LadoRetangulo | 'CUSTOM';
   /** Cobre o lado inteiro da parte: acompanha a medida dela se for mudada no orçamento. */
   ladoInteiro: boolean; customLabel?: string; lengthMm: number; heightMm?: number; serviceId?: string;
 };
 export type ComponenteDoDesenho = {
-  id: string; pecaId: string; recursoId?: string; label: string; componentType: 'TOP' | 'BACKSPLASH'; orientation: 'HORIZONTAL' | 'VERTICAL';
+  id: string; pecaId: string; recursoId?: string; label: string; componentType: 'TOP' | PecaNoLado; orientation: 'HORIZONTAL' | 'VERTICAL';
   lengthMm: number; widthMm: number; materialId?: string; bordas: BordaDoDesenho[];
-  /** Rodabanca presa a um lado de uma parte (id da parte). */
+  /** Rodabanca ou saia presa a um lado de uma parte (id da parte). */
   paiId?: string; ladoPai?: LadoRetangulo;
   /** Peça curva ou diagonal cobrada pelo retângulo que a envolve. */
   envolvente: boolean; retangulo?: Retangulo;
@@ -63,6 +63,13 @@ export type OpcoesConversao = {
 };
 
 const BORDA: Feature['type'][] = ['SKIRT', 'EDGE_FINISH', 'BACKSPLASH'];
+/**
+ * Rodabanca e saia: no desenho, faixas no lado da peça; no orçamento, peças próprias (Tipo/descrição)
+ * da mesma pedra, presas a esse lado e cobradas pela área (m²) como as outras.
+ */
+export const PECAS_NO_LADO = ['BACKSPLASH', 'SKIRT'] as const;
+export type PecaNoLado = typeof PECAS_NO_LADO[number];
+export const ehPecaNoLado = (tipo: string): tipo is PecaNoLado => (PECAS_NO_LADO as readonly string[]).includes(tipo);
 const mm = (valor: number) => Math.round(valor) || 0;
 const pontosIguais = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 const area = (r: Retangulo) => (r.x1 - r.x0) * (r.y1 - r.y0);
@@ -160,8 +167,6 @@ export function servicoSugerido<T extends { name: string }>(recurso: Pick<Featur
   }
   return undefined;
 }
-/** Serviço "Saia" do catálogo (cobrado pela área no preço da pedra, lançado como borda por metro linear). */
-export const servicoSaia = <T extends ServicoParaConversao>(servicos: T[]) => servicos.find((servico) => acabamentoBordaPedra(servico.name) === 'SKIRT' && servico.billingUnit === 'LINEAR_METER');
 
 const TIPO_RECORTE: Record<'SINK' | 'SCULPTED_SINK' | 'CUTOUT' | 'HOLE', TipoRecorteOrcamento> = { SINK: 'SINK', SCULPTED_SINK: 'SCULPTED_SINK', CUTOUT: 'COOKTOP', HOLE: 'FAUCET_HOLE' };
 
@@ -172,7 +177,6 @@ export function desenhoParaOrcamento(doc: TechnicalDocument, servicos: ServicoPa
     const escolhido = opcoes.servicoDoRecurso?.[recurso.id];
     return escolhido ? servicos.find((servico) => servico.id === escolhido) : servicoSugerido(recurso, servicos);
   };
-  const saia = servicoSaia(servicos);
 
   for (const peca of doc.pieces) {
     const nome = nomeDaPeca(peca, doc.pieces);
@@ -192,7 +196,7 @@ export function desenhoParaOrcamento(doc: TechnicalDocument, servicos: ServicoPa
     });
     const recursos = doc.features.filter((recurso) => recurso.pieceId === peca.id);
 
-    // Trechos de lado (saia, acabamento, rodabanca): em esquadro caem nos lados das partes; lado curvo fica como borda avulsa.
+    // Trechos de lado (rodabanca, saia, acabamento): em esquadro caem nos lados das partes; lado curvo fica como borda avulsa.
     const trechosDo = (recurso: Feature) => {
       const indice = peca.contour.findIndex((vertice) => vertice.id === recurso.edgeId);
       if (indice < 0) return null;
@@ -209,20 +213,19 @@ export function desenhoParaOrcamento(doc: TechnicalDocument, servicos: ServicoPa
     for (const recurso of recursos.filter((entrada) => BORDA.includes(entrada.type) && entrada.edgeId)) {
       const trechos = trechosDo(recurso);
       if (!trechos) continue;
-      if (recurso.type === 'BACKSPLASH') {
+      if (ehPecaNoLado(recurso.type)) {
         const presa = trechos.trechos.length === 1 ? trechos.trechos[0] : undefined;
+        const rotulo = nomeDoRecurso(recurso);
         componentes.push({
-          id: recurso.id, pecaId: peca.id, recursoId: recurso.id, label: nomeDoRecurso(recurso) === 'Rodabanca' ? `Rodabanca · ${nome}` : nomeDoRecurso(recurso),
-          componentType: 'BACKSPLASH', orientation: 'VERTICAL', lengthMm: trechos.total, widthMm: Math.max(1, mm(recurso.heightMm)), materialId, bordas: [], envolvente: false, forma, parte: 0,
+          id: recurso.id, pecaId: peca.id, recursoId: recurso.id, label: rotulo === ROTULO[recurso.type] ? `${rotulo} · ${nome}` : rotulo,
+          componentType: recurso.type, orientation: 'VERTICAL', lengthMm: trechos.total, widthMm: Math.max(1, mm(recurso.heightMm)), materialId, bordas: [], envolvente: false, forma, parte: 0,
           ...(presa ? { paiId: partes[presa.indice].id, ladoPai: presa.side } : {}),
         });
         continue;
       }
-      const tipo = recurso.type as 'SKIRT' | 'EDGE_FINISH';
-      const serviceId = tipo === 'SKIRT' ? saia?.id : servicoDe(recurso)?.id;
-      const extra = tipo === 'SKIRT' ? { heightMm: Math.max(1, mm(recurso.heightMm)) } : {};
-      if (trechos.trechos.length) for (const trecho of trechos.trechos) partes[trecho.indice].bordas.push({ recursoId: recurso.id, tipo, side: trecho.side, ladoInteiro: trecho.ladoInteiro, lengthMm: trecho.lengthMm, serviceId, ...extra });
-      else partes[0].bordas.push({ recursoId: recurso.id, tipo, side: 'CUSTOM', ladoInteiro: false, customLabel: `Lado ${trechos.lado}`, lengthMm: trechos.total, serviceId, ...extra });
+      const serviceId = servicoDe(recurso)?.id;
+      if (trechos.trechos.length) for (const trecho of trechos.trechos) partes[trecho.indice].bordas.push({ recursoId: recurso.id, tipo: 'EDGE_FINISH', side: trecho.side, ladoInteiro: trecho.ladoInteiro, lengthMm: trecho.lengthMm, serviceId });
+      else partes[0].bordas.push({ recursoId: recurso.id, tipo: 'EDGE_FINISH', side: 'CUSTOM', ladoInteiro: false, customLabel: `Lado ${trechos.lado}`, lengthMm: trechos.total, serviceId });
     }
 
     // Cuba, cooktop e furo: na parte onde está o centro (ou na mais próxima), com a posição a partir do canto de cima à esquerda.

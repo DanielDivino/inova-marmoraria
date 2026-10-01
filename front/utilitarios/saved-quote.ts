@@ -1,4 +1,4 @@
-import { arredondarMoeda, calcularAreaRetangularM2, calcularSubtotalMaterial, centimetrosParaMilimetros, detalheDesenhoComponente, itemSalvoParaEntrada, medidaM2Fechado, type SavedQuoteItem } from '@inova/domain';
+import { arredondarMoeda, tipoPresoAoLado, calcularAreaRetangularM2, calcularSubtotalMaterial, centimetrosParaMilimetros, detalheDesenhoComponente, itemSalvoParaEntrada, medidaM2Fechado, type SavedQuoteItem } from '@inova/domain';
 import type { DraftItem } from '../componentes/orcamento/types';
 
 const cm = (value?: number) => value === undefined ? undefined : String(value / 10);
@@ -59,7 +59,7 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
     const parentComponentIndex = draft.components.findIndex((entry) => entry.id === component.parentComponentId);
     return {
       ...(parentComponentIndex >= 0 ? { parentComponentIndex } : {}),
-      ...(parentComponentIndex >= 0 && component.componentType === 'BACKSPLASH' && component.parentSide ? { parentSide: component.parentSide } : {}),
+      ...(parentComponentIndex >= 0 && tipoPresoAoLado(component.componentType) && component.parentSide ? { parentSide: component.parentSide } : {}),
       ...(component.componentType === 'SILL' && component.sillDetailCm?.trim() ? { sillDetailMm: centimetrosParaMilimetros(component.sillDetailCm) } : {}),
       ...(component.componentType === 'SILL' && component.sillDetailHeightCm?.trim() ? { sillDetailHeightMm: centimetrosParaMilimetros(component.sillDetailHeightCm) } : {}),
       // Peitoril duplo: larguras reais das duas pedras, exatas (sem "M² fechado") —

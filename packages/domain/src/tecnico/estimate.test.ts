@@ -42,12 +42,12 @@ describe('estimativa pelo desenho', () => {
     const estimativa = estimarDesenho(cozinha(), catalogo, { servicosGerais: [{ serviceId: 's-jateado' }, { serviceId: 's-montagem' }] });
 
     // O mesmo projeto como o orçamento monta (quote.service → montarItem).
-    const componentes = [{ lengthMm: 2000, widthMm: 600 }, { lengthMm: 2000, widthMm: 100 }, { lengthMm: 900, widthMm: 500 }]
+    // A saia é peça da mesma pedra (Tipo/descrição), cobrada pela área como as outras.
+    const componentes = [{ lengthMm: 2000, widthMm: 600 }, { lengthMm: 2000, widthMm: 100 }, { lengthMm: 900, widthMm: 500 }, { lengthMm: 2000, widthMm: 40 }]
       .map((medida) => calcularComponente({ label: 'Peça', componentType: 'COUNTER', orientation: 'HORIZONTAL', ...medida }));
     const areaDoProjeto = componentes.reduce((soma, componente) => soma + componente.billableArea, 0);
     const orcamento = calcularTotalOrcamento([
       ...componentes.map((componente) => calcularSubtotalMaterial(componente.billableArea, 600)),
-      calcularAcabamentoBorda({ name: 'Saia', lengthMm: 2000, heightMm: 40, quantity: 1, materialPrice: 600, servicePrice: 0 }).subtotal,
       calcularAcabamentoBorda({ name: 'Acabamento 45°', lengthMm: 2000, quantity: 1, materialPrice: 600, servicePrice: 70 }).subtotal,
       calcularLinha({ billingUnit: 'UNIT', unitPrice: 180, billedQuantity: 1 }).subtotal,
       calcularLinha({ billingUnit: 'UNIT', unitPrice: 30, billedQuantity: 1 }).subtotal,
@@ -56,10 +56,10 @@ describe('estimativa pelo desenho', () => {
     ]);
 
     expect(estimativa.total).toBe(orcamento);
-    // 720 + 120 + 270 (pedra) + 48 (saia) + 140 (45°) + 180 (cuba) + 30 (furo) + 800 (jateado: 1,85 m² → 2 m²) + 300 (montagem).
+    // 720 + 120 + 270 (pedra) + 48 (saia) + 140 (45°) + 180 (cuba) + 30 (furo) + 800 (jateado: 1,93 m² → 2 m²) + 300 (montagem).
     expect(estimativa.total).toBe(2608);
-    expect(estimativa).toMatchObject({ areaTotalM2: 1.85, totalPix: 2608, totalCartao: calcularTotalCartao(2608), itensSemPreco: 0 });
-    expect(estimativa.linhas.find((linha) => linha.id === 'saia')).toMatchObject({ quantidade: .08, unidade: 'm²', subtotal: 48 });
+    expect(estimativa).toMatchObject({ areaTotalM2: 1.93, totalPix: 2608, totalCartao: calcularTotalCartao(2608), itensSemPreco: 0 });
+    expect(estimativa.linhas.find((linha) => linha.id === 'saia')).toMatchObject({ grupo: 'PEDRA', quantidade: .08, unidade: 'm²', subtotal: 48 });
     expect(estimativa.linhas.find((linha) => linha.id === 'borda')).toMatchObject({ descricao: 'Acabamento 45° · Peça 1', quantidade: 2, unidade: 'm', subtotal: 140 });
   });
 

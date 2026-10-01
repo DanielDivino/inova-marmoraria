@@ -30,7 +30,7 @@ export function projetoParaDesenho(item: DraftItem): ProjetoNoOrcamento {
       return {
         id: componente.id, label: componente.label, componentType: componente.componentType, lengthMm: mm(componente.lengthCm) ?? 0, widthMm: mm(componente.widthCm) ?? 0,
         ...(materialId ? { materialId } : {}), ...opcional('raioCantosMm', componente.raioCantosCm), ...(pai ? { paiId: pai } : {}),
-        ...(pai && componente.componentType === 'BACKSPLASH' && componente.parentSide ? { ladoPai: componente.parentSide } : {}),
+        ...(pai && componente.parentSide ? { ladoPai: componente.parentSide } : {}),
         bordas: componente.edges.filter((borda) => borda.serviceId).map((borda) => ({ side: borda.side, serviceId: borda.serviceId, ...opcional('lengthMm', borda.lengthCm), ...opcional('heightMm', borda.heightCm) })),
       };
     }),

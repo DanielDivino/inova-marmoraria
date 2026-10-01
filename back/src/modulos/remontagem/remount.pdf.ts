@@ -1,5 +1,5 @@
 import { calcularComponente, nomeExibicaoComponente, rotuloLadoBorda, type RemountDocument } from '@inova/domain';
-import { cabecalhoEmpresaPdf, assinaturasPdf, normalizarNomeMaterial, pdfDate, pdfMoney } from '../orcamentos/pdf-layout.js';
+import { AREIA, cabecalhoEmpresaPdf, assinaturasPdf, normalizarNomeMaterial, pdfDate, pdfMoney } from '../orcamentos/pdf-layout.js';
 
 type Customer = { number: string; customerNameSnapshot: string; customerPhoneSnapshot: string | null; workAddressSnapshot: string | null };
 const meters = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
@@ -41,7 +41,7 @@ export function renderizarRemontagemPdf(pdf: PDFKit.PDFDocument, quote: Customer
     ? [{ label: 'Item', w: 27 }, { label: 'Descrição', w: 144 }, { label: 'Material', w: 123 }, { label: 'Medida', w: 104 }, { label: 'Qtd.', w: 45 }, { label: 'Conferido', w: 80 }]
     : [{ label: 'Descrição / material', w: priced ? 248 : 245 }, { label: 'Medida', w: 100 }, { label: 'Qtd.', w: 38 }, { label: 'm²', w: 55 }, ...(priced ? [{ label: 'Total', w: 82 }] : [{ label: '', w: 85 }])];
   const tableHeader = () => {
-    space(25); pdf.fillColor('#d1cfcc').rect(36, y, 523, 21).fill();
+    space(25); pdf.fillColor(AREIA.claro).rect(36, y, 523, 21).fill();
     let x = 36; pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(8);
     for (const col of columns) { pdf.text(col.label, x + 4, y + 6, { width: col.w - 8 }); x += col.w; }
     y += 21;

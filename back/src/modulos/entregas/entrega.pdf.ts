@@ -1,5 +1,5 @@
 import { dataAtualEmpresa } from '@inova/domain';
-import { cabecalhoEmpresaPdf, CNPJ_EMPRESA, normalizarNomeMaterial, pdfDate } from '../orcamentos/pdf-layout.js';
+import { AREIA, cabecalhoEmpresaPdf, CNPJ_EMPRESA, normalizarNomeMaterial, pdfDate } from '../orcamentos/pdf-layout.js';
 import type { DocumentoNotaEntrega, LinhaNotaEntrega } from './entrega.service.js';
 
 export type NotaEntregaPdf = {
@@ -7,7 +7,7 @@ export type NotaEntregaPdf = {
   quote: { number: string; customerNameSnapshot: string; customerPhoneSnapshot: string | null; workAddressSnapshot: string | null };
 };
 
-const COR = { tinta: '#17251f', rotulo: '#6f685e', apagado: '#9a9388', ouro: '#8a6320', linha: '#dfd9cf', forte: '#8f887c', cabecalho: '#dcd9d3', zebra: '#f7f5f1', creme: '#fbf5e6', borda: '#e6cf8f' };
+const COR = { tinta: '#17251f', rotulo: '#6f685e', apagado: '#9a9388', ouro: '#8a6320', linha: '#dfd9cf', forte: '#8f887c', cabecalho: AREIA.claro, zebra: AREIA.zebra, creme: '#fbf5e6', borda: '#e6cf8f' };
 /** Conteúdo vai até aqui; abaixo fica o rodapé de cada página. */
 const LIMITE = 790;
 
