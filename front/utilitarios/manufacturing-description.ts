@@ -21,7 +21,7 @@ export function descricaoProducaoRascunho(components: DraftComponent[], cutouts:
       lengthMm: peitorilDuplo?.lengthMm ?? drawingMm(component.lengthCm) ?? 0, widthMm: peitorilDuplo?.widthMm ?? drawingMm(component.widthCm) ?? 0,
       sillDetailMm: drawingMm(component.sillDetailCm), sillDetailHeightMm: drawingMm(component.sillDetailHeightCm),
       sillTopWidthMm: drawingMm(component.sillTopWidthCm), sillBottomWidthMm: drawingMm(component.sillBottomWidthCm),
-      sillFinalWidthMm: drawingMm(component.sillFinalWidthCm), sillOverlapMm: drawingMm(component.sillOverlapCm),
+      sillFinalWidthMm: drawingMm(component.sillFinalWidthCm), sillOverlapMm: drawingMm(component.sillOverlapCm), cornerRadiusMm: drawingMm(component.raioCantosCm),
       edges: component.edges.map((edge) => ({ ...edge, lengthMm: drawingMm(edge.lengthCm), heightMm: drawingMm(edge.heightCm), serviceName: services.find((service) => service.id === edge.serviceId)?.name ?? 'Acabamento' })),
     }, cutouts.filter((cutout) => cutout.componentIndex === index).map(normalizeCutout),
     parentIndex >= 0 ? tituloComponenteProducao(components[parentIndex], parentIndex) : undefined,

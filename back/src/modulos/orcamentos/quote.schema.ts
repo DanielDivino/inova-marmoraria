@@ -27,7 +27,7 @@ export const quoteItemSchema = quoteItemBaseSchema.superRefine((value, context) 
   // Projeto que veio do desenho técnico ("Usar no orçamento") e o M² fechado com que foi salvo: só referência, nunca preço.
   if (value.drawingData && !z.object({ desenhoTecnico: z.object({ designId: z.string().cuid(), nome: z.string().max(160), versao: z.number().int().positive(), total: z.number().nonnegative(), aceitoEm: z.string().max(40) }).optional(), m2Fechado: z.boolean().optional() }).safeParse(value.drawingData).success) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Vínculo com o desenho técnico inválido.', path: ['drawingData'] });
   if (value.drawingData?.componentDetails !== undefined) {
-  const parsed = z.array(z.object({ parentComponentIndex: z.number().int().nonnegative().optional(), parentSide: z.enum(['BACK', 'FRONT', 'LEFT', 'RIGHT']).optional(), sillDetailMm: positiveMm.optional(), sillDetailHeightMm: positiveMm.optional(), sillTopWidthMm: positiveMm.optional(), sillBottomWidthMm: positiveMm.optional(), sillFinalWidthMm: positiveMm.optional(), sillOverlapMm: positiveMm.optional() })).safeParse(value.drawingData.componentDetails);
+  const parsed = z.array(z.object({ parentComponentIndex: z.number().int().nonnegative().optional(), parentSide: z.enum(['BACK', 'FRONT', 'LEFT', 'RIGHT']).optional(), sillDetailMm: positiveMm.optional(), sillDetailHeightMm: positiveMm.optional(), sillTopWidthMm: positiveMm.optional(), sillBottomWidthMm: positiveMm.optional(), sillFinalWidthMm: positiveMm.optional(), sillOverlapMm: positiveMm.optional(), cornerRadiusMm: positiveMm.optional() })).safeParse(value.drawingData.componentDetails);
   if (!parsed.success) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Detalhes dos componentes inválidos.', path: ['drawingData', 'componentDetails'] });
   else {
     if (parsed.data.length > value.components.length) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Detalhe sem componente correspondente.', path: ['drawingData', 'componentDetails'] });
@@ -38,6 +38,9 @@ export const quoteItemSchema = quoteItemBaseSchema.superRefine((value, context) 
       for (const field of ['sillDetailMm', 'sillDetailHeightMm', 'sillTopWidthMm', 'sillBottomWidthMm', 'sillFinalWidthMm', 'sillOverlapMm'] as const) {
         if (detail[field] !== undefined && value.components[index]?.componentType !== 'SILL') context.addIssue({ code: z.ZodIssueCode.custom, message: 'As medidas do detalhe são exclusivas do peitoril.', path: ['drawingData', 'componentDetails', index, field] });
       }
+      // Cantos arredondados: o raio cabe na peça (no máximo metade do lado menor).
+      const peca = value.components[index];
+      if (detail.cornerRadiusMm !== undefined && peca && detail.cornerRadiusMm * 2 > Math.min(peca.lengthMm, peca.widthMm)) context.addIssue({ code: z.ZodIssueCode.custom, message: 'O raio dos cantos arredondados passa da metade do lado menor da peça.', path: ['drawingData', 'componentDetails', index, 'cornerRadiusMm'] });
     });
   }
 }

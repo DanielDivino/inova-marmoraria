@@ -32,6 +32,15 @@ html .inova-theme .project-builder .modo-e-etapas > div.quote-mode-switch { flex
 .quick-round-toggle input { width:auto; }
 .quick-round-toggle.travado { cursor: help; }
 .quick-round-toggle.travado input { accent-color: #b6811e; opacity: 1; cursor: help; }
+.quick-heading-acoes { display:flex; align-items:stretch; justify-content:flex-end; flex-wrap:wrap; gap:8px; flex-shrink:0; }
+.quick-quote .quick-duplicar { display:inline-flex; align-items:center; gap:6px; padding:7px 11px; border-radius:6px; color:#3d4a3f; font-size:12px; font-weight:600; white-space:nowrap; }
+.quick-quote .quick-duplicar:hover { border-color:#b9ad97; background:#faf6ee; }
+.quick-quote .quick-duplicar svg { color:#8a6a3a; }
+.quick-info-row td { padding:0 8px 8px 30px; border:0; }
+.quick-cantos { align-items:center; }
+html .inova-theme .quick-quote .quick-cantos .quick-acabamento-campo input, html .inova-theme .quick-services-modal .quick-cantos .quick-acabamento-campo input { width:64px; min-width:0; height:32px; padding:4px 8px; }
+.quick-cantos-aviso { color:#b3261e; font-size:12px; font-weight:600; }
+.quick-medida-desenho { display:flex; align-items:center; gap:6px; margin:0; color:#8a6a3a; font-size:11.5px; }
 @media(max-width:560px) { .quick-heading { flex-direction:column; } }
 .quick-project-fields { display:grid; grid-template-columns:1fr 1fr; align-items:end; gap:10px; margin-bottom:12px; }
 .quick-project-fields label { display:grid; gap:5px; font-size:12px; }
@@ -56,12 +65,6 @@ html .inova-theme .project-builder .modo-e-etapas > div.quote-mode-switch { flex
 .type-description-form input { min-width:0; margin:0 !important; }
 .type-description-form button { min-height:33px; padding:5px 7px; white-space:nowrap; }
 .quick-service-launcher { display:block; margin-top:6px; width:100%; text-align:left; color:#795318 !important; font-size:11px; font-weight:600; }
-.quick-services-modal-backdrop { position:fixed; inset:0; z-index:40; display:grid; place-items:center; padding:20px; background:#29221955; }
-.quick-services-modal { width:min(540px,100%); max-height:min(680px,calc(100vh - 40px)); overflow:auto; border:1px solid #dfd3c0; border-radius:12px; background:#fffdf9; box-shadow:0 18px 60px #33251440; padding:18px; }
-.quick-services-modal header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding-bottom:13px; border-bottom:1px solid #eee5d8; }
-.quick-services-modal header strong { display:block; color:#3e3222; font:600 19px Georgia,serif; }
-.quick-services-modal header small { display:block; margin-top:4px; color:#7c7469; font-size:11px; }
-.quick-services-modal header button { border:0; background:transparent; color:#76572e; font-size:23px; cursor:pointer; }
 .quick-modal-add { margin:14px 0 4px; border:1px solid #cda96b; border-radius:6px; background:#fffaf0; color:#78531f; padding:8px 10px; cursor:pointer; }
 .quick-new-service-form { display:grid; grid-template-columns:1.5fr .8fr .8fr auto; align-items:end; gap:8px; margin:8px 0 12px; padding:10px; border:1px solid #eadfce; border-radius:7px; background:#fffaf2; }
 .quick-new-service-form label { display:grid; gap:4px; color:#625644; font-size:11px; }
@@ -80,7 +83,6 @@ html .inova-theme .project-builder .modo-e-etapas > div.quote-mode-switch { flex
 .quick-service-choice { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
 .quick-service-choice > label { min-width:0; }
 .quick-service-choice > input[type="number"] { width:74px; min-width:0; }
-.quick-services-modal footer { display:flex; justify-content:flex-end; margin-top:16px; padding-top:12px; border-top:1px solid #eee5d8; }
 .quick-inline-sides { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
 .quick-inline-sides label { display:flex; align-items:center; gap:4px; font-size:10px; white-space:nowrap; }
 .quick-inline-sides .quick-all-sides { grid-column:1 / -1; padding-bottom:4px; margin-bottom:2px; border-bottom:1px solid #eee7dc; color:#725020; font-weight:700; }

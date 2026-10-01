@@ -22,6 +22,6 @@ export function payloadCliente(form: Record<string, string>, semCadastro: boolea
 export function OpcaoSemCadastro({ ativo, aoMudar }: { ativo: boolean; aoMudar: (ativo: boolean) => void }) {
   return <label className={`cliente-rapido-opcao${ativo ? ' ativo' : ''}`}>
     <input type="checkbox" checked={ativo} onChange={(evento) => aoMudar(evento.target.checked)} />
-    <span><strong>Orçamento sem cadastro</strong><small>Sem exigir nenhum dado: faça os projetos agora e complete o cadastro depois.</small></span>
+    <span><strong>Orçamento sem cadastro</strong><small>Nenhum dado é obrigatório: elabore os projetos agora e complete o cadastro posteriormente.</small></span>
   </label>;
 }

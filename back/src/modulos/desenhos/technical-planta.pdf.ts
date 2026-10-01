@@ -70,6 +70,9 @@ function anguloLegivel(direcao: Point) {
   return angulo;
 }
 
+/** Folga (pt) entre o nome da peça e o que está em volta que já basta: a partir dela, vale ficar no centro. */
+const FOLGA_CONFORTAVEL = 8;
+
 type EstiloTexto = { fonte: string; tamanho: number; cor: string; fundo?: boolean };
 /** Texto centrado num ponto, girado junto com a linha; com fundo branco ele "corta" a linha da cota. */
 function rotulo(pdf: Pdf, texto: string, centro: Point, angulo: number, { fonte, tamanho, cor, fundo }: EstiloTexto) {
@@ -122,25 +125,29 @@ const amostrar = (linhas: Segmento[]) => linhas.flatMap(([a, b]) => {
 });
 
 /**
- * Lugar dentro da pedra para uma caixa de texto (meia largura × meia altura)
- * com a maior sobra até as bordas, os recortes e o que já foi escrito ali;
- * `folga` negativa quer dizer que a caixa não cabe em lugar nenhum.
+ * Lugar dentro da pedra para uma caixa de texto (meia largura × meia altura): o mais perto do
+ * centro da peça entre os que têm folga confortável até as bordas, os recortes e o que já foi
+ * escrito ali (numa peça comprida, vários pontos do meio têm a mesma folga: vale o do centro);
+ * sem folga confortável em lugar nenhum, o de maior folga. `folga` negativa quer dizer que a
+ * caixa não cabe em lugar nenhum.
  */
 function lugarDoNome(contorno: Point[], recortes: Point[][], pontos: Point[], meiaLargura: number, meiaAltura: number) {
   const xs = contorno.map((p) => p.x), ys = contorno.map((p) => p.y);
   const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  let melhor = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }, folga = -Infinity;
+  const centro = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+  const candidatos: { ponto: Point; folga: number }[] = [];
   for (let i = 1; i < 24; i++) for (let j = 1; j < 24; j++) {
     const p = { x: minX + (maxX - minX) * i / 24, y: minY + (maxY - minY) * j / 24 };
     if (!dentro(p, contorno) || recortes.some((recorte) => dentro(p, recorte))) continue;
     let sobra = Infinity;
-    for (const q of pontos) {
-      sobra = Math.min(sobra, Math.max(Math.abs(q.x - p.x) - meiaLargura, Math.abs(q.y - p.y) - meiaAltura));
-      if (sobra <= folga) break;
-    }
-    if (sobra > folga) { folga = sobra; melhor = p; }
+    for (const q of pontos) sobra = Math.min(sobra, Math.max(Math.abs(q.x - p.x) - meiaLargura, Math.abs(q.y - p.y) - meiaAltura));
+    candidatos.push({ ponto: p, folga: sobra });
   }
-  return { ponto: melhor, folga };
+  if (!candidatos.length) return { ponto: centro, folga: -Infinity };
+  const maior = Math.max(...candidatos.map((candidato) => candidato.folga));
+  const bastante = Math.min(maior, FOLGA_CONFORTAVEL) - .01;
+  const distancia = (p: Point) => Math.hypot(p.x - centro.x, p.y - centro.y);
+  return candidatos.filter((candidato) => candidato.folga >= bastante).reduce((melhor, candidato) => distancia(candidato.ponto) < distancia(melhor.ponto) ? candidato : melhor);
 }
 
 /** Trecho de pedra na altura y que contém x (coordenadas da peça). */

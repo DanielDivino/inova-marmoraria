@@ -139,9 +139,6 @@
   html.inova-dark .inova-theme .quick-table tbody tr:hover td { background: #2a302c; }
   html.inova-dark .inova-theme .dashboard-kpis .dashboard-warning { background: #342923; border-color: #875f49; }
 
-  html.inova-dark .inova-theme :is(.catalog-modal, .quick-services-modal, .customer-dialog) { background: #222724; border-color: #424943; color: var(--ink); }
-  html.inova-dark .inova-theme :is(.catalog-modal-backdrop, .quick-services-modal-backdrop) { background: #080a09b8; }
-  html.inova-dark .inova-theme .customer-dialog::backdrop { background: #080a09b8; }
   html.inova-dark .inova-theme :is(.quick-modal-simple-list, .quick-modal-service-list fieldset, .catalog-archive-list article) { background: #292e2b; border-color: #424943; }
 
   html.inova-dark .inova-theme .showcase-page { background: var(--canvas); color: var(--ink); }
@@ -177,13 +174,13 @@
   /* Controles que ainda tinham cores fixas do tema claro. */
   html.inova-dark .inova-theme :is(
     .session-screen, .worker-row, .quote-filter-panel, .quote-workbench,
-    .quote-workbench-general label > strong, .quote-linker, .active-worker,
+    .quote-linker, .active-worker,
     .attached-component, .split-assistant-card,
     .environment-picker-panel, .catalog-panel, .project-name-section,
     .material, .service, .piece
   ) { background: var(--surface); color: var(--ink); border-color: var(--line); }
   html.inova-dark .inova-theme :is(
-    .quote-workbench-tabs, .quote-workbench-bloco, .quick-services, .quick-assembly-service, .quick-round-toggle,
+    .quick-services, .quick-assembly-service, .quick-round-toggle,
     .quick-new-service-form, .component-measure-preview, .pricing-notice,
     .split-assistant-pieces li, .project-builder .customer-mode-tabs,
     .project-builder .selected-stone-placeholder
@@ -201,11 +198,11 @@
     background: #343a35; color: var(--ink); border-color: #766548;
   }
   html.inova-dark .inova-theme :is(
-    .quote-workbench-tabs button, .customer-mode-tabs button,
+    .customer-mode-tabs button,
     .technical-tools > button, .technical-layers button
   ) { color: var(--muted); }
   html.inova-dark .inova-theme :is(
-    .quote-workbench-tabs button[aria-pressed=true], .customer-mode-tabs button.selected,
+    .customer-mode-tabs button.selected,
     .customer-choice button.selected, .compact-option.selected,
     .sill-overlap-buttons button[aria-pressed=true], .item-tabs button.selected,
     .environment-picker-panel button.selected, .measurements-card .calculation-mode:has(input:checked),
@@ -257,7 +254,13 @@
     .map-component-add label, .map-editor-heading button, .edge-length-editor, .backsplash-details-button
   ) { color: var(--gold); }
   html.inova-dark .inova-theme .project-builder :is(.component-material-picker .picker-summary:hover, .project-selection-grid .picker-summary:hover) { background: #303631; }
-  html.inova-dark .inova-theme :is(.quote-workbench-bloco h3, .quote-workbench-prazo-obs > footer [role=status]) { color: #a9c29b; }
+  html.inova-dark .inova-theme :is(.quote-workbench-rodape [role=status], .quote-workbench-bloco .worker-colors summary) { color: #a9c29b; }
+  html.inova-dark .inova-theme .quote-workbench-bloco { background: var(--surface); }
+  html.inova-dark .inova-theme .quote-workbench-rodape { background: var(--soft); border-color: var(--line); }
+  html.inova-dark .inova-theme .botao-principal { background: #4d6a57; border-color: #4d6a57; }
+  html.inova-dark .inova-theme .menu-acoes-lista .perigo { color: #e39488; }
+  html.inova-dark .inova-theme .historico-marcos > div { background: var(--soft); }
+  html.inova-dark .inova-theme :is(.orcamento-status, .editar-contato-campos input, .editar-contato-campos textarea) { background-color: var(--surface); color: var(--ink); border-color: var(--line); }
   html.inova-dark .inova-theme .project-builder .project-step-number { background: #343a35; color: var(--ink); }
   html.inova-dark .inova-theme .project-stage-heading .stage-badge { background: var(--accent-soft); color: var(--gold); }
   html.inova-dark .inova-theme .project-builder :is(.project-step.current, .project-step.completed) .project-step-number { background: #485f48; color: #fff; }
@@ -265,7 +268,7 @@
   html.inova-dark .inova-theme :is(
     .quick-table-scroll, .quick-heading, .quote-mode-switch, .quote-summary-card > strong,
     .quote-summary-card > span, .component-material-picker, .project-tabs-bar,
-    .quote-workbench-tabs, .quote-workbench-history, .quick-project-services,
+    .quick-project-services,
     .component-card-title, .summary-grand-total, .technical-revisions article,
     .technical-dimensions-list, .technical-diagnostics, .ambientes-note,
     .quick-services-modal header, .quick-services-modal footer, .quick-inline-sides .quick-all-sides,
@@ -323,4 +326,6 @@
   html.inova-dark .inova-theme .cliente-rapido-aviso { color: var(--green); }
   html.inova-dark .inova-theme .catalog-ajuste { background: #252a27; border-color: #766548; }
   html.inova-dark .inova-theme .catalog-ajuste-chave { color: var(--green); }
+  html.inova-dark .inova-theme .quick-quote .quick-duplicar svg { color: #d2b27a; }
+  html.inova-dark .inova-theme .quick-medida-desenho { color: #d2b27a; }
 }

@@ -12,6 +12,7 @@ type PhotoFilter = 'ALL' | 'WITH_IMAGE' | 'WITHOUT_IMAGE';
 type PriceFilter = 'ALL' | 'WITH_PRICE' | 'WITHOUT_PRICE';
 
 import { AbasFiltro, AtalhosCabecalho, Icone, ModalFiltros, useCelular } from '../../componentes/filtros/Filtros';
+import { Janela } from '../../componentes/Janela';
 import { formatarMoeda } from '../../utilitarios/formatadores';
 const unitLabel: Record<BillingUnit, string> = { SQUARE_METER: 'm²', LINEAR_METER: 'Metro linear', UNIT: 'Unidade', FIXED: 'Valor fixo' };
 const empty = { name: '', category: '', billingUnit: 'SQUARE_METER' as BillingUnit, price: '', isActive: true };
@@ -66,7 +67,7 @@ export default function AdministrationPage() {
     try {
       const salvo = await api<{ closedSquareMeter: boolean }>('/catalog/settings', { method: 'PATCH', body: JSON.stringify({ closedSquareMeter: ligado }) });
       setM2Fechado(salvo.closedSquareMeter);
-      setNotice(salvo.closedSquareMeter ? 'M² fechado ligado: os orçamentos novos arredondam as peças de 5 em 5 cm.' : 'M² fechado desligado: os orçamentos novos usam a medida exata.');
+      setNotice(salvo.closedSquareMeter ? 'M² fechado ativado: os novos orçamentos arredondam as peças em múltiplos de 5 cm.' : 'M² fechado desativado: os novos orçamentos utilizam as medidas exatas.');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o M² fechado.'); }
     finally { setSalvandoAjuste(false); }
   }
@@ -220,36 +221,30 @@ export default function AdministrationPage() {
       </article>)}
       {!rows.length && <p className="catalog-empty">Nenhum material encontrado para este filtro.</p>}
     </div> : <><section className="catalog-ajuste" aria-label="M² fechado">
-      <div><strong>M² fechado</strong><small>O valor da pedra é calculado com cada peça arredondada para cima, de 5 em 5 cm; as medidas, o desenho e o PDF continuam exatos. Fica sempre marcado nos orçamentos e só pode ser desligado aqui.</small></div>
+      <div><strong>M² fechado</strong><small>O valor da pedra é calculado com cada peça arredondada para cima, em múltiplos de 5 cm; medidas, desenhos e PDF mantêm os valores exatos. A opção permanece ativa em todos os orçamentos e somente pode ser desativada nesta tela.</small></div>
       <label className="catalog-ajuste-chave"><input type="checkbox" role="switch" aria-label="M² fechado nos orçamentos" checked={!!m2Fechado} disabled={m2Fechado === null || salvandoAjuste} onChange={event => void alternarM2Fechado(event.target.checked)} /><span>{m2Fechado === null ? '…' : m2Fechado ? 'Ligado' : 'Desligado'}</span></label>
     </section><div className="admin-rows">
       {(rows as Service[]).map(service => <article key={service.id}><div><strong>{service.name}</strong><small>{service.category} · {unitLabel[service.billingUnit]} · {service.isActive ? 'Ativo' : 'Inativo'}</small></div><b>{formatarMoeda(service.currentPrice)}</b><button className="text-button" type="button" onClick={() => edit(service)}>Editar</button></article>)}
       {!rows.length && <p className="catalog-empty">Nenhum serviço encontrado.</p>}
     </div></>}
 
-    {editing !== null && <div className="catalog-modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) closeForm(); }}>
-      <section className="catalog-modal" role="dialog" aria-modal="true" aria-label={tab === 'materials' ? 'Editar material' : 'Editar serviço'}>
-        <header><div><span className="catalog-eyebrow">{editing ? 'EDITAR' : 'NOVO CADASTRO'}</span><h2>{tab === 'materials' ? 'Material' : 'Serviço'}</h2></div><button type="button" aria-label="Fechar" onClick={closeForm}>×</button></header>
-        <form className="admin-form" onSubmit={submit}>
+    {editing !== null && <Janela aberta aoFechar={closeForm} className="catalog-modal" icone={tab === 'materials' ? 'pedra' : 'valor'} titulo={`${editing ? 'Editar' : 'Novo'} ${tab === 'materials' ? 'material' : 'serviço'}`} aoEnviar={submit}
+      rodape={<><button type="button" className="botao-contorno" onClick={closeForm}>Cancelar</button><button className="botao-principal">{editing ? 'Salvar alterações' : 'Criar cadastro'}</button></>}>
+        <div className="admin-form">
           <label>Nome<input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} required /></label>
           <label>Categoria<input value={form.category} onChange={event => setForm({ ...form, category: event.target.value })} required /></label>
           <label>Unidade<select value={form.billingUnit} onChange={event => setForm({ ...form, billingUnit: event.target.value as BillingUnit })}>{Object.entries(unitLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>Preço<input inputMode="decimal" value={form.price} onChange={event => setForm({ ...form, price: event.target.value })} required /></label>
           <label className="active-toggle"><input type="checkbox" checked={form.isActive} onChange={event => setForm({ ...form, isActive: event.target.checked })} /> Ativo</label>
-          <button className="primary-button">{editing ? 'Salvar alterações' : 'Criar cadastro'}</button>
-        </form>
-        {tab === 'materials' && editing && <div className="material-photo-upload"><div className="material-photo-upload-header"><div><strong>Foto da pedra</strong><small>{editingMaterial?.images?.length ? 'Escolha outra imagem para substituir a foto exibida no catálogo e no mostruário.' : 'Adicione uma imagem para aparecer no catálogo e no mostruário.'}</small></div>{editingMaterial?.images?.length ? <img className="material-photo-preview material-sample-image" src={imageSrc(editingMaterial)} alt={`Foto atual de ${editingMaterial.name}`} /> : null}</div><label className="photo-upload-button">{imageBusy ? 'Enviando…' : editingMaterial?.images?.length ? 'Trocar foto' : '+ Adicionar foto'}<input type="file" accept="image/*" disabled={imageBusy} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadImage(file); event.currentTarget.value = ''; }} /></label></div>}
-      </section>
-    </div>}
-    {archiveOpen && <div className="catalog-modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setArchiveOpen(false); }}>
-      <section className="catalog-modal catalog-archive-modal" role="dialog" aria-modal="true" aria-label="Materiais arquivados">
-        <header><div><span className="catalog-eyebrow">CATÁLOGO</span><h2>Arquivados</h2></div><button type="button" aria-label="Fechar" onClick={() => setArchiveOpen(false)}>×</button></header>
-        <p className="catalog-archive-help">Materiais inativos não aparecem em orçamentos nem no mostruário.</p>
+        </div>
+        {tab === 'materials' && editing && <div className="material-photo-upload"><div className="material-photo-upload-header"><div><strong>Foto da pedra</strong><small>{editingMaterial?.images?.length ? 'Selecione outra imagem para substituir a foto exibida no catálogo e no mostruário.' : 'Adicione uma imagem para exibição no catálogo e no mostruário.'}</small></div>{editingMaterial?.images?.length ? <img className="material-photo-preview material-sample-image" src={imageSrc(editingMaterial)} alt={`Foto atual de ${editingMaterial.name}`} /> : null}</div><label className="photo-upload-button">{imageBusy ? 'Enviando…' : editingMaterial?.images?.length ? 'Trocar foto' : '+ Adicionar foto'}<input type="file" accept="image/*" disabled={imageBusy} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadImage(file); event.currentTarget.value = ''; }} /></label></div>}
+    </Janela>}
+    {archiveOpen && <Janela aberta aoFechar={() => setArchiveOpen(false)} className="catalog-modal catalog-archive-modal" icone="camadas" titulo="Materiais arquivados" subtitulo="Materiais inativos não são exibidos nos orçamentos nem no mostruário." largura="grande">
+        
         <div className="catalog-archive-list">
           {archivedMaterials.map((material) => <article key={material.id}><img className="material-sample-image" src={imageSrc(material)} alt="" /><div><strong>{material.name}</strong><small>{material.category} · {formatarMoeda(material.currentPrice)} / {material.billingUnit === 'SQUARE_METER' ? 'm²' : unitLabel[material.billingUnit]}</small></div><button type="button" className="secondary-button" disabled={restoringId === material.id} onClick={() => void restoreMaterial(material)}>{restoringId === material.id ? 'Desarquivando…' : 'Desarquivar'}</button></article>)}
           {!archivedMaterials.length && <p className="catalog-empty">Nenhum material arquivado.</p>}
         </div>
-      </section>
-    </div>}
+    </Janela>}
   </main>;
 }

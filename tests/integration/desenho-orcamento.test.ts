@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { arredondarMoeda, calcularAcabamentoBorda, calcularLinha, calcularTotalOrcamento, medidaM2Fechado, calcularAreaRetangularM2, type SavedQuoteItem } from '@inova/domain';
+import { execFileSync } from 'node:child_process';
+import { arredondarMoeda, calcularAcabamentoBorda, calcularLinha, calcularTotalOrcamento, medidaM2Fechado, calcularAreaRetangularM2, itemSalvoParaEntrada, type SavedQuoteItem } from '@inova/domain';
 import { contornoDosParametros, emptyTechnicalDocument, estimarDesenho, featureSchema, makePiece, type CatalogoEstimativa, type Feature, type TechnicalDocument } from '@inova/domain/technical';
 import { criarAplicacao } from '../../back/src/app.js';
 import { prisma } from '../../back/src/config/prisma.js';
@@ -117,6 +118,248 @@ describe('Desenho técnico dentro do Novo orçamento', () => {
     expect(sem.data.map((entrada: any) => entrada.id)).toEqual([cliente.id]);
     expect(sem.counts).toEqual({ cadastrados: 1, semCadastro: 1 });
     expect((await request('GET', '/customers?tipo=cadastrados', vendedor)).json().data.map((entrada: any) => entrada.name)).toEqual(['Cliente cadastrado']);
+  });
+
+  it('imprime o desenho técnico de cada projeto: só o dele (o antigo do orçamento vale sozinho num orçamento de um projeto)', async () => {
+    const texto = (resposta: { rawPayload: Buffer }) => execFileSync('pdftotext', ['-', '-'], { input: resposta.rawPayload, encoding: 'utf8' });
+    const salvarDesenho = async (designId: string, auth: Auth) => {
+      const atual = (await request('GET', `/designs/${designId}/draft`, auth)).json().draft;
+      expect((await request('PUT', `/designs/${designId}/draft`, auth, { baseVersion: atual.version, document: cozinha() })).statusCode).toBe(200);
+    };
+    const vinculo = (designId: string) => ({ designId, nome: 'Cozinha impressa', versao: 1, total: 1, aceitoEm: new Date().toISOString() });
+    const doDesenho = (id: string, designId: string) => rascunhoParaEntradaItem(projetoDoDesenho(estimarDesenho(cozinha(), catalogo).item, { id, projectName: 'Cozinha', productTypeId: produto, m2Fechado: false, vinculo: vinculo(designId) }));
+    const avulso = { projectName: 'Lavabo', productTypeId: produto, materialId: catalogo.materials.find((material) => material.name === 'Branco Dallas')!.id, components: [{ label: 'Tampo', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 1000, widthMm: 500, quantity: 1 }] };
+    const designId = (await request('POST', `/customers/${cliente.id}/designs`, vendedor, { name: 'Cozinha impressa' })).json().designId;
+    const orcamento = (await request('POST', '/quotes', vendedor, { customerId: cliente.id, items: [doDesenho('impresso', designId), avulso] })).json();
+    const [cozinhaItem, lavabo] = orcamento.items;
+    const imprimir = (itemId: string, auth: Auth = vendedor) => request('GET', `/quotes/${orcamento.id}/items/${itemId}/technical-pdf`, auth);
+
+    // Desenho ainda vazio e projeto sem desenho: avisa, sem PDF.
+    expect((await imprimir(cozinhaItem.id)).json()).toMatchObject({ error: 'EMPTY_TECHNICAL_DESIGN' });
+    expect((await imprimir(lavabo.id)).json()).toMatchObject({ error: 'NO_TECHNICAL_DESIGN' });
+    await salvarDesenho(designId, vendedor);
+    const pdf = await imprimir(cozinhaItem.id);
+    expect(pdf.statusCode, pdf.body).toBe(200);
+    expect(pdf.headers['content-type']).toContain('application/pdf');
+    // No padrão das folhas de OS: data de entrega, cliente, número da OS, projeto e pedra.
+    expect(texto(pdf)).toContain('DATA DE ENTREGA');
+    expect(texto(pdf)).toContain(orcamento.number);
+    expect(texto(pdf)).toContain('Desenho técnico · Cozinha');
+    expect(texto(pdf)).toContain('Versão 2 · Página 1 de 1');
+    expect(texto(pdf)).not.toContain('INOVA MARMORARIA');
+    // Outro vendedor não imprime o orçamento de quem não é dele.
+    expect((await imprimir(cozinhaItem.id, outro)).statusCode).toBe(404);
+
+    // O desenho antigo do orçamento (um só para todo o orçamento) não passa para outro projeto.
+    const antigo = (await request('POST', `/quotes/${orcamento.id}/technical-project`, admin)).json();
+    await salvarDesenho(antigo.designId, admin);
+    expect((await imprimir(lavabo.id)).json()).toMatchObject({ error: 'NO_TECHNICAL_DESIGN' });
+    // Num orçamento de um projeto só, ele continua valendo para esse projeto.
+    const sozinho = (await request('POST', '/quotes', vendedor, { customerId: cliente.id, items: [avulso] })).json();
+    await salvarDesenho((await request('POST', `/quotes/${sozinho.id}/technical-project`, admin)).json().designId, admin);
+    expect((await request('GET', `/quotes/${sozinho.id}/items/${sozinho.items[0].id}/technical-pdf`, vendedor)).statusCode).toBe(200);
+
+    // Vínculo com desenho de outro cliente (enviado à mão) não imprime o desenho alheio.
+    const outroCliente = (await request('POST', '/customers', admin, { quick: true })).json();
+    const alheio = (await request('POST', `/customers/${outroCliente.id}/designs`, admin, {})).json().designId;
+    await salvarDesenho(alheio, admin);
+    const desviado = (await request('POST', '/quotes', vendedor, { customerId: cliente.id, items: [doDesenho('desviado', alheio)] })).json();
+    expect((await request('GET', `/quotes/${desviado.id}/items/${desviado.items[0].id}/technical-pdf`, vendedor)).json()).toMatchObject({ error: 'NO_TECHNICAL_DESIGN' });
+  });
+
+  it('Exportar junta orçamento, desenhos e desenho técnico no mesmo PDF, só com as partes marcadas', async () => {
+    const texto = (resposta: { rawPayload: Buffer }) => execFileSync('pdftotext', ['-layout', '-', '-'], { input: resposta.rawPayload, encoding: 'utf8' });
+    const tamanhos = (resposta: { rawPayload: Buffer }) => execFileSync('pdfinfo', ['-f', '1', '-l', '99', '-'], { input: resposta.rawPayload, encoding: 'utf8' }).match(/Page +\d+ size: +[\d.]+ x [\d.]+/g)!.map((linha) => linha.includes('595.') ? 'A4' : 'carta');
+    const salvarDesenho = async (designId: string, auth: Auth) => {
+      const atual = (await request('GET', `/designs/${designId}/draft`, auth)).json().draft;
+      expect((await request('PUT', `/designs/${designId}/draft`, auth, { baseVersion: atual.version, document: cozinha() })).statusCode).toBe(200);
+    };
+    const designId = (await request('POST', `/customers/${cliente.id}/designs`, vendedor, { name: 'Cozinha exportada' })).json().designId;
+    await salvarDesenho(designId, vendedor);
+    const vinculo = { designId, nome: 'Cozinha exportada', versao: 2, total: 1, aceitoEm: new Date().toISOString() };
+    const cozinhaProjeto = rascunhoParaEntradaItem(projetoDoDesenho(estimarDesenho(cozinha(), catalogo).item, { id: 'exportado', projectName: 'Cozinha', productTypeId: produto, m2Fechado: false, vinculo }));
+    const avulso = { projectName: 'Lavabo', productTypeId: produto, materialId: catalogo.materials.find((material) => material.name === 'Branco Dallas')!.id, components: [{ label: 'Tampo', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 1000, widthMm: 500, quantity: 1 }] };
+    const orcamento = (await request('POST', '/quotes', vendedor, { customerId: cliente.id, items: [cozinhaProjeto, avulso] })).json();
+    const [cozinhaItem, lavabo] = orcamento.items;
+    const exportar = (caminho: string, partes: string) => request('GET', `/quotes/${orcamento.id}${caminho}?${partes}`, vendedor);
+    expect((await request('GET', `/quotes/${orcamento.id}/desenhos-tecnicos`, vendedor)).json()).toEqual({ projetos: [cozinhaItem.id] });
+
+    // Projeto: orçamento + desenho técnico, na mesma folha de cálculo de páginas do desenho (só as dele).
+    const completo = await exportar(`/items/${cozinhaItem.id}/pdf`, 'commercial=true&drawings=true&technical=true');
+    expect(completo.statusCode, completo.body).toBe(200);
+    const paginas = texto(completo).split('\f').filter((pagina) => pagina.trim());
+    expect(paginas[0]).toContain('TOTAL DO PROJETO');
+    expect(paginas[0]).not.toContain('LAVABO');
+    expect(paginas[1]).toContain('Desenho técnico · Cozinha');
+    expect(paginas[1]).toMatch(/Versão 2 · Página 1 de \d/);
+    expect(tamanhos(completo)).toEqual(['carta', ...paginas.slice(1).map(() => 'A4')]);
+
+    // Só o desenho técnico: sem a folha do orçamento, em A4.
+    const soTecnico = await exportar(`/items/${cozinhaItem.id}/pdf`, 'commercial=false&drawings=false&technical=true');
+    expect(soTecnico.statusCode, soTecnico.body).toBe(200);
+    expect(texto(soTecnico)).toContain('Desenho técnico · Cozinha');
+    expect(texto(soTecnico)).not.toContain('TOTAL DO PROJETO');
+    expect(new Set(tamanhos(soTecnico))).toEqual(new Set(['A4']));
+
+    // Só o desenho técnico de um projeto que não tem: avisa, sem PDF.
+    expect((await exportar(`/items/${lavabo.id}/pdf`, 'commercial=false&drawings=false&technical=true')).json()).toMatchObject({ error: 'NOTHING_TO_EXPORT' });
+
+    // Orçamento todo: o desenho técnico de cada projeto, um depois do outro.
+    const doLavabo = await request('POST', `/quotes/${orcamento.id}/items/${lavabo.id}/technical-design`, admin, {});
+    expect(doLavabo.statusCode, doLavabo.body).toBe(201);
+    await salvarDesenho(doLavabo.json().designId, admin);
+    expect((await request('GET', `/quotes/${orcamento.id}/desenhos-tecnicos`, vendedor)).json()).toEqual({ projetos: [cozinhaItem.id, lavabo.id] });
+    const geral = await exportar('/pdf', 'commercial=true&drawings=false&technical=true');
+    expect(geral.statusCode, geral.body).toBe(200);
+    expect(texto(geral).match(/Versão \d+ · Página 1 de/g)).toHaveLength(2);
+    expect(texto(geral)).toContain('LAVABO');
+    // Sem desenho técnico marcado, o PDF do orçamento continua como antes.
+    expect(texto(await exportar('/pdf', 'commercial=true&drawings=true&technical=false'))).not.toContain('Desenho técnico ·');
+  });
+
+  describe('cada projeto do orçamento tem o seu desenho técnico', () => {
+    const salvarDesenho = async (designId: string) => {
+      const atual = (await request('GET', `/designs/${designId}/draft`, admin)).json().draft;
+      expect((await request('PUT', `/designs/${designId}/draft`, admin, { baseVersion: atual.version, document: cozinha() })).statusCode).toBe(200);
+    };
+    const projeto = (projectName: string) => ({ projectName, productTypeId: produto, materialId: catalogo.materials.find((material) => material.name === 'Branco Dallas')!.id, components: [{ label: 'Tampo', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 1000, widthMm: 500, quantity: 1 }] });
+    const novoOrcamento = async (...nomes: string[]) => (await request('POST', '/quotes', vendedor, { customerId: cliente.id, items: nomes.map(projeto) })).json();
+    const abrir = (orcamento: any, itemId: string, corpo: object = {}) => request('POST', `/quotes/${orcamento.id}/items/${itemId}/technical-design`, admin, corpo);
+
+    it('cria um desenho para cada projeto, abre sempre o mesmo e não empresta para o outro', async () => {
+      const orcamento = await novoOrcamento('Cozinha', 'Banheiro');
+      const [cozinhaItem, banheiro] = orcamento.items;
+      const daCozinha = await abrir(orcamento, cozinhaItem.id);
+      expect(daCozinha.statusCode, daCozinha.body).toBe(201);
+      expect(daCozinha.json().editorUrl).toMatch(/^\/projetos\/[^/]+\/desenhos\/[^/]+$/);
+      expect((await abrir(orcamento, cozinhaItem.id)).json().designId).toBe(daCozinha.json().designId);
+      await salvarDesenho(daCozinha.json().designId);
+      // Desenhar a cozinha não dá desenho técnico ao banheiro.
+      expect((await request('GET', `/quotes/${orcamento.id}/desenhos-tecnicos`, vendedor)).json()).toEqual({ projetos: [cozinhaItem.id] });
+      const doBanheiro = await abrir(orcamento, banheiro.id);
+      expect(doBanheiro.statusCode).toBe(201);
+      expect(doBanheiro.json().designId).not.toBe(daCozinha.json().designId);
+      // O vínculo fica gravado no próprio projeto, com o nome do projeto e do orçamento.
+      const salvo = (await request('GET', `/quotes/${orcamento.id}`, vendedor)).json();
+      expect(salvo.items.find((item: any) => item.id === cozinhaItem.id).drawingData.desenhoTecnico).toMatchObject({ designId: daCozinha.json().designId, nome: `Cozinha · ${orcamento.number}` });
+      // Aparece na linha do tempo do orçamento.
+      expect((await request('GET', `/quotes/${orcamento.id}/historico`, admin)).json().eventos.map((evento: any) => evento.titulo)).toContain('Desenho técnico iniciado');
+    });
+
+    it('projeto duplicado: a cópia do desenho técnico é independente da original', async () => {
+      const original = (await request('POST', `/customers/${cliente.id}/designs`, vendedor, { name: 'Cozinha' })).json().designId;
+      await salvarDesenho(original);
+      const copia = await request('POST', `/designs/${original}/copy`, vendedor, { name: 'Cozinha (cópia)' });
+      expect(copia.statusCode, copia.body).toBe(201);
+      expect(copia.json()).toMatchObject({ nome: 'Cozinha (cópia)', versao: 1 });
+      const [daOriginal, daCopia] = await Promise.all([original, copia.json().designId].map(async (designId) => (await request('GET', `/designs/${designId}/draft`, admin)).json().draft));
+      expect(daCopia.document).toEqual(daOriginal.document);
+      // Mexer na cópia não muda a original.
+      const alterada = { ...daCopia.document, pieces: daCopia.document.pieces.map((peca: any) => ({ ...peca, name: 'Só na cópia' })) };
+      const gravada = await request('PUT', `/designs/${copia.json().designId}/draft`, admin, { baseVersion: daCopia.version, document: alterada });
+      expect(gravada.statusCode, gravada.body).toBe(200);
+      expect((await request('GET', `/designs/${original}/draft`, admin)).json().draft.document.pieces.map((peca: any) => peca.name)).toEqual(daOriginal.document.pieces.map((peca: any) => peca.name));
+      expect(daOriginal.document.pieces.map((peca: any) => peca.name)).not.toContain('Só na cópia');
+      // A cópia é do mesmo cliente e aparece na lista dele; quem não vê o cliente não copia.
+      expect((await request('GET', `/customers/${cliente.id}/designs`, vendedor)).json().designs.map((desenho: any) => desenho.nome)).toEqual(expect.arrayContaining(['Cozinha', 'Cozinha (cópia)']));
+      expect((await request('POST', `/designs/${original}/copy`, outro, {})).statusCode).toBe(404);
+    });
+
+    it('Orçamento Rápido → desenho: um desenho novo recebe o projeto inteiro; depois vão só as mudanças', async () => {
+      const bancada = { label: 'Bancada', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 2000, widthMm: 600, quantity: 1, edges: [{ side: 'FRONT', serviceId: servico('Saia').id, heightMm: 100 }] };
+      const criado = await request('POST', '/quotes', vendedor, { customerId: cliente.id, items: [{ ...projeto('Cozinha'), components: [bancada], cutouts: [{ componentIndex: 0, cutoutType: 'SINK', label: 'Cuba', lengthMm: 500, widthMm: 400 }] }] });
+      expect(criado.statusCode, criado.body).toBe(201);
+      const orcamento = criado.json();
+      const componente = orcamento.items[0].components[0].id;
+      const aberto = await abrir(orcamento, orcamento.items[0].id);
+      expect(aberto.statusCode, aberto.body).toBe(201);
+      const { designId } = aberto.json();
+      const documento = async () => (await request('GET', `/designs/${designId}/draft`, admin)).json().draft.document;
+      const inicial = await documento();
+      expect(inicial.pieces).toHaveLength(1);
+      expect(inicial.pieces[0]).toMatchObject({ name: 'Bancada', parameters: { shape: 'RECTANGLE', width: 2000, length: 600 }, material: { name: 'Branco Dallas' } });
+      expect(inicial.features.map((recurso: any) => recurso.type).sort()).toEqual(['SINK', 'SKIRT']);
+      // O projeto guarda de onde veio cada parte no desenho.
+      const salvo = (await request('GET', `/quotes/${orcamento.id}`, vendedor)).json();
+      expect(salvo.items[0].drawingData.desenhoTecnico.sincronia.pecas[componente]).toMatchObject({ pecaId: inicial.pieces[0].id, forma: 'RETANGULO' });
+
+      // Editar o orçamento salvo (medida e nome) e abrir o desenho de novo: o desenho acompanha.
+      const entrada = { customerId: salvo.customerId, expectedUpdatedAt: salvo.updatedAt, discountAmount: salvo.discountAmount, notes: salvo.notes, validUntil: salvo.validUntil, items: salvo.items.map(itemSalvoParaEntrada) };
+      entrada.items[0].components[0].lengthMm = 2400;
+      entrada.items[0].projectName = 'Cozinha gourmet';
+      const editado = await request('PUT', `/quotes/${orcamento.id}`, vendedor, entrada);
+      expect(editado.statusCode, editado.body).toBe(200);
+      const reaberto = await abrir(orcamento, orcamento.items[0].id);
+      expect(reaberto.statusCode, reaberto.body).toBe(200);
+      expect(reaberto.json().avisos).toEqual([]);
+      const depois = await documento();
+      expect(depois.pieces[0].parameters.width).toBe(2400);
+      expect(depois.features.find((recurso: any) => recurso.type === 'SKIRT').extentMm).toBe(2400);
+      expect((await request('GET', `/customers/${cliente.id}/designs`, vendedor)).json().designs.find((desenho: any) => desenho.id === designId).nome).toBe('Cozinha gourmet');
+      // Sem nada novo no orçamento, abrir de novo não muda o desenho.
+      const versao = (await request('GET', `/designs/${designId}/draft`, admin)).json().draft.version;
+      await abrir(orcamento, orcamento.items[0].id);
+      expect((await request('GET', `/designs/${designId}/draft`, admin)).json().draft.version).toBe(versao);
+    });
+
+    it('peça Arredondada salva, lida do banco e salva de novo (o banco devolve a curvatura com menos casas)', async () => {
+      const designId = (await request('POST', `/customers/${cliente.id}/designs`, vendedor, { name: 'Arredondada' })).json().designId;
+      const rascunho = (await request('GET', `/designs/${designId}/draft`, vendedor)).json().draft;
+      const parameters = { ...makePiece('r').parameters!, shape: 'ROUNDED' as const, width: 1300, length: 700, radius: 100 };
+      const documento = { ...rascunho.document, pieces: [{ ...makePiece('r'), name: 'Tampo', geometryMode: 'PARAMETRIC', parameters, contour: contornoDosParametros('r', parameters) }] };
+      const primeiro = await request('PUT', `/designs/${designId}/draft`, vendedor, { baseVersion: rascunho.version, document: documento });
+      expect(primeiro.statusCode, primeiro.body).toBe(200);
+      const lido = (await request('GET', `/designs/${designId}/draft`, vendedor)).json().draft;
+      const segundo = await request('PUT', `/designs/${designId}/draft`, vendedor, { baseVersion: lido.version, document: { ...lido.document, pieces: [{ ...lido.document.pieces[0], name: 'Tampo da pia' }] } });
+      expect(segundo.statusCode, segundo.body).toBe(200);
+    });
+
+    it('cantos arredondados: ficam no projeto salvo e o desenho recebe a peça Arredondada; raio maior que a peça é recusado', async () => {
+      const criar = (raio: number) => request('POST', '/quotes', vendedor, { customerId: cliente.id, items: [{ ...projeto('Lavabo'), drawingData: { componentDetails: [{ cornerRadiusMm: raio }] } }] });
+      const grande = await criar(300);
+      expect(grande.statusCode).toBe(422);
+      expect(grande.body).toContain('raio dos cantos');
+      const criado = await criar(100);
+      expect(criado.statusCode, criado.body).toBe(201);
+      const orcamento = criado.json();
+      expect(orcamento.items[0].drawingData.componentDetails).toEqual([{ cornerRadiusMm: 100 }]);
+      const aberto = await abrir(orcamento, orcamento.items[0].id);
+      const desenho = (await request('GET', `/designs/${aberto.json().designId}/draft`, admin)).json().draft.document;
+      expect(desenho.pieces[0].parameters).toMatchObject({ shape: 'ROUNDED', radius: 100, width: 1000, length: 500 });
+    });
+
+    it('Novo orçamento (antes de salvar): o desenho recebe o projeto e depois as mudanças; o que chega é validado', async () => {
+      const designId = (await request('POST', `/customers/${cliente.id}/designs`, vendedor, { name: 'Lavabo' })).json().designId;
+      const projetoRapido = { nome: 'Lavabo', pecas: [{ id: 'c1', label: 'Tampo', componentType: 'TOP', lengthMm: 1000, widthMm: 500, materialId: catalogo.materials[0].id, bordas: [] }], recortes: [] };
+      const primeira = await request('POST', `/designs/${designId}/sincronizar`, vendedor, { projeto: projetoRapido });
+      expect(primeira.statusCode, primeira.body).toBe(200);
+      expect(primeira.json()).toMatchObject({ alterado: true, avisos: [], versao: 2, nome: 'Lavabo' });
+      const mudado = { ...projetoRapido, nome: 'Lavabo social', pecas: [{ ...projetoRapido.pecas[0], widthMm: 550 }] };
+      const segunda = await request('POST', `/designs/${designId}/sincronizar`, vendedor, { projeto: mudado, sincronia: primeira.json().sincronia });
+      expect(segunda.json()).toMatchObject({ alterado: true, versao: 3, nome: 'Lavabo social' });
+      expect((await request('GET', `/designs/${designId}/draft`, admin)).json().draft.document.pieces[0].parameters).toMatchObject({ width: 1000, length: 550 });
+      expect((await request('POST', `/designs/${designId}/sincronizar`, vendedor, { projeto: { nome: 'x', pecas: [{ id: 'c1' }], recortes: [] } })).statusCode).toBe(422);
+      expect((await request('POST', `/designs/${designId}/sincronizar`, outro, { projeto: projetoRapido })).statusCode).toBe(404);
+    });
+
+    it('o desenho antigo do orçamento vai para o projeto escolhido; num orçamento de um projeto só, sem perguntar', async () => {
+      const orcamento = await novoOrcamento('Cozinha', 'Banheiro');
+      const [cozinhaItem, banheiro] = orcamento.items;
+      const antigo = (await request('POST', `/quotes/${orcamento.id}/technical-project`, admin)).json();
+      const pergunta = await abrir(orcamento, cozinhaItem.id);
+      expect(pergunta.statusCode).toBe(409);
+      expect(pergunta.json()).toMatchObject({ error: 'UNASSIGNED_TECHNICAL_DESIGN' });
+      // "Criar um novo" deixa o antigo livre para outro projeto.
+      expect((await abrir(orcamento, banheiro.id, { usarDoOrcamento: false })).json().designId).not.toBe(antigo.designId);
+      expect((await abrir(orcamento, cozinhaItem.id, { usarDoOrcamento: true })).json().designId).toBe(antigo.designId);
+      await salvarDesenho(antigo.designId);
+      // O desenho novo do banheiro já veio com as peças do orçamento.
+      expect((await request('GET', `/quotes/${orcamento.id}/desenhos-tecnicos`, vendedor)).json().projetos.sort()).toEqual([cozinhaItem.id, banheiro.id].sort());
+
+      const sozinho = await novoOrcamento('Lavabo');
+      const doSozinho = (await request('POST', `/quotes/${sozinho.id}/technical-project`, admin)).json();
+      expect((await abrir(sozinho, sozinho.items[0].id)).json().designId).toBe(doSozinho.designId);
+    });
   });
 
   it('recusa vínculo com desenho malformado no projeto', async () => {

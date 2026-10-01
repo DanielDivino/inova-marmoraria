@@ -157,7 +157,7 @@ export function VisualizadorAmbientes({ material, materiais, selecionarMaterial 
           </button>)}
           {!filtrados.length && <p>Nenhuma pedra encontrada.</p>}
         </div>
-        <p className="ambientes-feedback" role="status">{material && !pedra ? 'Esta pedra ainda não tem foto para a simulação.' : imagemComErro === pedra && pedra ? 'Não foi possível carregar esta amostra.' : pedra && !pronta ? 'Carregando amostra…' : ''}</p>
+        <p className="ambientes-feedback" role="status">{material && !pedra ? 'Esta pedra ainda não possui foto para a simulação.' : imagemComErro === pedra && pedra ? 'Não foi possível carregar esta amostra.' : pedra && !pronta ? 'Carregando amostra…' : ''}</p>
       </aside>
     </div>
     <p className="ambientes-note">Simulação ilustrativa. Tonalidade, escala e veios podem variar na pedra natural.</p>

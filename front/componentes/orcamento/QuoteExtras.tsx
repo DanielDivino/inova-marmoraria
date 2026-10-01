@@ -64,7 +64,7 @@ export function ComplementosOrcamento({ mode = 'all', componentIndex, calculateC
     {mode === 'all' && <TituloEtapaProjeto number={4} title="Recortes, cubas e serviços" description="Configure os recortes e selecione os serviços que fazem parte do projeto." />}
     {mode !== 'services' && <>
     <details className="compact-menu cutouts-menu" open><summary>{mode === 'unassigned' ? 'Recortes sem peça vinculada / serviços anteriores' : 'Recortes e cubas'} {cutoutCount ? '(' + cutoutCount + ')' : ''}</summary><div className="compact-menu-content">
-      {!cutoutCount && <p className="extras-empty">A peça precisa de cuba, cooktop ou furação? Adicione aqui. Se não precisar, pode continuar.</p>}
+      {!cutoutCount && <p className="extras-empty">Inclua aqui cubas, cooktops ou furações, se a peça exigir. Caso contrário, prossiga para a próxima etapa.</p>}
       {componentIndex === undefined && mode !== 'unassigned' && <button type="button" className="text-button" onClick={addCutout}>+ Adicionar recorte/cuba</button>}
       {legacyServices.map(renderService)}
       {visibleCutouts.map(({ cutout, index }) => {

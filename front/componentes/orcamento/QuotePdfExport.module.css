@@ -7,7 +7,12 @@
 @media screen {
   :global(html.inova-dark) .panel { background: var(--surface); color: var(--ink); border-color: var(--line); box-shadow: 0 8px 30px #0005; }
   :global(html.inova-dark) .panel small { color: var(--muted); }
+  :global(html.inova-dark) .panel label:has(input:disabled) { color: var(--muted); opacity: .6; }
 }
 @media (max-width: 640px) { .panel { position: static; margin-top: 8px; } }
-/* No cartão do projeto (grid), o botão fica do tamanho do texto, não da largura toda. */
-.printDrawing { justify-self: start; }
+.panel label:has(input:disabled) { color: #aaa398; cursor: default; }
+/* "Exibir valores individuais" pertence ao orçamento: fica logo abaixo dele, recuado. */
+.panel .subopcao { margin-top: -6px; padding-left: 25px; font-size: 13px; }
+/* No cartão do projeto o botão fica à esquerda: a janela abre a partir dele, para a direita. */
+.doProjeto { justify-self: start; }
+.doProjeto .panel { left: 0; right: auto; }

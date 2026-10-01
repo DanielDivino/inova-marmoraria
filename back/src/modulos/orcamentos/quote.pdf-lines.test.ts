@@ -100,10 +100,13 @@ describe('Linhas comerciais do PDF', () => {
 
 describe('Opções do PDF', () => {
   it('preserva a exportação antiga quando não há opções', () => {
-    expect(quotePdfOptionsSchema.parse({})).toEqual({ individualPrices: false, drawings: true });
+    expect(quotePdfOptionsSchema.parse({})).toEqual({ commercial: true, individualPrices: false, drawings: true, technical: false });
   });
   it.each(['true', 'false'])('aceita valores %s independentemente dos desenhos', individualPrices => {
-    for (const drawings of ['true', 'false']) expect(quotePdfOptionsSchema.parse({ individualPrices, drawings })).toEqual({ individualPrices: individualPrices === 'true', drawings: drawings === 'true' });
+    for (const drawings of ['true', 'false']) expect(quotePdfOptionsSchema.parse({ individualPrices, drawings })).toMatchObject({ individualPrices: individualPrices === 'true', drawings: drawings === 'true' });
+  });
+  it('cada caixinha do Exportar é independente: só desenhos e desenho técnico, sem o orçamento', () => {
+    expect(quotePdfOptionsSchema.parse({ commercial: 'false', drawings: 'true', technical: 'true' })).toEqual({ commercial: false, individualPrices: false, drawings: true, technical: true });
   });
   it('rejeita opções inválidas em vez de gerar um documento diferente do solicitado', () => {
     expect(quotePdfOptionsSchema.safeParse({ drawings: 'não' }).success).toBe(false);

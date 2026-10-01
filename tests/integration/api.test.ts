@@ -266,6 +266,53 @@ describe('Orçamento, snapshots, edição e relacionamentos', () => {
     const text = execFileSync('pdftotext', ['-', '-'], { input: response.rawPayload, encoding: 'utf8' });
     expect(text).toContain('975,31'); expect(text).toContain('987,65'); expect(text).toContain('TOTAL DO PROJETO'); expect(text).not.toContain('600,00');
   });
+  it('PDF de um projeto: só ele e o total dele; projeto de outro orçamento não sai', async () => {
+    const q = await quote({ items: [item({ projectName: 'Cozinha' }), item({ projectName: 'Banheiro social', components: [{ ...item().components[0], appliedTotal: 432.1 }] })], discountAmount: 10 });
+    const banheiro = q.items.find((entry: any) => entry.projectName === 'Banheiro social');
+    const response = await request('GET', `/quotes/${q.id}/items/${banheiro.id}/pdf?drawings=false`);
+    expect(response.statusCode, response.body).toBe(200); expect(response.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
+    expect(decodeURIComponent(String(response.headers['content-disposition']))).toContain(`${q.number} - Banheiro social`);
+    const text = execFileSync('pdftotext', ['-', '-'], { input: response.rawPayload, encoding: 'utf8' });
+    expect(text).toContain('BANHEIRO SOCIAL'); expect(text).toContain('432,10');
+    expect(text).not.toContain('COZINHA'); expect(text).not.toContain('DESCONTO FINAL');
+    const outro = await quote();
+    expect((await request('GET', `/quotes/${outro.id}/items/${banheiro.id}/pdf`)).statusCode).toBe(404);
+  });
+  it('histórico do orçamento: linha do tempo com o que aconteceu, só para quem vê o orçamento', async () => {
+    const q = await quote();
+    expect((await request('PATCH', `/quotes/${q.id}/status`, { status: 'APPROVED' })).statusCode).toBe(200);
+    expect((await request('PATCH', `/quotes/${q.id}/tracking`, { deliveryDeadline: '2030-02-01', deadlineConfirmed: true, notes: 'Conferir no local.' })).statusCode).toBe(200);
+    const resposta = await request('GET', `/quotes/${q.id}/historico`);
+    expect(resposta.statusCode, resposta.body).toBe(200);
+    const { eventos, marcos } = resposta.json();
+    expect(eventos.map((evento: any) => evento.titulo)).toEqual(['Prazos atualizados', 'Observações do orçamento atualizadas', 'Orçamento aprovado', 'Orçamento criado']);
+    expect(eventos[0]).toMatchObject({ detalhe: 'Entrega acordada: 01/02/2030 · Prazo confirmado com o cliente', usuario: 'Administrador Inova' });
+    expect(marcos.map((marco: any) => marco.rotulo)).toEqual(['Emissão', 'Validade', 'Aprovação', 'Data limite', 'Entrega']);
+    expect(marcos[1].data).toBe(q.validUntil.slice(0, 10));
+    const email = `historico-${Date.now()}@example.test`;
+    expect((await request('POST', '/users', { name: 'Vendedor do histórico', email, password: 'Historico@2026', role: 'SELLER', maxDiscountPercent: 5 })).statusCode).toBe(201);
+    const vendedor = { authorization: `Bearer ${(await request('POST', '/auth/login', { email, password: 'Historico@2026' }, {})).json().accessToken}` };
+    expect([403, 404]).toContain((await request('GET', `/quotes/${q.id}/historico`, undefined, vendedor)).statusCode);
+  });
+  it('edita o contato pelo orçamento: o cliente, este orçamento e o PDF passam a mostrá-lo', async () => {
+    const q = await quote();
+    const nome = (await request('GET', `/customers/${q.customerId}`)).json().name;
+    const editado = await request('PATCH', `/quotes/${q.id}/contact`, { name: '', phone: '(92) 98877-0001', address: 'Rua das Pedras, 10', email: null });
+    expect(editado.statusCode, editado.body).toBe(200);
+    // Nome vazio mantém o salvo; telefone vai só com números.
+    expect(editado.json()).toMatchObject({ customerNameSnapshot: nome, customerPhoneSnapshot: '92988770001', workAddressSnapshot: 'Rua das Pedras, 10' });
+    expect((await request('GET', `/customers/${q.customerId}`)).json()).toMatchObject({ name: nome, phone: '92988770001', address: 'Rua das Pedras, 10' });
+    const pdf = execFileSync('pdftotext', ['-', '-'], { input: (await request('GET', `/quotes/${q.id}/pdf`)).rawPayload, encoding: 'utf8' });
+    expect(pdf).toContain('Rua das Pedras, 10'); expect(pdf).toContain('92988770001');
+    // Telefone de outro cliente é recusado; outro vendedor não edita o contato deste orçamento.
+    const outro = await customer();
+    expect((await request('PATCH', `/quotes/${q.id}/contact`, { phone: outro.phone })).statusCode).toBe(409);
+    const email = `contato-${Date.now()}@example.test`;
+    expect((await request('POST', '/users', { name: 'Vendedor do contato', email, password: 'Contato@2026', role: 'SELLER', maxDiscountPercent: 5 })).statusCode).toBe(201);
+    const vendedor = { authorization: `Bearer ${(await request('POST', '/auth/login', { email, password: 'Contato@2026' }, {})).json().accessToken}` };
+    expect([403, 404]).toContain((await request('PATCH', `/quotes/${q.id}/contact`, { phone: '92988770002' }, vendedor)).statusCode);
+    expect((await request('GET', `/customers/${q.customerId}`)).json().phone).toBe('92988770001');
+  });
   it('validade sempre 10 dias úteis após a emissão; observações do orçamento pela tela do orçamento, sem se perder ao editar', async () => {
     // A validade enviada é ignorada: vale sempre a regra dos 10 dias úteis.
     const q = await quote({ validUntil: '2030-01-01' });

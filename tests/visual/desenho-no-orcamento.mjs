@@ -43,6 +43,8 @@ const esperado = estimarDesenho(documento, { materials: catalogo.materials, serv
 const reais = valor => valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const desenhos = [{ id: 'cm000000000000000000banho', nome: 'Banheiro', atualizadoEm: '2026-09-20T12:00:00.000Z', pecas: 1, usadoEm: [{ quoteId: 'q1', number: 'ORC-0921' }] }];
 let versao = 1, salvamentos = 0;
+const copias = [];
+const sincronizacoes = [];
 
 await page.route('**/api/**', async route => {
   const url = new URL(route.request().url());
@@ -71,6 +73,19 @@ await page.route('**/api/**', async route => {
   }
   if (path === '/api/designs/cm00000000000000000novo01/draft') return route.fulfill({ json: { design: { id: 'cm00000000000000000novo01', name: 'Desenho técnico', project: { id: 'p', name: 'Cozinha', job: { customer: { name: cliente.name, phone: cliente.phone } } } }, draft: { id: 'rascunho', version: versao, schemaVersion: 1, document: documento, updatedAt: new Date().toISOString() }, diagnostics: [] } });
   if (path === '/api/designs/cm00000000000000000novo01') return route.fulfill({ json: { revisions: [] } });
+  // Antes de abrir o desenho de um projeto do orçamento, ele recebe o que mudou no Orçamento Rápido.
+  if (/^\/api\/designs\/[^/]+\/sincronizar$/.test(path) && method === 'POST') {
+    const body = route.request().postDataJSON();
+    sincronizacoes.push({ path, ...body });
+    return route.fulfill({ json: { sincronia: { ...body.sincronia, base: body.projeto }, avisos: ['Bancada · parte 1: a medida mudou no orçamento, mas peças em L, U, com curva ou em desenho livre mudam de medida só no desenho técnico.'], versao: versao + 1, nome: body.projeto.nome, alterado: false } });
+  }
+  // Projeto duplicado: o desenho técnico dele é copiado, e a cópia fica só com a cópia do desenho.
+  if (path === '/api/designs/cm00000000000000000novo01/copy' && method === 'POST') {
+    const body = route.request().postDataJSON();
+    copias.push(body);
+    desenhos.unshift({ id: 'cm0000000000000000copia01', nome: body.name, atualizadoEm: new Date().toISOString(), pecas: 1, usadoEm: [] });
+    return route.fulfill({ status: 201, json: { designId: 'cm0000000000000000copia01', projectId: 'p2', nome: body.name, versao: 1 } });
+  }
   errors.push('API não prevista: ' + method + ' ' + path);
   return route.fulfill({ status: 404, json: {} });
 });
@@ -85,7 +100,7 @@ try {
   // 1) Sem cliente: pede o cliente (ou um orçamento sem cadastro) antes de desenhar.
   await page.getByRole('button', { name: /^Desenho técnico/ }).click();
   const janela = page.locator('.orc-desenho-janela');
-  await janela.getByText('Escolha o cliente deste orçamento primeiro.', { exact: false }).waitFor();
+  await janela.getByText('Selecione primeiro o cliente deste orçamento.', { exact: false }).waitFor();
   await janela.getByRole('button', { name: 'Escolher cliente' }).click();
   await page.locator('.customer-dialog .search').fill('Maria');
   await page.locator('.customer-result').filter({ hasText: 'Maria Silva' }).click();
@@ -95,8 +110,8 @@ try {
   await janela.getByText('Banheiro', { exact: true }).waitFor();
   await janela.getByText(/Usado em ORC-0921/).waitFor();
   await shot('01-rascunhos-do-cliente');
-  await janela.getByLabel('Novo desenho').fill('Cozinha');
-  await janela.getByRole('button', { name: 'Começar desenho' }).click();
+  await janela.getByLabel('Desenho em branco, sem ligar a um projeto').fill('Cozinha');
+  await janela.getByRole('button', { name: 'Começar em branco' }).click();
 
   // 3) Editor em tela cheia, sem conferência para o vendedor, com o valor pelas regras do orçamento.
   const tela = page.getByRole('dialog', { name: 'Desenho técnico do orçamento' });
@@ -118,8 +133,12 @@ try {
   const total = await page.locator('.quote-summary-card .summary-grand-total').innerText();
   assert(total.includes(reais(esperado.total)), `resumo ${total} × desenho ${reais(esperado.total)}`);
   assert.equal(await page.locator('#project-name').inputValue(), 'Cozinha');
-  await page.getByText(/Este projeto veio do desenho técnico “Cozinha”/).waitFor();
+  await page.getByText(/Desenho técnico deste projeto: “Cozinha”/).waitFor();
   await shot('03-resumo-com-o-desenho');
+
+  // 4b) O U vira três partes no orçamento: a medida delas muda no desenho (avisado em cada parte).
+  await page.getByText('Parte de uma peça em L ou U do desenho técnico: a medida muda no desenho.').first().waitFor();
+  await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('3,00');
 
   // 5) De volta à lista: o desenho aparece como "Neste orçamento".
   await page.getByRole('button', { name: /^Desenho técnico/ }).click();
@@ -138,6 +157,34 @@ try {
   await tela.getByRole('button', { name: '← Voltar ao orçamento' }).click();
   await tela.waitFor({ state: 'detached' });
   await page.setViewportSize({ width: 1440, height: 950 });
+  // Ao abrir, o desenho recebeu o projeto do orçamento como está agora e o vínculo guardado no "Usar no orçamento".
+  assert.equal(sincronizacoes.length, 1, 'sincroniza antes de abrir o desenho do projeto');
+  const [enviada] = sincronizacoes;
+  assert.equal(enviada.path, '/api/designs/cm00000000000000000novo01/sincronizar');
+  assert.equal(enviada.projeto.nome, 'Cozinha');
+  assert.equal(enviada.projeto.pecas[0].lengthMm, 3000, 'medida de agora');
+  assert.notEqual(enviada.sincronia.base.pecas[0].lengthMm, 3000, 'base: como estava ao usar o desenho');
+  assert.deepEqual(new Set(Object.values(enviada.sincronia.pecas).map(origem => origem.forma)), new Set(['COMPOSTA']), 'as partes do U vieram marcadas');
+  await page.getByText(/mudam de medida só no desenho técnico/).waitFor();
+
+  // 6b) Duplicar o projeto: a cópia ganha uma cópia do desenho técnico, só dela.
+  await page.getByRole('button', { name: 'Duplicar projeto', exact: true }).click();
+  const janelaDuplicar = page.getByRole('dialog', { name: 'Duplicar projeto' });
+  await janelaDuplicar.getByText('O desenho técnico do projeto também é copiado, com este nome.').waitFor();
+  await janelaDuplicar.getByLabel('Nome do novo projeto').fill('Cozinha da varanda');
+  await janelaDuplicar.getByRole('button', { name: 'Duplicar', exact: true }).click();
+  await janelaDuplicar.waitFor({ state: 'detached' });
+  await page.getByText(/Desenho técnico deste projeto: “Cozinha da varanda”/).waitFor();
+  assert.equal(await page.locator('#project-name').inputValue(), 'Cozinha da varanda');
+  assert.deepEqual(copias, [{ name: 'Cozinha da varanda' }], 'o desenho copiado leva o nome do novo projeto');
+  await page.getByRole('button', { name: /^Projeto:/ }).click();
+  await page.getByRole('menu').getByRole('menuitemradio', { name: 'Cozinha', exact: true }).click();
+  await page.getByText(/Desenho técnico deste projeto: “Cozinha”/).waitFor();
+  // Na lista do cliente, os dois desenhos: cada projeto com o seu.
+  await page.getByRole('button', { name: /^Desenho técnico/ }).click();
+  for (const nome of ['Cozinha', 'Cozinha da varanda']) await janela.locator('li').filter({ has: page.getByText(nome, { exact: true }) }).getByText('Neste orçamento').waitFor();
+  await shot('06-projeto-duplicado-com-desenho');
+  await janela.getByRole('button', { name: 'Fechar' }).last().click();
 
   // 7) Clientes: cadastrados e sem cadastro em abas separadas.
   await page.goto(base + '/clientes');
@@ -150,7 +197,7 @@ try {
   assert.equal(await lista.getByText('Maria Silva', { exact: true }).count(), 0);
   await shot('04-clientes-sem-cadastro');
   assert.deepEqual(errors, []);
-  console.log('OK: desenho técnico dentro do Novo orçamento — pede cliente, lista rascunhos do cliente, valor com M² fechado igual ao do domínio, usar no orçamento leva o mesmo valor ao resumo; clientes separados em cadastrados e sem cadastro.');
+  console.log('OK: desenho técnico dentro do Novo orçamento — pede cliente, lista rascunhos do cliente, valor com M² fechado igual ao do domínio, usar no orçamento leva o mesmo valor ao resumo; projeto duplicado (com o nome escolhido) ganha uma cópia do desenho técnico com o mesmo nome, só dele; clientes separados em cadastrados e sem cadastro.');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

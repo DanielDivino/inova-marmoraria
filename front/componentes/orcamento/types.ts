@@ -10,7 +10,9 @@ export type DraftComponent = { materialId?: string;
   /** Orçamento Rápido, peitoril de duas pedras sobrepostas — ver DetalhePeitorilDuplo.
    * O comprimento é o normal (lengthCm, compartilhado pelas duas pedras); só a
    * largura se divide nesses 4 valores independentes (sem fórmula entre eles). */
-  sillTopWidthCm?: string; sillBottomWidthCm?: string; sillFinalWidthCm?: string; sillOverlapCm?: string };
+  sillTopWidthCm?: string; sillBottomWidthCm?: string; sillFinalWidthCm?: string; sillOverlapCm?: string;
+  /** Acabamento "Cantos arredondados": as 4 pontas com este raio (cm); vira a peça "Arredondada" do desenho técnico. */
+  raioCantosCm?: string };
 export type DraftCutout = { id: string; componentIndex?: number; cutoutType: CutoutType; sizePending?: boolean; label: string; lengthCm?: string; widthCm?: string; diameterCm?: string; positionXCm?: string; positionYCm?: string; quantity: number; serviceId?: string; appliedTotal?: string };
 export type DraftItem = {
   id: string;

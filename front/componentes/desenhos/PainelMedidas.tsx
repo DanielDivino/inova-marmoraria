@@ -6,6 +6,7 @@ import { CampoMedida } from './CampoMedida';
 import { pontoDaCota } from './CotasLivres';
 import { PainelPeca } from './PainelPeca';
 import { PainelRecurso } from './PainelRecurso';
+import { confirmar } from '../Confirmacao';
 import { FONTE_TEXTO_PADRAO_MM, type MaterialVisual, type Selecao } from './tipos';
 
 /** Painel de propriedades: o que estiver selecionado (peça, componente, vértice ou texto) e a conferência do desenho. */
@@ -28,7 +29,7 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
   return <div className="tec-painel">
     {peca && <PainelPeca key={peca.id} documento={documento} peca={peca} materiais={materiais} aoMudar={aoMudar} aoAbrirLado={(ladoId) => aoAbrirLado(peca.id, ladoId)} aoMarcarArea={aoMarcarArea}
       aoDuplicar={() => { const id = criarId(); aoMudar(duplicatePiece(documento, peca.id, id)); aoSelecionar({ tipo: 'peca', id }); }}
-      aoExcluir={() => { if (window.confirm(`Excluir ${nomeDaPeca(peca, documento.pieces)}? Cubas, recortes e faixas dela também saem.`)) { aoMudar(deletePiece(documento, peca.id)); aoSelecionar(null); } }} />}
+      aoExcluir={() => void confirmar({ titulo: `Excluir ${nomeDaPeca(peca, documento.pieces)}?`, mensagem: 'Cubas, recortes e faixas da peça também serão excluídos. Use Ctrl+Z para desfazer.', confirmar: 'Excluir peça', perigo: true }).then((sim) => { if (sim) { aoMudar(deletePiece(documento, peca.id)); aoSelecionar(null); } })} />}
     {recurso && paiDoRecurso && <PainelRecurso key={recurso.id} recurso={recurso} peca={paiDoRecurso} nomePeca={nomeDaPeca(paiDoRecurso, documento.pieces)} aoMudar={(patch) => mudarRecurso(recurso.id, patch)}
       aoExcluir={() => { aoMudar({ ...documento, features: documento.features.filter((entrada) => entrada.id !== recurso.id) }); aoSelecionar(null); }} />}
     {vertice && pecaDoVertice && <section className="tec-painel-secao" aria-label="Vértice">
@@ -36,7 +37,7 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
       <label className="tec-campo">Curvatura do lado seguinte
         <input type="range" min="-1" max="1" step=".05" value={vertice.bulge} onChange={(evento) => mudarContorno(pecaDoVertice.contour.map((entrada) => entrada.id === vertice.id ? { ...entrada, bulge: Number(evento.target.value) } : entrada))} />
       </label>
-      <small className="tec-dica">0 deixa o lado reto; perto de 1 ou −1 vira meio círculo para um lado ou para o outro.</small>
+      <small className="tec-dica">0 mantém o lado reto; valores próximos de 1 ou −1 formam um semicírculo para um lado ou para o outro.</small>
       <div className="tec-acoes">
         <button type="button" className="botao-contorno" onClick={() => mudarContorno(pecaDoVertice.contour.map((entrada) => entrada.id === vertice.id ? { ...entrada, bulge: 0 } : entrada))}>Tornar reto</button>
         <button type="button" className="botao-contorno" disabled={pecaDoVertice.contour.length <= 3} onClick={() => { mudarContorno(pecaDoVertice.contour.filter((entrada) => entrada.id !== vertice.id)); aoSelecionar({ tipo: 'peca', id: pecaDoVertice.id }); }}>Remover vértice</button>
@@ -45,11 +46,11 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
     {texto && <section className="tec-painel-secao" aria-label="Texto">
       <label className="tec-campo">Texto<textarea rows={3} value={texto.text} autoFocus onChange={(evento) => aoMudar({ ...documento, annotations: documento.annotations.map((entrada) => entrada.id === texto.id ? { ...entrada, text: evento.target.value || ' ' } : entrada) })} /></label>
       <CampoMedida rotulo="Tamanho da letra" valorMm={texto.fontSizeMm ?? FONTE_TEXTO_PADRAO_MM} onChange={(fontSizeMm) => aoMudar({ ...documento, annotations: documento.annotations.map((entrada) => entrada.id === texto.id ? { ...entrada, fontSizeMm } : entrada) })} />
-      <small className="tec-dica">Arraste o texto no desenho para mudar de lugar. Sai igual no PDF técnico.</small>
+      <small className="tec-dica">Arraste o texto no desenho para reposicioná-lo. A posição é mantida no PDF técnico.</small>
       <button type="button" className="botao-contorno tec-perigo" onClick={() => { aoMudar({ ...documento, annotations: documento.annotations.filter((entrada) => entrada.id !== texto.id) }); aoSelecionar(null); }}>Excluir texto</button>
     </section>}
     {!peca && !recurso && !vertice && !texto && <section className="tec-painel-secao">
-      <p className="tec-dica">Arraste um lado para esticar ou encolher a peça (os lados vizinhos acompanham). Toque num lado ou na medida para digitar outra; toque numa cuba ou num texto para editar. Com uma peça selecionada, Delete apaga (Ctrl+Z desfaz).</p>
+      <p className="tec-dica">Arraste um lado para aumentar ou reduzir a peça (os lados adjacentes acompanham). Toque em um lado ou em uma medida para informar outro valor; toque em uma cuba ou em um texto para editá-los. Com uma peça selecionada, a tecla Delete a exclui (Ctrl+Z desfaz).</p>
       {documento.pieces.length > 0 && <div className="tec-lista-pecas">{documento.pieces.map((entrada) => <button type="button" key={entrada.id} className="botao-contorno" onClick={() => aoSelecionar({ tipo: 'peca', id: entrada.id })}>{entrada.locked ? '🔒 ' : ''}{nomeDaPeca(entrada, documento.pieces)}</button>)}</div>}
     </section>}
     {documento.dimensions.length > 0 && <section className="tec-painel-secao" aria-label="Cotas livres">

@@ -4,10 +4,20 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { apresentacaoPrazo, ROLE_LABELS, temPermissao } from '@inova/domain';
+import { ListasDeSelecao } from './ListasDeSelecao';
+import { JanelasDeConfirmacao } from './Confirmacao';
 import { api, encerrarSessao, type SessionUser } from '../utilitarios/api';
 
 const SessionContext = createContext<SessionUser | null>(null);
 export function useSession() { return useContext(SessionContext); }
+/** Seta de voltar da barra de cima no celular: a tela de detalhe diz para onde ela leva. */
+type Voltar = { rotulo: string; href: string } | null;
+const VoltarContext = createContext<(voltar: Voltar) => void>(() => {});
+export function useVoltarNoTopo(voltar: Voltar) {
+  const definir = useContext(VoltarContext);
+  const chave = voltar ? `${voltar.href}|${voltar.rotulo}` : '';
+  useEffect(() => { if (!voltar) return; definir(voltar); return () => definir(null); }, [chave]); // eslint-disable-line react-hooks/exhaustive-deps
+}
 
 function NavigationIcon({ name }: { name: string }) {
   const paths: Record<string, ReactNode> = {
@@ -34,6 +44,14 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
   const [leaving, setLeaving] = useState(false);
   const [logoutError, setLogoutError] = useState('');
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [voltar, setVoltar] = useState<Voltar>(null);
+  // Orçamento aberto pelo Fluxo, por um cliente, pelo Dashboard ou pelo Histórico: o menu marca essa seção.
+  const [secaoDeOrigem, setSecaoDeOrigem] = useState<string | null>(null);
+  useEffect(() => {
+    const de = new URLSearchParams(window.location.search).get('de');
+    const secao = ({ fluxo: '/fluxo', cliente: '/clientes', dashboard: '/dashboard', historico: '/historico' } as Record<string, string>)[de ?? ''];
+    setSecaoDeOrigem(secao && (pathname.startsWith('/orcamentos/') || pathname.startsWith('/projetos/')) ? secao : null);
+  }, [pathname]);
   const mobileMenu = useRef<HTMLDialogElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [darkTheme, setDarkTheme] = useState(false);
@@ -113,10 +131,10 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
     ...(user.role === 'SUPER_ADMIN' || temPermissao(user.role, 'administration') ? [{ href: user.role === 'SUPER_ADMIN' ? '/funcionarios' : '/usuarios', label: 'Funcionários', icon: 'workers', inclui: ['/funcionarios', '/usuarios'] }] : []),
     { href: '/historico', label: 'Histórico', icon: 'history' },
   ];
-  const ativo = (link: typeof links[number]) => link.href === '/' ? pathname === '/' : [link.href, ...(link.inclui ?? [])].some((prefixo) => pathname.startsWith(prefixo));
+  const ativo = (link: typeof links[number]) => secaoDeOrigem ? link.href === secaoDeOrigem : link.href === '/' ? pathname === '/' : [link.href, ...(link.inclui ?? [])].some((prefixo) => pathname.startsWith(prefixo));
   const navigation = <nav aria-label="Menu principal">{links.map((link) => { const selected = ativo(link); return <Link key={link.href} href={link.href} onClick={() => mobileMenu.current?.close()} className={selected ? 'active' : ''} aria-current={selected ? 'page' : undefined}><span aria-hidden="true"><NavigationIcon name={link.icon} /></span>{link.label}</Link>; })}</nav>;
   const mobileTitle = links.find(ativo)?.label ?? 'Inova Marmoraria';
-  return <SessionContext.Provider value={user}><div className="application-frame">
+  return <SessionContext.Provider value={user}><VoltarContext.Provider value={setVoltar}><div className="application-frame">
     <aside className="application-sidebar"><Link className="application-brand" href="/" aria-label="Inova — novo orçamento"><img src="/inova-logo.png" alt="Inova Marmoraria" /></Link>
       <span className="sidebar-section-label">ÁREA DE TRABALHO</span>
       {navigation}
@@ -129,6 +147,6 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
       {navigation}
       <div className="mobile-menu-account"><strong>{user.name}</strong><small>{ROLE_LABELS[user.role]}</small><button type="button" className="secondary-button" onClick={signOut} disabled={leaving}>{leaving ? 'Saindo…' : 'Sair da conta'}</button>{logoutError && <p role="alert" className="form-error">{logoutError}</p>}</div>
     </aside>
-  </dialog><div className="application-content"><div className="application-header-actions"><button type="button" className="notification-bell mobile-menu-toggle" aria-label="Abrir menu" aria-haspopup="dialog" aria-controls="mobile-navigation" aria-expanded={menuOpen} onClick={() => { setAlertsOpen(false); mobileMenu.current?.showModal(); setMenuOpen(true); }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button><strong className="mobile-header-title">{mobileTitle}</strong><div id="application-header-tabs" className="application-header-tabs" />{pathname === '/mostruario' && <Link className="showcase-header-request" href="/">Solicitar orçamento <span>→</span></Link>}<button type="button" className="notification-bell" aria-label="Notificações de prazo" aria-expanded={alertsOpen} aria-controls="deadline-notifications" onClick={() => setAlertsOpen((open) => !open)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>{alerts.length > 0 && <b>{alerts.length}</b>}</button><button type="button" className="notification-bell theme-toggle" aria-label={darkTheme ? 'Ativar tema claro' : 'Ativar tema escuro'} title={darkTheme ? 'Tema claro' : 'Tema escuro'} aria-pressed={darkTheme} onClick={toggleTheme}>{darkTheme ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></svg>}</button><div className="header-account"><span className="account-avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span><div><strong>{user.name}</strong><small>{ROLE_LABELS[user.role]}</small></div><button type="button" onClick={signOut} disabled={leaving}>{leaving ? 'Saindo…' : 'Sair'}</button></div>{alertsOpen && <aside id="deadline-notifications" className="notification-panel" aria-label="Notificações de prazo"><strong>Prazos de projetos</strong>{alerts.length ? alerts.map((alert) => <Link onClick={() => setAlertsOpen(false)} href={`/orcamentos/${alert.id}`} key={alert.id} className={`deadline-alert ${alert.status.toLowerCase()}`}><b>{alert.number}</b><span>{alert.customerName}{alert.projectName ? ` · ${alert.projectName}` : ''}</span><small>{apresentacaoPrazo(alert.dueDate)?.description ?? alert.label}</small></Link>) : <p>Nenhum prazo exige atenção.</p>}</aside>}</div>{logoutError && <p role="alert" className="form-error header-logout-error">{logoutError}</p>}{allowed ? children : <main className="list-page"><h1>Acesso restrito</h1><p>Seu perfil não tem acesso a esta área.</p><Link href="/orcamentos">Voltar aos seus orçamentos</Link></main>}</div>
-  </div></SessionContext.Provider>;
+  </dialog><div className="application-content"><div className="application-header-actions"><button type="button" className="notification-bell mobile-menu-toggle" aria-label="Abrir menu" aria-haspopup="dialog" aria-controls="mobile-navigation" aria-expanded={menuOpen} onClick={() => { setAlertsOpen(false); mobileMenu.current?.showModal(); setMenuOpen(true); }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>{voltar && <Link className="mobile-voltar" href={voltar.href} aria-label={`Voltar para ${voltar.rotulo}`} title={`Voltar para ${voltar.rotulo}`}>‹</Link>}<strong className="mobile-header-title">{mobileTitle}</strong><div id="application-header-tabs" className="application-header-tabs" />{pathname === '/mostruario' && <Link className="showcase-header-request" href="/">Solicitar orçamento <span>→</span></Link>}<button type="button" className="notification-bell" aria-label="Notificações de prazo" aria-expanded={alertsOpen} aria-controls="deadline-notifications" onClick={() => setAlertsOpen((open) => !open)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>{alerts.length > 0 && <b>{alerts.length}</b>}</button><button type="button" className="notification-bell theme-toggle" aria-label={darkTheme ? 'Ativar tema claro' : 'Ativar tema escuro'} title={darkTheme ? 'Tema claro' : 'Tema escuro'} aria-pressed={darkTheme} onClick={toggleTheme}>{darkTheme ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></svg>}</button><div className="header-account"><span className="account-avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span><div><strong>{user.name}</strong><small>{ROLE_LABELS[user.role]}</small></div><button type="button" onClick={signOut} disabled={leaving}>{leaving ? 'Saindo…' : 'Sair'}</button></div>{alertsOpen && <aside id="deadline-notifications" className="notification-panel" aria-label="Notificações de prazo"><strong>Prazos de projetos</strong>{alerts.length ? alerts.map((alert) => <Link onClick={() => setAlertsOpen(false)} href={`/orcamentos/${alert.id}`} key={alert.id} className={`deadline-alert ${alert.status.toLowerCase()}`}><b>{alert.number}</b><span>{alert.customerName}{alert.projectName ? ` · ${alert.projectName}` : ''}</span><small>{apresentacaoPrazo(alert.dueDate)?.description ?? alert.label}</small></Link>) : <p>Nenhum prazo exige atenção.</p>}</aside>}</div>{logoutError && <p role="alert" className="form-error header-logout-error">{logoutError}</p>}{allowed ? children : <main className="list-page"><h1>Acesso restrito</h1><p>Seu perfil não possui acesso a esta área.</p><Link href="/orcamentos">Voltar aos seus orçamentos</Link></main>}</div>
+  </div><ListasDeSelecao /><JanelasDeConfirmacao /></VoltarContext.Provider></SessionContext.Provider>;
 }

@@ -40,20 +40,7 @@ export async function registrarRotasClientes(app: FastifyInstance) {
     const input = customerSchema.parse(body); await validarContatoUnico(input);
     return reply.status(201).send(await prisma.customer.create({ data: { ...input, ownerId: request.user.id } }).catch(tratarConflitoContato));
   });
-  app.patch('/:id', authenticated, async (request) => {
-    const { id } = idSchema.parse(request.params); const input = customerUpdateSchema.parse(request.body);
-    const customer = await prisma.customer.findUnique({ where: { id } }); if (!customer) throw new AppError(404, 'Cliente não encontrado.', 'NOT_FOUND');
-    await validarContatoUnico(input, id);
-    // Sem cadastro (cliente rápido): ao ganhar telefone vira cadastro completo, e os orçamentos dele passam a mostrar os dados informados.
-    return prisma.$transaction(async (tx) => {
-      const updated = await tx.customer.update({ where: { id }, data: { ...input, ...(customer.isQuick && input.phone ? { isQuick: false } : {}) } });
-      if (customer.isQuick) {
-        await tx.quote.updateMany({ where: { customerId: id }, data: { customerNameSnapshot: updated.name, customerPhoneSnapshot: updated.phone } });
-        if (updated.address) await tx.quote.updateMany({ where: { customerId: id, workAddressSnapshot: null }, data: { workAddressSnapshot: updated.address } });
-      }
-      return updated;
-    }).catch(tratarConflitoContato);
-  });
+  app.patch('/:id', authenticated, async (request) => atualizarCliente(idSchema.parse(request.params).id, request.body));
   app.patch('/:id/owner', { preHandler: [app.authenticate, exigirPermissao('administration')] }, async (request) => {
     const { id } = idSchema.parse(request.params);
     const { ownerId } = z.object({ ownerId: z.string().cuid().nullable() }).strict().parse(request.body);
@@ -69,6 +56,23 @@ export async function registrarRotasClientes(app: FastifyInstance) {
 }
 
 /** Próximo número livre para "Sem cadastro N" (orçamento sem cadastro). */
+/**
+ * Atualiza o contato do cliente. Sem cadastro (cliente rápido): ao ganhar telefone vira cadastro completo,
+ * e os orçamentos dele passam a mostrar os dados informados.
+ */
+export async function atualizarCliente(id: string, entrada: unknown) {
+  const input = customerUpdateSchema.parse(entrada);
+  const customer = await prisma.customer.findUnique({ where: { id } }); if (!customer) throw new AppError(404, 'Cliente não encontrado.', 'NOT_FOUND');
+  await validarContatoUnico(input, id);
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.customer.update({ where: { id }, data: { ...input, ...(customer.isQuick && input.phone ? { isQuick: false } : {}) } });
+    if (customer.isQuick) {
+      await tx.quote.updateMany({ where: { customerId: id }, data: { customerNameSnapshot: updated.name, customerPhoneSnapshot: updated.phone } });
+      if (updated.address) await tx.quote.updateMany({ where: { customerId: id, workAddressSnapshot: null }, data: { workAddressSnapshot: updated.address } });
+    }
+    return updated;
+  }).catch(tratarConflitoContato);
+}
 async function proximoNumeroSemCadastro() {
   const clientes = await prisma.customer.findMany({ where: { name: { startsWith: 'Sem cadastro ' } }, select: { name: true } });
   return Math.max(0, ...clientes.map(({ name }) => Number(/^Sem cadastro (\d+)$/.exec(name)?.[1] ?? 0))) + 1;

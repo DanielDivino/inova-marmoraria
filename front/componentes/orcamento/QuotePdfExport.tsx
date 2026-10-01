@@ -1,67 +1,76 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react';
 import { buscarArquivoApi } from '../../utilitarios/api';
 import { nomeArquivoPdf } from '@inova/domain';
 import { abrirPdf } from '../../utilitarios/abrir-pdf';
 import styles from './QuotePdfExport.module.css';
 import { Icone } from '../filtros/Filtros';
 
-/** Abre só as folhas de OS de um projeto, prontas para imprimir, sem a folha comercial. */
-export function ImprimirDesenhoProjeto({ quoteId, itemId, quoteNumber, customerName, projectName }: { quoteId: string; itemId: string; quoteNumber: string; customerName: string; projectName: string }) {
+/** O que o orçamento (ou o projeto) tem para ir no PDF; o que não tem fica apagado no Exportar. */
+export type PartesDisponiveis = { desenhos: boolean; tecnico: boolean };
+type Partes = { orcamento: boolean; valores: boolean; desenhos: boolean; tecnico: boolean };
+
+/**
+ * Exportar: caixinhas independentes e tudo no mesmo PDF, nesta ordem — orçamento, desenhos em
+ * ordem de serviço e desenho técnico. O mesmo no orçamento todo (topo) e em cada projeto.
+ */
+function Exportar({ caminho, arquivo, disponivel, titulo, noProjeto = false }: { caminho: string; arquivo: string; disponivel: PartesDisponiveis; titulo: string; noProjeto?: boolean }) {
+  const panelId = useId();
+  const caixa = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [partes, setPartes] = useState<Partes>({ orcamento: true, valores: false, desenhos: true, tecnico: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  async function imprimir() {
-    if (loading) return;
-    setLoading(true); setError('');
-    try {
-      const file = await buscarArquivoApi(`/quotes/${quoteId}/items/${itemId}/drawing-pdf`);
-      abrirPdf(file, nomeArquivoPdf(customerName, `${quoteNumber} - ${projectName}`));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível gerar o desenho.');
-    } finally { setLoading(false); }
-  }
-  return <>
-    <button type="button" className={`secondary-button ${styles.printDrawing}`} disabled={loading} onClick={imprimir}>{loading ? 'Gerando…' : 'Imprimir desenho'}</button>
-    {error && <p role="alert" className="form-error">{error}</p>}
-  </>;
-}
-
-export function ExportarPdfOrcamento({ quoteId, quoteNumber, customerName, hasDrawings = true }: { quoteId: string; quoteNumber: string; customerName: string; hasDrawings?: boolean }) {
-  const panelId = useId();
-  const [open, setOpen] = useState(false);
-  const [individualPrices, setIndividualPrices] = useState(false);
-  const [drawings, setDrawings] = useState(hasDrawings);
   useEffect(() => {
+    if (noProjeto) return;
+    // Depois de salvar um orçamento, o Exportar do topo já abre (…?pdf=1).
     const params = new URLSearchParams(window.location.search);
     if (params.get('pdf') === '1') setOpen(true);
-    if (params.has('individualPrices')) setIndividualPrices(params.get('individualPrices') === 'true');
-  }, []);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+    if (params.has('individualPrices')) setPartes((atual) => ({ ...atual, valores: params.get('individualPrices') === 'true' }));
+  }, [noProjeto]);
+  useEffect(() => {
+    if (!open) return;
+    const fora = (event: PointerEvent) => { if (!caixa.current?.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener('pointerdown', fora);
+    return () => document.removeEventListener('pointerdown', fora);
+  }, [open]);
+  // O que não existe fica desmarcado, mesmo que a última escolha tenha sido marcá-lo.
+  const marcado = { ...partes, valores: partes.orcamento && partes.valores, desenhos: partes.desenhos && disponivel.desenhos, tecnico: partes.tecnico && disponivel.tecnico };
+  const algumaParte = marcado.orcamento || marcado.desenhos || marcado.tecnico;
+  const alternar = (parte: keyof Partes) => (event: ChangeEvent<HTMLInputElement>) => setPartes((atual) => ({ ...atual, [parte]: event.target.checked }));
 
   async function generate() {
-    if (loading) return;
+    if (loading || !algumaParte) return;
     setLoading(true); setError('');
     try {
-      const query = new URLSearchParams({ individualPrices: String(individualPrices), drawings: String(drawings) });
-      const file = await buscarArquivoApi(`/quotes/${quoteId}/pdf?${query}`);
-      abrirPdf(file, nomeArquivoPdf(customerName, quoteNumber));
+      const query = new URLSearchParams({ commercial: String(marcado.orcamento), individualPrices: String(marcado.valores), drawings: String(marcado.desenhos), technical: String(marcado.tecnico) });
+      abrirPdf(await buscarArquivoApi(`${caminho}?${query}`), arquivo);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível gerar o PDF.');
     } finally { setLoading(false); }
   }
 
-  return <div className={styles.export}>
-    <button type="button" className="botao-contorno" title="Orçamento ou OS em PDF" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}><Icone nome="download" />Exportar<Icone nome="seta" tamanho={16} /></button>
-    {open && <section id={panelId} className={styles.panel} aria-label="Opções do PDF" onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
+  return <div ref={caixa} className={`${styles.export}${noProjeto ? ` ${styles.doProjeto}` : ''}`} onKeyDown={event => { if (event.key === 'Escape' && open) { event.stopPropagation(); setOpen(false); } }}>
+    <button type="button" className="botao-contorno" title={titulo} aria-label={noProjeto ? titulo : undefined} aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}><Icone nome="download" />Exportar<Icone nome="seta" tamanho={16} /></button>
+    {open && <section id={panelId} className={styles.panel} aria-label="Opções do PDF">
       <strong>Como deseja gerar o PDF?</strong>
-      <label><input type="checkbox" checked={individualPrices} disabled={loading} onChange={event => setIndividualPrices(event.target.checked)} />Exibir valores individuais</label>
-      <label><input type="checkbox" checked={hasDrawings && drawings} disabled={loading || !hasDrawings} onChange={event => setDrawings(event.target.checked)} />Incluir desenhos e OS</label>
-      {!hasDrawings && <small>Desenho pendente. O orçamento usa o modelo habitual, com todos os valores.</small>}
-      <small>O total e o desconto no Pix aparecem em todas as versões. Sem desenhos, será gerado apenas o orçamento.</small>
+      <label><input type="checkbox" checked={marcado.orcamento} disabled={loading} onChange={alternar('orcamento')} />Incluir orçamento</label>
+      <label className={styles.subopcao}><input type="checkbox" checked={marcado.valores} disabled={loading || !marcado.orcamento} onChange={alternar('valores')} />Exibir valores individuais</label>
+      <label title={disponivel.desenhos ? undefined : noProjeto ? 'Este projeto ainda não tem desenho.' : 'Nenhum projeto tem desenho.'}><input type="checkbox" checked={marcado.desenhos} disabled={loading || !disponivel.desenhos} onChange={alternar('desenhos')} />Incluir desenhos em ordem de serviço</label>
+      <label title={disponivel.tecnico ? undefined : noProjeto ? 'Este projeto ainda não tem desenho técnico.' : 'Nenhum projeto tem desenho técnico.'}><input type="checkbox" checked={marcado.tecnico} disabled={loading || !disponivel.tecnico} onChange={alternar('tecnico')} />Incluir desenho técnico</label>
       {error && <p role="alert" className="form-error">{error}</p>}
-      <button type="button" className="primary-button" disabled={loading} onClick={generate}>{loading ? 'Gerando…' : 'Gerar PDF'}</button>
+      <button type="button" className="primary-button" disabled={loading || !algumaParte} onClick={generate}>{loading ? 'Gerando…' : 'Gerar PDF'}</button>
     </section>}
   </div>;
+}
+
+/** Exportar do orçamento todo (topo da tela do orçamento). */
+export function ExportarPdfOrcamento({ quoteId, quoteNumber, customerName, disponivel }: { quoteId: string; quoteNumber: string; customerName: string; disponivel: PartesDisponiveis }) {
+  return <Exportar caminho={`/quotes/${quoteId}/pdf`} arquivo={nomeArquivoPdf(customerName, quoteNumber)} disponivel={disponivel} titulo="Orçamento, desenhos e desenho técnico em PDF" />;
+}
+
+/** Exportar de um projeto só, no cartão do projeto. */
+export function ExportarPdfProjeto({ quoteId, itemId, quoteNumber, customerName, projectName, disponivel }: { quoteId: string; itemId: string; quoteNumber: string; customerName: string; projectName: string; disponivel: PartesDisponiveis }) {
+  return <Exportar caminho={`/quotes/${quoteId}/items/${itemId}/pdf`} arquivo={nomeArquivoPdf(customerName, `${quoteNumber} - ${projectName}`)} disponivel={disponivel} titulo={`Exportar ${projectName}`} noProjeto />;
 }

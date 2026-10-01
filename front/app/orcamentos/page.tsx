@@ -10,6 +10,8 @@ import { useSession } from '../../componentes/ApplicationShell';
 import { api } from '../../utilitarios/api';
 import { AbasFiltro, CampoFiltro, Icone, MenuSelecao, ModalFiltros, useCelular, type NomeIcone } from '../../componentes/filtros/Filtros';
 import { intervaloDoPeriodo, OPCOES_PERIODO, periodoSelecionado, type OpcaoPeriodo } from '../../utilitarios/periodos';
+import { useFiltrosNaUrl } from '../../componentes/useFiltrosNaUrl';
+import { enderecoOrcamento, SEM_ORIGEM, type Origem } from '../../utilitarios/rotas';
 
 type Quote = QuoteProgress & {
   id: string; number: string; netTotal: number; createdAt: string;
@@ -20,6 +22,7 @@ type Marcado = { number: string; status: string; executionStatus?: string | null
 type AcaoLote = 'APROVAR' | 'NAO_APROVADO' | 'PARAR' | 'RETOMAR' | 'DESISTIU';
 type QuotePage = { data: Quote[]; meta: { pages: number; total: number }; counts?: Record<string, number> };
 type Worker = { id: string; name: string; workColor: string };
+import { confirmar, pergunta as perguntaEmJanela } from '../../componentes/Confirmacao';
 import { formatarMoeda } from '../../utilitarios/formatadores';
 const date = (value: string | Date) => new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 /**
@@ -65,25 +68,29 @@ function QuotesList() {
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => { if (canManage) api<typeof sellers>('/users').then(setSellers).catch(() => setSellers([])); }, [canManage]);
   const isHistory = usePathname() === '/historico';
+  // Aberto pelo Histórico, o orçamento volta para o Histórico.
+  const origemDaLista: Origem = isHistory ? { de: 'historico' } : SEM_ORIGEM;
   const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  // Filtros e página vêm do endereço (e voltam para ele): ao voltar de um orçamento, a lista reabre igual.
+  const [search, setSearch] = useState(params.get('busca') ?? '');
+  const [page, setPage] = useState(() => Math.max(1, Number(params.get('pagina')) || 1));
   const [pages, setPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
-  const [abaStatus, setAbaStatus] = useState<AbaStatus>('TODOS');
-  const [situacaoPrazoInterno, setDeadlineStatus] = useState<CustomerDeadlineStatus | ''>('');
-  const [responsibleId, setResponsibleId] = useState('');
+  const [abaStatus, setAbaStatus] = useState<AbaStatus>(() => { const aba = params.get('status'); return aba && aba in ABAS_STATUS ? aba as AbaStatus : 'TODOS'; });
+  const [situacaoPrazoInterno, setDeadlineStatus] = useState<CustomerDeadlineStatus | ''>(() => { const prazo = params.get('prazo'); return prazo && prazo in DEADLINE_LABELS ? prazo as CustomerDeadlineStatus : ''; });
+  const [responsibleId, setResponsibleId] = useState(params.get('funcionario') ?? '');
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [total, setTotal] = useState(0);
-  const [ordem, setOrdem] = useState<Ordem>('recentes');
+  const [ordem, setOrdem] = useState<Ordem>(() => ORDENS.find((opcao) => opcao.valor === params.get('ordem'))?.valor ?? 'recentes');
   const [abertos, setAbertos] = useState<string[]>([]);
   const alternar = (id: string) => setAbertos((atual) => atual.includes(id) ? atual.filter((aberto) => aberto !== id) : [...atual, id]);
   const [maisFiltros, setMaisFiltros] = useState(false);
   const celular = useCelular();
   const activeFilterCount = [search, abaStatus !== 'TODOS', situacaoPrazoInterno, responsibleId, sellerId, from, to].filter(Boolean).length;
+  useFiltrosNaUrl(isHistory ? 'historico' : 'orcamentos', { busca: search, status: abaStatus, prazo: situacaoPrazoInterno, funcionario: responsibleId, sellerId, from, to, ordem, pagina: page }, { status: 'TODOS', ordem: 'recentes', pagina: '1' });
 
   const montarConsulta = (pagina: number, limite?: number) => {
     const query = new URLSearchParams({ search, page: String(pagina), ...(limite ? { limit: String(limite) } : {}), ...(allQuotes ? {} : { scope: isHistory ? 'history' : 'active' }) });
@@ -160,19 +167,22 @@ function QuotesList() {
   const ACOES_LOTE: Record<AcaoLote, { alvos: [string, Marcado][]; corpo: Record<string, string>; pergunta: (n: number) => string; feito: (n: number) => string }> = {
     APROVAR: { alvos: grupos.aguardando, corpo: { status: 'APPROVED' }, pergunta: (n) => `Aprovar ${plural(n, 'orçamento', 'orçamentos')}?`, feito: (n) => `${plural(n, 'orçamento aprovado', 'orçamentos aprovados')}.` },
     NAO_APROVADO: { alvos: grupos.aguardando, corpo: { status: 'REJECTED', reason: 'Cliente não aprovou' },
-      pergunta: (n) => `Marcar ${plural(n, 'orçamento', 'orçamentos')} como não aprovado? Saem da lista e vão para o Histórico. Nada é apagado.`, feito: (n) => `${plural(n, 'orçamento marcado', 'orçamentos marcados')} como não aprovado (${n === 1 ? 'foi' : 'foram'} para o Histórico).` },
+      pergunta: (n) => `Marcar ${plural(n, 'orçamento', 'orçamentos')} como não aprovado? Os orçamentos serão transferidos para o Histórico. Nenhuma informação será excluída.`, feito: (n) => `${plural(n, 'orçamento marcado', 'orçamentos marcados')} como não aprovado e ${n === 1 ? 'transferido' : 'transferidos'} para o Histórico.` },
     PARAR: { alvos: grupos.emProducao, corpo: { status: 'APPROVED', executionStatus: 'PAUSED', reason: 'Produção parada' },
-      pergunta: (n) => `Parar a produção de ${plural(n, 'orçamento', 'orçamentos')}? Continuam em Orçamentos como "Produção parada" e os projetos saem das colunas do Fluxo até você retomar.`, feito: (n) => `Produção parada em ${plural(n, 'orçamento', 'orçamentos')}.` },
+      pergunta: (n) => `Interromper a produção de ${plural(n, 'orçamento', 'orçamentos')}? Os orçamentos permanecerão em Orçamentos com a situação "Produção parada", e seus projetos serão retirados do Fluxo de trabalho até a retomada.`, feito: (n) => `Produção interrompida em ${plural(n, 'orçamento', 'orçamentos')}.` },
     RETOMAR: { alvos: grupos.parados, corpo: { status: 'APPROVED', executionStatus: 'IN_PROGRESS', reason: 'Produção retomada' },
-      pergunta: (n) => `Retomar a produção de ${plural(n, 'orçamento', 'orçamentos')}? Os projetos voltam para a etapa em que estavam no Fluxo.`, feito: (n) => `Produção retomada em ${plural(n, 'orçamento', 'orçamentos')}.` },
+      pergunta: (n) => `Retomar a produção de ${plural(n, 'orçamento', 'orçamentos')}? Os projetos retornarão à etapa em que estavam no Fluxo de trabalho.`, feito: (n) => `Produção retomada em ${plural(n, 'orçamento', 'orçamentos')}.` },
     DESISTIU: { alvos: grupos.aprovados, corpo: { status: 'CANCELLED', reason: 'Cliente desistiu' },
-      pergunta: (n) => `Marcar que o cliente desistiu de ${plural(n, 'orçamento', 'orçamentos')}? Saem de Orçamentos e vão para o Histórico. Nada é apagado.`, feito: (n) => `${plural(n, 'orçamento marcado', 'orçamentos marcados')} como "Cliente desistiu" (${n === 1 ? 'foi' : 'foram'} para o Histórico).` },
+      pergunta: (n) => `Registrar desistência do cliente em ${plural(n, 'orçamento', 'orçamentos')}? Os orçamentos serão transferidos para o Histórico. Nenhuma informação será excluída.`, feito: (n) => `${plural(n, 'orçamento marcado', 'orçamentos marcados')} como "Cliente desistiu" (${n === 1 ? 'foi' : 'foram'} para o Histórico).` },
   };
   async function executarEmLote(acao: AcaoLote) {
     const { alvos, corpo, pergunta, feito } = ACOES_LOTE[acao];
     if (!alvos.length) return;
     const fora = quantidadeMarcados - alvos.length;
-    if (!window.confirm(pergunta(alvos.length) + (fora ? `\n\n${plural(fora, 'marcado não entra', 'marcados não entram')} nesta ação e ${fora === 1 ? 'fica' : 'ficam'} como ${fora === 1 ? 'está' : 'estão'}.` : ''))) return;
+    const rotuloAcao: Record<AcaoLote, string> = { APROVAR: 'Aprovar', NAO_APROVADO: 'Marcar como não aprovado', PARAR: 'Interromper produção', RETOMAR: 'Retomar produção', DESISTIU: 'Registrar desistência' };
+    const naoEntram = fora ? `${plural(fora, 'orçamento selecionado não se enquadra', 'orçamentos selecionados não se enquadram')} nesta ação e ${fora === 1 ? 'permanecerá inalterado' : 'permanecerão inalterados'}.` : '';
+    const opcoes = perguntaEmJanela(pergunta(alvos.length), { confirmar: rotuloAcao[acao], perigo: acao === 'NAO_APROVADO' || acao === 'DESISTIU' });
+    if (!await confirmar({ ...opcoes, mensagem: [opcoes.mensagem, naoEntram].filter(Boolean).join('\n\n') })) return;
     setProcessando(true); setAvisoLote('');
     const falhas: string[] = [];
     for (const [id, quote] of alvos) {
@@ -180,7 +190,7 @@ function QuotesList() {
       catch (cause) { falhas.push(`${quote.number}: ${cause instanceof Error ? cause.message : 'erro'}`); }
     }
     const feitos = alvos.length - falhas.length;
-    setAvisoLote((feitos ? feito(feitos) : 'Nenhum orçamento foi alterado.') + (falhas.length ? ` Não foi possível: ${falhas.join('; ')}.` : ''));
+    setAvisoLote((feitos ? feito(feitos) : 'Nenhum orçamento foi alterado.') + (falhas.length ? ` Não foi possível concluir: ${falhas.join('; ')}.` : ''));
     setMarcados({}); setProcessando(false); setAttempt((valor) => valor + 1);
   }
   const chooseDeadline = (value: CustomerDeadlineStatus | '') => { setDeadlineStatus(value); setPage(1); };
@@ -289,7 +299,7 @@ function QuotesList() {
             {/* Clicar na linha (fora de links e botões) abre os projetos do orçamento. */}
             <tr className={`linha-orcamento${aberto ? ' aberta' : ''}${marcados[quote.id] ? ' marcada' : ''}`} onClick={(event) => { if (!(event.target as HTMLElement).closest('a, button, input, label, .col-selecao')) alternar(quote.id); }}>
               {podeSelecionar && <td className="col-selecao"><input type="checkbox" aria-label={`Marcar ${quote.number}`} checked={!!marcados[quote.id]} onChange={() => alternarMarcado(quote)} /></td>}
-              <td className="col-numero" data-rotulo="Nº orçamento"><Link href={`/orcamentos/${quote.id}`}>{quote.number}</Link></td>
+              <td className="col-numero" data-rotulo="Nº orçamento"><Link href={enderecoOrcamento(quote.id, origemDaLista)}>{quote.number}</Link></td>
               <td className="col-cliente" data-rotulo="Cliente"><span className="celula-cliente"><strong>{quote.customer.name}</strong>{projetos.length > 0 && <small title={projetos.join(' · ')}>{projetos.join(' · ')}</small>}</span></td>
               <td className="col-emissao" data-rotulo="Emissão">{date(quote.createdAt)}</td>
               <td className="col-funcionario" data-rotulo="Funcionário">{worker ? <span className="quote-worker"><i style={{ backgroundColor: worker.worker.workColor }} />{worker.worker.name}</span> : <span className="celula-vazia">—</span>}</td>
@@ -301,7 +311,7 @@ function QuotesList() {
             </tr>
             {aberto && <tr className="linha-projetos" id={`projetos-${quote.id}`}><td colSpan={podeSelecionar ? 10 : 9}>
               <DesenhosSalvos quoteId={quote.id} />
-              <div className="detail-actions"><Link className="secondary-button" href={`/orcamentos/${quote.id}`}>Ver detalhes</Link>{podeEditarOrcamento(quote) && <Link className="secondary-button" href={`/orcamentos/${quote.id}/editar`}>Editar orçamento</Link>}<Link className="text-button" href={`/?parent=${quote.id}`}>+ Vincular complemento</Link></div>
+              <div className="detail-actions"><Link className="secondary-button" href={enderecoOrcamento(quote.id, origemDaLista)}>Ver detalhes</Link>{podeEditarOrcamento(quote) && <Link className="secondary-button" href={enderecoOrcamento(quote.id, origemDaLista, { tela: 'editar' })}>Editar orçamento</Link>}<Link className="text-button" href={`/?parent=${quote.id}`}>+ Vincular complemento</Link></div>
             </td></tr>}
           </Fragment>;
         })}</tbody>

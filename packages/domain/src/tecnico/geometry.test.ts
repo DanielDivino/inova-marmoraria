@@ -70,6 +70,20 @@ describe('validação do documento técnico', () => {
   });
 });
 
+describe('peça arredondada gravada no banco', () => {
+  it('a curvatura dos cantos com menos casas decimais (como o banco devolve) continua conferindo com os parâmetros', () => {
+    const doc = emptyTechnicalDocument();
+    const parameters = { ...makePiece('r').parameters!, shape: 'ROUNDED' as const, width: 1300, length: 700, radius: 100 };
+    const contour = contornoDosParametros('r', parameters).map((vertice) => ({ ...vertice, bulge: Number(vertice.bulge.toPrecision(15)) }));
+    expect(contour[1].bulge).not.toBe(contornoDosParametros('r', parameters)[1].bulge);
+    doc.pieces.push({ ...makePiece('r'), geometryMode: 'PARAMETRIC', parameters, contour });
+    expect(validateTechnicalDocument(doc).filter((diagnostico) => diagnostico.code === 'PARAMETER_MISMATCH')).toEqual([]);
+    // Divergência de verdade (um vértice fora do lugar) continua sendo recusada.
+    doc.pieces[0] = { ...doc.pieces[0], contour: contour.map((vertice, indice) => indice === 2 ? { ...vertice, x: vertice.x + 1 } : vertice) };
+    expect(validateTechnicalDocument(doc).map((diagnostico) => diagnostico.code)).toContain('PARAMETER_MISMATCH');
+  });
+});
+
 describe('peça em U', () => {
   it('gera o contorno com fundo, dois braços e larguras próprias', () => {
     const contorno = parametricContour('u', 'U', 3000, 600, 0, 600, { leftArm: 1800, rightArm: 1200, leftArmWidth: 650, rightArmWidth: 550 });

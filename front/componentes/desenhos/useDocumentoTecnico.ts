@@ -10,7 +10,9 @@ export type EstadoSalvamento = 'idle' | 'saving' | 'saved' | 'error';
 /**
  * Rascunho do desenho técnico: carrega, salva (com `baseVersion`; 409 = outra
  * sessão salvou antes), salva sozinho 2 s depois da última mudança e guarda o
- * histórico para desfazer/refazer (Ctrl+Z / Ctrl+Y ou Ctrl+Shift+Z).
+ * histórico para desfazer/refazer (Ctrl+Z / Ctrl+Y ou Ctrl+Shift+Z). Se salvar
+ * der erro, não tenta de novo sozinho (a tela ficaria piscando com o mesmo erro):
+ * a próxima mudança ou "Salvar agora" tentam outra vez.
  */
 export function useDocumentoTecnico(designId: string) {
   const [dados, setDados] = useState<RascunhoResposta | null>(null);
@@ -68,10 +70,10 @@ export function useDocumentoTecnico(designId: string) {
     }
   }, [designId, salvamento, versao]);
   useEffect(() => {
-    if (!documento || !alterado || conflito) return;
+    if (!documento || !alterado || conflito || salvamento === 'error') return;
     const temporizador = window.setTimeout(() => { void salvar(); }, 2000);
     return () => window.clearTimeout(temporizador);
-  }, [documento, alterado, conflito, salvar]);
+  }, [documento, alterado, conflito, salvamento, salvar]);
 
   /** Mudança com histórico (botões, campos, fim de um arraste). */
   const aplicar = (proximo: TechnicalDocument) => { atual.current = proximo; setDocumento(proximo); setAlterado(true); setSalvamento('idle'); };

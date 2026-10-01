@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { orcamentoSalvo } from './apoio/orcamento-salvo.mjs';
 
 // API inteiramente simulada (inclusive o rascunho no servidor, com versão e conflito como a API real).
 // O Novo orçamento do mesmo usuário no computador e no celular: os clientes abertos e os seus
@@ -28,6 +29,8 @@ async function rotas(context, aparelho) {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
     if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: usuario, name: 'Vendedor', role: 'SUPER_ADMIN', maxDiscountPercent: 100 } } });
+    // Projetos com desenho técnico (Exportar do orçamento): nenhum.
+    if (/^\/api\/quotes\/[^/]+\/desenhos-tecnicos$/.test(path)) return route.fulfill({ json: { projetos: [] } });
     if (path === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
     if (/^\/api\/customers\/[^/]+\/designs$/.test(path)) return route.fulfill({ json: { designs: [] } });
     if (path === '/api/catalog') return route.fulfill({ json: { materials: [{ id: 'stone', name: 'Branco Dallas', category: 'Granito', billingUnit: 'SQUARE_METER', currentPrice: 600, images: [] }], productTypes: [{ id: 'counter', name: 'Bancada' }], services: [], settings: { closedSquareMeter: true } } });
@@ -52,6 +55,8 @@ async function rotas(context, aparelho) {
     }
     if (path === '/api/quotes' && method === 'POST') { salvo = route.request().postDataJSON(); return route.fulfill({ status: 201, json: { id: 'salvo' } }); }
     if (path === '/api/quotes/salvo/status') return route.fulfill({ json: { status: 'SENT' } });
+    // Depois de salvar abre a tela do orçamento salvo.
+    if (path === '/api/quotes/salvo' && route.request().method() === 'GET') return route.fulfill({ json: orcamentoSalvo('salvo') });
     // Tela Orçamentos (depois de salvar).
     if (path === '/api/users' || path === '/api/workers') return route.fulfill({ json: [] });
     if (path === '/api/quotes') return route.fulfill({ json: { data: [], total: 0, meta: { page: 1, limit: 20, total: 0, pages: 0 } } });
@@ -67,7 +72,6 @@ const abrir = async (context, nome) => {
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   page.on('pageerror', error => errors.push(`${nome}: pageerror: ${error.message}`));
-  page.on('dialog', dialog => dialog.accept());
   await page.goto(base + '/');
   await page.locator('#project-name').waitFor();
   return page;
@@ -156,6 +160,7 @@ try {
   await escolherCliente(celular, 'Sem cadastro 4');
   await menuCliente(celular);
   await celular.getByRole('menuitem', { name: 'Remover este cliente' }).click();
+  await celular.getByRole('alertdialog').getByRole('button', { name: 'Remover cliente', exact: true }).click();
   await esperar(() => noServidor().length === 3, 'remoção chega ao servidor');
   await voltarParaTela(computador);
   await computador.waitForTimeout(800);
@@ -164,7 +169,7 @@ try {
   // 7) Orçamento salvo no computador: o cliente sai do atendimento também no celular.
   await escolherCliente(computador, 'Sem cadastro 2');
   await computador.getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
-  await computador.waitForURL('**/orcamentos');
+  await computador.waitForURL('**/orcamentos/salvo');
   assert.equal(salvo.customerId, 'sc-2');
   assert.deepEqual(noServidor(), ['Sem cadastro 1', 'Sem cadastro 3'], 'o salvo sai do rascunho no servidor');
   await voltarParaTela(celular);

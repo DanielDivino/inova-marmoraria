@@ -8,7 +8,7 @@ import type { RemountInput } from './remount.schema.js';
 type Tx = Prisma.TransactionClient;
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value));
 export async function buscarOrigemRemontagem(tx: Tx, id: string) {
-  const quote = await tx.quote.findUnique({ where: { id }, select: { id: true, number: true, customerNameSnapshot: true, customerPhoneSnapshot: true, workAddressSnapshot: true, notes: true, createdAt: true } });
+  const quote = await tx.quote.findUnique({ where: { id }, select: { id: true, number: true, customerId: true, status: true, executionStatus: true, customerNameSnapshot: true, customerPhoneSnapshot: true, workAddressSnapshot: true, notes: true, createdAt: true } });
   if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
   return quote;
 }

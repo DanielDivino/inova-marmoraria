@@ -83,6 +83,7 @@ try {
   await page.mouse.click(...ponto(.1));
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Selecionar', exact: true }).waitFor();
+  await page.locator('.tec-area-previa').first().waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
   assert.equal(await page.locator('.tec-area-previa').count(), 0, 'Esc cancela a área');
 
   // 4) Painel da peça: trocar a molhada para seca junta tudo numa área seca só.
@@ -137,7 +138,7 @@ try {
   for (let graus = 80; graus >= -90; graus -= 10) await page.mouse.move(cx + raio * Math.cos(graus * Math.PI / 180), cy - raio * Math.sin(graus * Math.PI / 180));
   assert.equal(await page.locator('.tec-girar-graus').textContent(), '180°', 'ângulo ao lado da bolinha enquanto gira');
   await page.mouse.up();
-  await page.getByText('Peça girada para 180°. Ctrl+Z desfaz.').waitFor();
+  await page.getByText('Peça girada para 180°. Use Ctrl+Z para desfazer.').waitFor();
   await shot('06-girada');
   await salvar();
   assert.equal(savedDocument.pieces[0].rotationDeg, 180);
@@ -181,7 +182,7 @@ try {
   // 8) Delete apaga a peça selecionada (com a cuba); Ctrl+Z traz de volta.
   await page.mouse.click(pedra.x + pedra.width * .1, pedra.y + pedra.height * .8);
   await page.keyboard.press('Delete');
-  await page.getByText('Peça 1 excluída. Ctrl+Z desfaz.').waitFor();
+  await page.getByText('Peça 1 excluída. Use Ctrl+Z para desfazer.').waitFor();
   assert.equal(await page.locator('.tec-pedra').count(), 0, 'peça apagada com Delete');
   await page.keyboard.press('Control+z');
   await page.locator('.tec-pedra').first().waitFor();

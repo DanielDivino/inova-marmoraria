@@ -39,7 +39,7 @@ export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, a
   const mudarAreas = (wetDryZones: Piece['wetDryZones']) => atualizar({ wetDryZones });
 
   return <section className="tec-painel-secao" aria-label={`Peça ${nomeDaPeca(peca, documento.pieces)}`}>
-    {peca.locked && <p className="tec-aviso">Peça travada: destrave para mudar medidas ou posição.</p>}
+    {peca.locked && <p className="tec-aviso">Peça travada. Destrave-a para alterar medidas ou posição.</p>}
     <label className="tec-campo">Nome<input value={peca.name} placeholder={`Sem nome (aparece como ${nomeDaPeca({ ...peca, name: '' }, documento.pieces)})`} onChange={(evento) => atualizar({ name: evento.target.value })} /></label>
     <label className="tec-campo">Pedra (visual e estimativa)
       <select value={peca.material?.id ?? ''} onChange={(evento) => {
@@ -77,7 +77,7 @@ export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, a
     </div>
 
     <h3>Área seca e molhada <small>marcadas no desenho</small></h3>
-    {!areas.length && <p className="tec-dica">Clique em 💧 Seca / molhada, clique no balcão onde a área começa, puxe até onde termina e clique de novo; depois escolha seca ou molhada.</p>}
+    {!areas.length && <p className="tec-dica">Selecione 💧 Seca / molhada, clique no início da área no balcão, arraste até o fim e clique novamente. Em seguida, defina se a área é seca ou molhada.</p>}
     {areas.length > 0 && <ul className="tec-areas" aria-label="Áreas do balcão">
       {areas.map((area) => <li key={area.indice} className={`tec-area-linha ${area.tipo === 'WET' ? 'molhada' : 'seca'}`}>
         <div><strong>{NOME_AREA[area.tipo]} · {formatMeasure(area.comprimentoMm)}</strong><small>de {formatMeasure(area.inicioMm)} a {formatMeasure(area.fimMm)} da ponta esquerda</small></div>

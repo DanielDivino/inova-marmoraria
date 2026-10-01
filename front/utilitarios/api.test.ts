@@ -89,6 +89,15 @@ describe('sessão da aplicação', () => {
     expect(window.location.replace).toHaveBeenCalledWith('/login');
   });
 
+  it('sessão expirada no meio do trabalho volta para a mesma tela depois do login', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(response(401, { message: 'Sessão expirada.' }))));
+    vi.stubGlobal('window', { setTimeout, clearTimeout, location: { pathname: '/orcamentos/q1', search: '?de=fluxo', replace: vi.fn() } });
+    localStorage.setItem('inova_access_token', 'expired');
+    const { api } = await import('./api');
+    await expect(api('/quotes/q1')).rejects.toThrow('Sessão expirada.');
+    expect(window.location.replace).toHaveBeenCalledWith('/login?voltar=%2Forcamentos%2Fq1%3Fde%3Dfluxo');
+  });
+
   it('sair limpa credenciais e cache somente após encerrar o cookie no backend', async () => {
     const fetch = vi.fn().mockResolvedValue(response(200, { ok: true }));
     vi.stubGlobal('fetch', fetch);

@@ -6,6 +6,7 @@ import { api } from '../../utilitarios/api';
 import { useSession } from '../../componentes/ApplicationShell';
 import { CabecalhoEquipe } from '../../componentes/equipe/CabecalhoEquipe';
 import { AbasFiltro, Icone, type NomeIcone } from '../../componentes/filtros/Filtros';
+import { Janela } from '../../componentes/Janela';
 import '../dashboard/dashboard.css';
 
 type ManagedUser = { id: string; name: string; email: string; role: UserRole; isActive: boolean; maxDiscountPercent: number | string };
@@ -35,7 +36,7 @@ export default function UsersPage() {
     try {
       const { password, isActive, ...rest } = form;
       await api(editing ? `/users/${editing}` : '/users', { method: editing ? 'PATCH' : 'POST', body: JSON.stringify({ ...rest, maxDiscountPercent: Number(form.maxDiscountPercent), ...(password ? { password } : {}), ...(editing ? { isActive } : {}) }) });
-      await load(); closeForm(); setNotice('Usuário salvo. As permissões valem também para sessões já abertas.');
+      await load(); closeForm(); setNotice('Usuário salvo. As permissões passam a valer imediatamente, inclusive para sessões já iniciadas.');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o usuário.'); }
     finally { setBusy(false); }
   }
@@ -58,10 +59,9 @@ export default function UsersPage() {
       </div>
     </div>
     <div className="dashboard-table-wrap"><table className="dashboard-table"><thead><tr><th>Usuário</th><th>Perfil</th><th>Situação</th><th>Desconto autorizado</th><th>Ações</th></tr></thead><tbody>{visiveis.map(user => <tr key={user.id}><td>{user.name}<small>{user.email}</small></td><td>{ROLE_LABELS[user.role]}</td><td>{user.isActive ? 'Ativo' : 'Inativo'}</td><td>{Number(user.maxDiscountPercent).toLocaleString('pt-BR')}%</td><td><button className="text-button" disabled={busy} onClick={() => { setEditing(user.id); setForm({ name: user.name, email: user.email, role: user.role, isActive: user.isActive, maxDiscountPercent: String(user.maxDiscountPercent), password: '' }); setError(''); setNotice(''); }}>Editar</button></td></tr>)}{!visiveis.length && <tr><td colSpan={5}>Nenhum usuário com esses filtros.</td></tr>}</tbody></table></div>
-    {editing !== null && <div className="catalog-modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) closeForm(); }}>
-      <section className="catalog-modal" role="dialog" aria-modal="true" aria-label={editing ? 'Editar usuário' : 'Cadastrar vendedor'}>
-        <header><div><span className="catalog-eyebrow">{editing ? 'EDITAR' : 'NOVO CADASTRO'}</span><h2>{editing ? 'Usuário' : 'Vendedor'}</h2></div><button type="button" aria-label="Fechar" onClick={closeForm}>×</button></header>
-        <form className="admin-form" onSubmit={save}>
+    {editing !== null && <Janela aberta aoFechar={closeForm} ocupada={busy} className="catalog-modal" icone="vendedor" titulo={editing ? 'Editar usuário' : 'Cadastrar vendedor'} aoEnviar={save}
+      rodape={<><button type="button" className="botao-contorno" disabled={busy} onClick={closeForm}>Cancelar</button><button className="botao-principal" disabled={busy}>{busy ? 'Salvando…' : editing ? 'Salvar alterações' : 'Cadastrar vendedor'}</button></>}>
+        <div className="admin-form">
           <label>Nome<input required minLength={2} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
           <label>E-mail<input required type="email" autoComplete="off" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label>
           <label>{editing ? 'Nova senha (deixe vazio para manter)' : 'Senha'}<input type="password" required={!editing} minLength={8} autoComplete="new-password" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} /></label>
@@ -69,9 +69,7 @@ export default function UsersPage() {
           <label>Desconto final autorizado (%)<input type="number" min={0} max={100} step="0.01" required value={form.maxDiscountPercent} onChange={event => setForm({ ...form, maxDiscountPercent: event.target.value })} /></label>
           {editing && <label>Situação<select disabled={editing === session?.id} value={form.isActive ? 'active' : 'inactive'} onChange={event => setForm({ ...form, isActive: event.target.value === 'active' })}><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label>}
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="primary-button" disabled={busy}>{busy ? 'Salvando…' : editing ? 'Salvar alterações' : 'Cadastrar vendedor'}</button>
-        </form>
-      </section>
-    </div>}
+        </div>
+    </Janela>}
   </main>;
 }

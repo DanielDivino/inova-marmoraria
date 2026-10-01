@@ -3,7 +3,7 @@ import { serializarOrcamento } from './serializacao.js';
 import { nomeArquivoPdf, disposicaoArquivoPdf, itemSalvoParaCopia, projetoTemDesenho, nomeProjeto } from '@inova/domain';
 import PDFDocument from 'pdfkit';
 import { Prisma } from '@prisma/client';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { adicionarDiasUteis, podeAlterarStatusOrcamento, calcularLinha, calcularTotalOrcamento, DEFAULT_PROJECT_BUSINESS_DAYS, WORK_STATUS_STORAGE } from '@inova/domain';
 import { prisma } from '../../config/prisma.js';
@@ -11,12 +11,17 @@ import { AppError, idSchema } from '../../compartilhado/http.js';
 import { createQuoteSchema, quoteItemSchema, updateQuoteItemSchema, updateQuoteSchema, updateStatusSchema, calculateQuoteSchema } from './quote.schema.js';
 import { adicionarItemOrcamento, criarOrcamento, editarOrcamento, incluirOrcamento, recalcularOrcamento, validarDesconto } from './quote.service.js';
 import { editQuoteSchema } from './quote.schema.js';
-import { renderizarPdfOrcamento, renderizarPdfDesenhoProjeto } from './quote.pdf.js';
-import { quotePdfOptionsSchema } from './quote.pdf-options.js';
+import { renderizarPdfDesenhoProjeto, novoPdfExportacao, renderizarExportacao } from './quote.pdf.js';
+import { quotePdfOptionsSchema, type QuotePdfOptions } from './quote.pdf-options.js';
+import { desenhosTecnicosDosProjetos, desenhosTecnicosParaExportar } from '../desenhos/desenho-tecnico-do-orcamento.js';
 import { compararPorPrazo, montarFiltrosOrcamento, historySchema, ORDEM_ORCAMENTOS } from './quote.tracking.js';
+import { atualizarCliente } from '../clientes/customer.routes.js';
+import { montarHistorico } from './quote.historico.js';
 import { acompanhamentoSchema } from './quote.tracking.js';
 
 const asNumber = (value: unknown) => Number(value);
+type QuoteParaExportar = { id: string; number: string; customerId: string; customerNameSnapshot: string; deliveryDeadline: Date | null; dueDate: Date | null; items: { id: string; projectName: string | null; drawingData: unknown }[] };
+
 export async function registrarRotasOrcamentos(app: FastifyInstance) {
   const authenticated = { preHandler: [app.authenticate, exigirOrcamentoProprio] };
   app.put('/:id', authenticated, async (request) => {
@@ -69,6 +74,36 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
       await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_WORKER', entityId: id, action: 'ASSIGNMENT_CHANGED', previous: current ? { workerId: current.worker.id, name: current.worker.name, color: current.colorSnapshot } : Prisma.JsonNull, current: worker ? { workerId: worker.id, name: worker.name, color: worker.workColor } : Prisma.JsonNull } });
       return result;
     });
+    return serializarOrcamento(updated);
+  });
+  // Botão "Histórico" da tela do orçamento: linha do tempo com o que aconteceu (situação, prazos, equipe, Fluxo, entregas).
+  app.get('/:id/historico', authenticated, async (request) => {
+    const { id } = idSchema.parse(request.params);
+    const quote = await prisma.quote.findUnique({ where: { id }, select: {
+      createdAt: true, validUntil: true, approvedAt: true, completedAt: true, dueDate: true,
+      items: { select: { id: true, projectName: true } },
+      workerAssignments: { select: { id: true, assignedAt: true, releasedAt: true, worker: { select: { name: true } } }, orderBy: { assignedAt: 'asc' } },
+    } });
+    if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
+    const registros = await prisma.auditLog.findMany({
+      where: { OR: [
+        { entityType: 'QUOTE', entityId: id },
+        { entityType: 'QUOTE_ITEM', current: { path: ['quoteId'], equals: id } },
+        { entityType: 'DESIGN', action: 'CREATED_FROM_QUOTE', current: { path: ['quoteId'], equals: id } },
+      ] },
+      include: { user: { select: { name: true } } }, orderBy: { createdAt: 'asc' }, take: 500,
+    });
+    return montarHistorico(quote, registros);
+  });
+  // Lápis ao lado do cliente, na tela do orçamento: edita o contato do cliente e este orçamento (e o PDF dele) passa a mostrá-lo.
+  app.patch('/:id/contact', authenticated, async (request) => {
+    const { id } = idSchema.parse(request.params);
+    const before = await prisma.quote.findUnique({ where: { id }, select: { customerId: true, customerNameSnapshot: true, customerPhoneSnapshot: true, workAddressSnapshot: true } });
+    if (!before) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
+    const customer = await atualizarCliente(before.customerId, request.body);
+    const current = { customerNameSnapshot: customer.name, customerPhoneSnapshot: customer.phone, workAddressSnapshot: customer.address ?? before.workAddressSnapshot };
+    const updated = await prisma.quote.update({ where: { id }, data: current, include: incluirOrcamento(request.user) });
+    await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'CONTACT_UPDATED', previous: { customerNameSnapshot: before.customerNameSnapshot, customerPhoneSnapshot: before.customerPhoneSnapshot, workAddressSnapshot: before.workAddressSnapshot }, current } });
     return serializarOrcamento(updated);
   });
   app.patch('/:id/tracking', authenticated, async (request) => {
@@ -140,11 +175,35 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     const input = { customerId: quote.customerId, validUntil: quote.validUntil, deliveryDeadline: quote.deliveryDeadline ? quote.deliveryDeadline.toISOString().slice(0, 10) : null, installationDeadline: quote.installationDeadline ? quote.installationDeadline.toISOString().slice(0, 10) : null, deadlineConfirmed: quote.deadlineConfirmed, deadlineNote: quote.deadlineNote, discountAmount: Number(quote.discountAmount), notes: quote.notes, items: quote.items.map(itemSalvoParaCopia) };
     const copy = await prisma.$transaction((tx) => criarOrcamento(tx, input, request.user)); await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: copy.id, action: 'DUPLICATED', current: { sourceId: id, number: copy.number } } }); return reply.status(201).send(serializarOrcamento(copy));
   });
+  // Exportar: as partes marcadas (orçamento, OS e desenho técnico) no mesmo PDF, do orçamento todo ou de um projeto.
+  async function exportarPdf(reply: FastifyReply, quote: QuoteParaExportar, options: QuotePdfOptions, arquivo: string, projetoId?: string) {
+    const projetos = projetoId ? quote.items.filter((item) => item.id === projetoId) : quote.items;
+    const tecnicos = options.technical ? await desenhosTecnicosParaExportar(quote, projetos) : [];
+    const partes = { orcamento: options.commercial, valoresIndividuais: options.individualPrices, desenhos: options.drawings && projetos.some((item) => projetoTemDesenho(item.drawingData)), tecnicos };
+    if (!partes.orcamento && !partes.desenhos && !partes.tecnicos.length) throw new AppError(404, 'Não há desenhos para exportar com as opções escolhidas.', 'NOTHING_TO_EXPORT');
+    const pdf = novoPdfExportacao(partes); renderizarExportacao(pdf, quote, partes, projetoId); pdf.end();
+    return reply.type('application/pdf').header('Content-Disposition', disposicaoArquivoPdf(arquivo)).send(pdf);
+  }
   app.get('/:id/pdf', authenticated, async (request, reply) => {
     const options = quotePdfOptionsSchema.parse(request.query);
     const quote = await prisma.quote.findUnique({ where: idSchema.parse(request.params), include: incluirOrcamento(request.user) }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
-    const filename = nomeArquivoPdf(quote.customerNameSnapshot, quote.number);
-    const pdf = new PDFDocument({ margin: 36 }); renderizarPdfOrcamento(pdf, quote, options); pdf.end(); return reply.type('application/pdf').header('Content-Disposition', disposicaoArquivoPdf(filename)).send(pdf);
+    return exportarPdf(reply, quote, options, nomeArquivoPdf(quote.customerNameSnapshot, quote.number));
+  });
+  app.get('/:id/items/:itemId/pdf', authenticated, async (request, reply) => {
+    const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const options = quotePdfOptionsSchema.parse(request.query);
+    const quote = await prisma.quote.findUnique({ where: { id: params.id }, include: incluirOrcamento(request.user) }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
+    const item = quote.items.find((entry) => entry.id === params.itemId);
+    if (!item) throw new AppError(404, 'Projeto não encontrado neste orçamento.', 'NOT_FOUND');
+    return exportarPdf(reply, quote, options, nomeArquivoPdf(quote.customerNameSnapshot, `${quote.number} - ${nomeProjeto(item)}`), item.id);
+  });
+  // Projetos com desenho técnico (para o Exportar marcar a opção como disponível).
+  app.get('/:id/desenhos-tecnicos', authenticated, async (request) => {
+    const { id } = idSchema.parse(request.params);
+    const quote = await prisma.quote.findUnique({ where: { id }, select: { id: true, number: true, customerId: true, customerNameSnapshot: true, deliveryDeadline: true, dueDate: true, items: { select: { id: true, projectName: true, drawingData: true } } } });
+    if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
+    const desenhos = await desenhosTecnicosDosProjetos(quote, quote.items);
+    return { projetos: desenhos.flatMap((desenho) => 'designId' in desenho ? [desenho.itemId] : []) };
   });
   // Desenho de um único projeto: só as folhas de OS, sem a folha comercial.
   app.get('/:id/items/:itemId/drawing-pdf', authenticated, async (request, reply) => {

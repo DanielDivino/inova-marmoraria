@@ -1,15 +1,14 @@
 import { chromium, expect } from '@playwright/test';
 import { existsSync, mkdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { orcamentoSalvo } from './apoio/orcamento-salvo.mjs';
 
 const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
 const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? (existsSync(installed) ? installed : undefined) });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 const errors = [];
 let saved;
-let confirmations = 0;
 page.on('pageerror', error => errors.push(error.message));
-page.on('dialog', async dialog => { confirmations++; await dialog.accept(); });
 await page.route('**/api/**', async route => {
   const path = new URL(route.request().url()).pathname;
   if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'compact-test', name: 'Teste', role: 'SUPER_ADMIN' } } });
@@ -26,6 +25,9 @@ await page.route('**/api/**', async route => {
   if (path === '/api/customers') return route.fulfill({ json: route.request().method() === 'POST' ? { id: 'new-customer', ...route.request().postDataJSON() } : { data: [{ id: 'customer', name: 'João da Silva', phone: '00000000000' }] } });
   if (path === '/api/quotes' && route.request().method() === 'POST') { saved = route.request().postDataJSON(); return route.fulfill({ status: 201, json: { id: 'saved' } }); }
   if (path === '/api/quotes/saved/status') return route.fulfill({ json: { status: 'SENT' } });
+  // Depois de salvar abre a tela do orçamento salvo.
+  if (path === '/api/quotes/saved' && route.request().method() === 'GET') return route.fulfill({ json: orcamentoSalvo('saved') });
+  if (path === '/api/workers') return route.fulfill({ json: [] });
   if (path === '/api/quotes') return route.fulfill({ json: { data: [], total: 0 } });
   return route.fulfill({ status: 404, json: {} });
 });
@@ -83,7 +85,7 @@ try {
   await rowMaterial(2, 'Branco Itaúnas');
   const opcoesPeca2 = await abrirOpcoes(2);
   await opcoesPeca2.getByRole('button', { name: 'Adicionar acabamento', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: /^Acabamentos de/ });
+  const dialog = page.getByRole('dialog', { name: 'Acabamentos da peça' });
   await dialog.locator('fieldset').filter({ hasText: 'Vista' }).getByLabel('Inferior', { exact: true }).check();
   await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
   await opcoesPeca2.locator('.quick-acabamento').filter({ hasText: 'Vista' }).getByLabel(/Altura do acabamento/).fill('5');
@@ -109,7 +111,7 @@ try {
   // do editor rápido.
   await expect(page.locator('#project-name')).toHaveValue('');
   await excluirProjeto('Projeto 2');
-  assert.equal(confirmations, 0);
+  assert.equal(await page.getByRole('alertdialog').count(), 0, 'projeto vazio sai sem perguntar');
   await projetoAtivo('Cozinha');
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
   await page.locator('#project-name').fill('Janela');
@@ -125,7 +127,7 @@ try {
   await expect(root(0).getByLabel('Comprimento (m)', { exact: true })).toHaveValue('2,00');
   await expect(page.locator('.summary-grand-total')).toContainText('1.070,00');
   await excluirProjeto('Janela');
-  assert.equal(confirmations, 1);
+  await page.getByRole('alertdialog', { name: 'Excluir Janela?' }).getByRole('button', { name: 'Excluir projeto', exact: true }).click();
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
   await page.locator('#project-name').fill('Banheiro');
   await projectMaterial('Branco Itaúnas');
@@ -151,7 +153,7 @@ try {
   // Com desenho, o salvar fica nas ações da etapa (não no resumo do orçamento rápido).
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('button', { name: 'Salvar orçamento', exact: true }).first().click();
-  await page.waitForURL('**/orcamentos');
+  await page.waitForURL('**/orcamentos/saved');
   assert.equal(saved.items.length, 2);
   assert.deepEqual(saved.items[0].components.map(piece => piece.materialId), ['stone-a', 'stone-b', 'stone-b']);
   assert.equal(saved.items[1].components[0].materialId, 'stone-b');

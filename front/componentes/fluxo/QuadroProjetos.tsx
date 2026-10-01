@@ -7,12 +7,14 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { FASE_ORCAMENTO_FLUXO_LABELS, PROJECT_WORKFLOW_LABELS, PROJECT_WORKFLOW_STATUSES, SITUACAO_PRAZO_FLUXO_LABELS, situacaoPrazoFluxo, type ProjectWorkflowStatus } from '@inova/domain';
 import { Icone, useCelular } from '../filtros/Filtros';
+import { enderecoOrcamento } from '../../utilitarios/rotas';
 import { aguardandoInicio, colunasFluxo, corOrcamento, formatarDataFluxo, nomeResponsavel, rotuloPecasCartao, type CartaoFluxo, type ResponsavelFluxo } from '../../utilitarios/fluxo';
 
 type Ordem = Record<ProjectWorkflowStatus, string[]>;
 const PREFIXO_COLUNA = 'coluna:';
 
-export const enderecoProjeto = (cartao: CartaoFluxo) => `/orcamentos/${cartao.quote.id}#projeto-${cartao.projectId}`;
+/** Abre o orçamento no projeto do cartão; o caminho e o voltar de lá trazem de volta a este cartão. */
+export const enderecoProjeto = (cartao: CartaoFluxo) => enderecoOrcamento(cartao.quote.id, { de: 'fluxo', cartao: cartao.id }, { ancora: `projeto-${cartao.projectId}` });
 
 function colunaEm(ordem: Ordem, id: UniqueIdentifier): ProjectWorkflowStatus | undefined {
   const valor = String(id);
@@ -29,8 +31,8 @@ export function Responsavel({ responsavel }: { responsavel: ResponsavelFluxo | n
 /** Etiqueta, peças, nome, cliente, responsável e prazo; a faixa lateral tem a cor do orçamento. */
 export function CartaoProjeto({ cartao, ...props }: { cartao: CartaoFluxo } & HTMLAttributes<HTMLElement>) {
   const situacao = situacaoPrazoFluxo(cartao.quote.deadline, cartao.status === 'DELIVERED');
-  return <article {...props} className={`fluxo-cartao prazo-${situacao.toLowerCase()} ${props.className ?? ''}`} style={{ ...props.style, '--cor-orcamento': corOrcamento(cartao.quote.id) } as CSSProperties}>
-    <div className="fluxo-cartao-topo"><span className="fluxo-etiqueta">{cartao.quote.number}</span><span className={`fluxo-pecas${cartao.totalPieces > cartao.pieces ? ' fluxo-pecas-parte' : ''}`} title={cartao.totalPieces > cartao.pieces ? 'O projeto foi dividido: as outras peças estão em outra etapa.' : undefined}>{rotuloPecasCartao(cartao)}</span></div>
+  return <article {...props} data-cartao={cartao.id} className={`fluxo-cartao prazo-${situacao.toLowerCase()} ${props.className ?? ''}`} style={{ ...props.style, '--cor-orcamento': corOrcamento(cartao.quote.id) } as CSSProperties}>
+    <div className="fluxo-cartao-topo"><span className="fluxo-etiqueta">{cartao.quote.number}</span><span className={`fluxo-pecas${cartao.totalPieces > cartao.pieces ? ' fluxo-pecas-parte' : ''}`} title={cartao.totalPieces > cartao.pieces ? 'Projeto dividido: as demais peças estão em outra etapa.' : undefined}>{rotuloPecasCartao(cartao)}</span></div>
     {cartao.quote.phase !== 'IN_EXECUTION' && <span className={`fluxo-fase fase-${cartao.quote.phase.toLowerCase()}`}>{FASE_ORCAMENTO_FLUXO_LABELS[cartao.quote.phase]}</span>}
     <strong>{cartao.name}</strong>
     <small>{cartao.quote.customerName}</small>
@@ -52,7 +54,7 @@ function BotaoFaltaMaterial({ cartao, aoAlternar }: { cartao: CartaoFluxo; aoAlt
   </button>;
 }
 
-type ColunaId = 'AGUARDANDO' | ProjectWorkflowStatus;
+export type ColunaId = 'AGUARDANDO' | ProjectWorkflowStatus;
 /** Rótulos curtos para a barra de etapas do celular. */
 const ROTULO_CURTO: Partial<Record<ColunaId, string>> = { AGUARDANDO: 'Aguardando início', DONE: 'Produzido' };
 
@@ -70,7 +72,7 @@ function MoverPara({ cartao, aoEscolher }: { cartao: CartaoFluxo; aoEscolher: (s
 function ColunaAguardando({ cartoes, abrir, ativa, faltaMaterial }: { cartoes: CartaoFluxo[]; abrir: (cartao: CartaoFluxo) => void; ativa: boolean; faltaMaterial?: (cartao: CartaoFluxo) => void }) {
   return <section className={`fluxo-coluna fluxo-coluna-aguardando${ativa ? ' ativa' : ''}`} aria-labelledby="fluxo-AGUARDANDO">
     <header><h2 id="fluxo-AGUARDANDO">Aguardando início</h2><span>{cartoes.length}</span></header>
-    <p className="fluxo-coluna-nota">Entram em “A fazer” quando o serviço é iniciado. Com a produção parada, voltam para onde estavam ao retomar.</p>
+    <p className="fluxo-coluna-nota">Os projetos entram em “A fazer” quando o serviço é iniciado. Se a produção for interrompida, retornam à etapa anterior na retomada.</p>
     <ol className="fluxo-lista">
       {cartoes.map((cartao) => <li key={cartao.id}><div className="fluxo-cartao-caixa"><CartaoProjeto cartao={cartao} role="link" tabIndex={0} className="fluxo-cartao-fixo"
         aria-label={`${descricaoCartao(cartao)}, ${FASE_ORCAMENTO_FLUXO_LABELS[cartao.quote.phase].toLowerCase()}. Enter para abrir.`}
@@ -108,14 +110,30 @@ function Coluna({ status, ids, porId, abrir, ativa, moverPara, faltaMaterial }: 
  * Kanban de projetos. Durante o arraste a ordem fica local (`ordem`); ao soltar,
  * `onMover` recebe a coluna de destino e a ordem visível final dela.
  */
-export function QuadroProjetos({ cartoes, onMover, onFaltaMaterial }: { cartoes: CartaoFluxo[]; onMover: (id: string, status: ProjectWorkflowStatus, idsDestino: string[], origem?: 'menu') => void; onFaltaMaterial?: (cartao: CartaoFluxo) => void }) {
+export function QuadroProjetos({ cartoes, onMover, onFaltaMaterial, colunaInicial, aoTrocarColuna, destaque }: { cartoes: CartaoFluxo[]; onMover: (id: string, status: ProjectWorkflowStatus, idsDestino: string[], origem?: 'menu') => void; onFaltaMaterial?: (cartao: CartaoFluxo) => void; colunaInicial?: ColunaId; aoTrocarColuna?: (coluna: ColunaId) => void; destaque?: string | null }) {
   const router = useRouter();
   const celular = useCelular();
   // No celular, abre na primeira etapa de trabalho; as outras ficam a um toque na barra de etapas.
-  const [colunaAtiva, setColunaAtiva] = useState<ColunaId>('TODO');
+  const [colunaAtiva, setColunaAtiva] = useState<ColunaId>(colunaInicial ?? 'TODO');
+  useEffect(() => { aoTrocarColuna?.(colunaAtiva); }, [colunaAtiva]); // eslint-disable-line react-hooks/exhaustive-deps
   const colunas = useMemo(() => colunasFluxo(cartoes), [cartoes]);
   const aguardando = useMemo(() => aguardandoInicio(cartoes), [cartoes]);
   const porId = useMemo(() => new Map(cartoes.map((cartao) => [cartao.id, cartao])), [cartoes]);
+  // De volta de um orçamento aberto por aqui: mostra a etapa do cartão (no celular), rola até ele e o destaca.
+  const destacado = useRef(false);
+  useEffect(() => {
+    const cartao = destaque ? porId.get(destaque) : undefined;
+    if (!cartao || destacado.current) return;
+    destacado.current = true;
+    setColunaAtiva(aguardando.some((entrada) => entrada.id === cartao.id) ? 'AGUARDANDO' : cartao.status);
+    window.setTimeout(() => {
+      const elemento = document.querySelector<HTMLElement>(`.fluxo-quadro [data-cartao="${window.CSS.escape(cartao.id)}"]`);
+      if (!elemento) return;
+      elemento.scrollIntoView({ block: 'center', inline: 'center' });
+      elemento.classList.add('fluxo-cartao-destaque');
+      window.setTimeout(() => elemento.classList.remove('fluxo-cartao-destaque'), 2600);
+    }, 60);
+  }, [destaque, porId, aguardando]);
   const [ordemArraste, setOrdemArraste] = useState<Ordem | null>(null);
   const [ativo, setAtivo] = useState<string | null>(null);
   const acabouDeArrastar = useRef(false);

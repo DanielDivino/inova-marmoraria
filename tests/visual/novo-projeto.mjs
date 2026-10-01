@@ -3,6 +3,7 @@ import { expect } from '@playwright/test';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { orcamentoSalvo } from './apoio/orcamento-salvo.mjs';
 
 // API inteiramente simulada: não cria clientes nem orçamentos reais.
 const output = resolve(import.meta.dirname, '../../.test-artifacts/novo-projeto');
@@ -30,6 +31,8 @@ let saved;
 await page.route('**/api/**', async route => {
   const path = new URL(route.request().url()).pathname;
   if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'visual-project', name: 'Administrador Inova', role: 'SUPER_ADMIN' } } });
+  // Projetos com desenho técnico (Exportar do orçamento): nenhum.
+  if (/^\/api\/quotes\/[^/]+\/desenhos-tecnicos$/.test(path)) return route.fulfill({ json: { projetos: [] } });
   // Rascunho do Novo orçamento no servidor (vazio: vale o deste navegador).
   if (path === '/api/quote-draft') return route.fulfill({ json: route.request().method() === 'GET' ? { version: null } : { saved: true, version: 1 } });
   if (path === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
@@ -42,6 +45,9 @@ await page.route('**/api/**', async route => {
     return route.fulfill({ json: { id: 'saved-test' }, status: 201 });
   }
   if (path === '/api/quotes/saved-test/status') return route.fulfill({ json: { status: 'SENT' } });
+  // Depois de salvar abre a tela do orçamento salvo.
+  if (path === '/api/quotes/saved-test' && route.request().method() === 'GET') return route.fulfill({ json: orcamentoSalvo('saved-test') });
+  if (path === '/api/workers') return route.fulfill({ json: [] });
   if (path === '/api/quotes') return route.fulfill({ json: { data: [], total: 0 } });
   errors.push('API não prevista: ' + path);
   return route.fulfill({ status: 404, json: {} });
@@ -73,7 +79,7 @@ try {
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('2,50');
   await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,60');
   await page.getByRole('button', { name: '+ Acabamentos', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: /^Acabamentos de/ });
+  const dialog = page.getByRole('dialog', { name: 'Acabamentos da peça' });
   await dialog.locator('fieldset').filter({ hasText: 'Acabamento 45°' }).getByLabel('Inferior', { exact: true }).check();
   await dialog.locator('fieldset').filter({ hasText: 'Saia' }).getByLabel('Inferior', { exact: true }).check();
   await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
@@ -163,10 +169,10 @@ try {
   await escolherProjeto('Bancada da cozinha');
   assert.equal(await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).inputValue(), '2,50');
   await escolherProjeto('Segundo projeto');
-  page.once('dialog', dialog => dialog.accept());
   await excluirProjeto('Segundo projeto');
+  await page.getByRole('alertdialog', { name: 'Excluir Segundo projeto?' }).getByRole('button', { name: 'Excluir projeto', exact: true }).click();
   await page.locator('.quote-summary-actions').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
-  await page.waitForURL('**/orcamentos');
+  await page.waitForURL('**/orcamentos/saved-test');
   assert.equal(saved.items[0].components[0].edges.length, 2);
   assert.equal(saved.items[0].components[0].orientation, 'HORIZONTAL', 'Orientação interna preservada');
   assert(saved.items[0].services.some((servico) => servico.serviceId === 'oval-cut'), 'Corte de cuba oval salvo como serviço do projeto');

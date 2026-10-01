@@ -2,14 +2,15 @@ import { escopoClientes, escopoOrcamentos, exigirPermissao } from '../../compart
 import { createHash } from 'node:crypto';
 import PDFDocument from 'pdfkit';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { temPermissao } from '@inova/domain';
+import { nomeProjeto, temPermissao } from '@inova/domain';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
 import { AppError, idSchema } from '../../compartilhado/http.js';
-import { createDesignSchema, createJobSchema, createProjectSchema, decisionSchema, emptyTechnicalDocument, technicalDocumentSchema, updateDraftSchema } from './design.schema.js';
+import { createDesignSchema, createJobSchema, createProjectSchema, decisionSchema, emptyTechnicalDocument, projetoNoOrcamentoSchema, sincroniaDesenhoSchema, technicalDocumentSchema, updateDraftSchema } from './design.schema.js';
 import { validateTechnicalDocument } from './geometry.js';
 import { renderizarPdfTecnico } from './technical.pdf.js';
+import { desenhoDoOrcamentoSemProjeto, desenhoDoProjeto, desenhosTecnicosDosProjetos, projetoSalvoParaDesenho, selecaoProjetoParaDesenho, sincronizarComOrcamento, vinculoDoProjeto } from './desenho-tecnico-do-orcamento.js';
 
 const designWithDetails = {
   project: { include: { job: { include: { customer: { select: { id: true, name: true, phone: true } } } } } },
@@ -34,6 +35,18 @@ async function getDesign(id: string) {
 
 /** Atendimento onde ficam os desenhos feitos de dentro do Novo orçamento (um por cliente). */
 const ATENDIMENTO_DESENHOS = 'Desenhos técnicos';
+
+/** Novo desenho no atendimento "Desenhos técnicos" do cliente: rascunho vazio ou, com `documento`, a cópia de outro. */
+async function criarDesenhoDoCliente(tx: Prisma.TransactionClient, customerId: string, nome: string | undefined, userId: string, documento: Prisma.InputJsonValue = emptyTechnicalDocument() as Prisma.InputJsonValue) {
+  const job = await tx.job.findFirst({ where: { customerId, name: ATENDIMENTO_DESENHOS }, orderBy: { createdAt: 'asc' } })
+    ?? await tx.job.create({ data: { customerId, name: ATENDIMENTO_DESENHOS, createdById: userId } });
+  const total = await tx.project.count({ where: { job: { customerId } } });
+  const project = await tx.project.create({ data: { jobId: job.id, name: nome ?? `Desenho ${total + 1}` } });
+  const design = await tx.design.create({ data: { projectId: project.id, name: 'Desenho técnico' } });
+  const draft = await tx.designDraft.create({ data: { designId: design.id, document: documento, updatedById: userId } });
+  await tx.design.update({ where: { id: design.id }, data: { activeDraftId: draft.id } });
+  return { project, design, draft };
+}
 const podeDesenhar = (request: FastifyRequest) => temPermissao(request.user.role, 'technical') || temPermissao(request.user.role, 'commercial');
 /**
  * Desenho do cliente feito de dentro do Novo orçamento: a equipe técnica abre
@@ -76,16 +89,7 @@ export async function registrarRotasDesenhos(app: FastifyInstance) {
   app.post('/customers/:id/designs', doCliente, async (request, reply) => {
     const { id } = idSchema.parse(request.params);
     const { name } = z.object({ name: z.string().trim().min(1).max(120).optional() }).strict().parse(request.body ?? {});
-    const criado = await prisma.$transaction(async tx => {
-      const job = await tx.job.findFirst({ where: { customerId: id, name: ATENDIMENTO_DESENHOS }, orderBy: { createdAt: 'asc' } })
-        ?? await tx.job.create({ data: { customerId: id, name: ATENDIMENTO_DESENHOS, createdById: request.user.id } });
-      const total = await tx.project.count({ where: { job: { customerId: id } } });
-      const project = await tx.project.create({ data: { jobId: job.id, name: name ?? `Desenho ${total + 1}` } });
-      const design = await tx.design.create({ data: { projectId: project.id, name: 'Desenho técnico' } });
-      const draft = await tx.designDraft.create({ data: { designId: design.id, document: emptyTechnicalDocument() as Prisma.InputJsonValue, updatedById: request.user.id } });
-      await tx.design.update({ where: { id: design.id }, data: { activeDraftId: draft.id } });
-      return { project, design };
-    });
+    const criado = await prisma.$transaction((tx) => criarDesenhoDoCliente(tx, id, name, request.user.id));
     await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'DESIGN', entityId: criado.design.id, action: 'CREATED_FOR_CUSTOMER', current: { customerId: id, projectId: criado.project.id, name: criado.project.name } } });
     return reply.status(201).send({ designId: criado.design.id, projectId: criado.project.id, name: criado.project.name });
   });
@@ -152,6 +156,22 @@ export async function registrarRotasDesenhos(app: FastifyInstance) {
     return reply.send({ id: result.id, version: result.version, schemaVersion: result.schemaVersion, document: input.document, updatedAt: result.updatedAt, diagnostics });
   });
 
+  // Cópia independente do desenho como está agora (projeto duplicado no orçamento): mexer em um não muda o outro.
+  app.post('/designs/:id/copy', desenhoAcessivel, async (request, reply) => {
+    const { id } = idSchema.parse(request.params);
+    const { name } = z.object({ name: z.string().trim().min(1).max(120).optional() }).strict().parse(request.body ?? {});
+    const origem = await prisma.design.findUnique({ where: { id }, select: { activeDraft: { select: { document: true } }, project: { select: { name: true, job: { select: { customerId: true } } } } } });
+    if (!origem?.activeDraft) throw new AppError(404, 'Desenho técnico não encontrado.', 'DESIGN_NOT_FOUND');
+    const copia = await prisma.$transaction((tx) => criarDesenhoDoCliente(tx, origem.project.job.customerId, name ?? `${origem.project.name} (cópia)`.slice(0, 120), request.user.id, origem.activeDraft!.document as Prisma.InputJsonValue));
+    await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'DESIGN', entityId: copia.design.id, action: 'COPIED', current: { fromDesignId: id, projectId: copia.project.id, name: copia.project.name } } });
+    return reply.status(201).send({ designId: copia.design.id, projectId: copia.project.id, nome: copia.project.name, versao: copia.draft.version });
+  });
+  // Novo orçamento: antes de abrir o desenho de um projeto, leva a ele o que mudou no Orçamento Rápido.
+  app.post('/designs/:id/sincronizar', desenhoAcessivel, async (request) => {
+    const { id } = idSchema.parse(request.params);
+    const { projeto, sincronia } = z.object({ projeto: projetoNoOrcamentoSchema, sincronia: sincroniaDesenhoSchema.optional() }).strict().parse(request.body);
+    return sincronizarComOrcamento(id, projeto, sincronia, request.user.id);
+  });
   app.post('/designs/:id/validate', desenhoAcessivel, async (request) => {
     const document = technicalDocumentSchema.parse(z.object({ document: technicalDocumentSchema }).parse(request.body).document);
     return { diagnostics: validateTechnicalDocument(document) };
@@ -206,6 +226,52 @@ export async function registrarRotasDesenhos(app: FastifyInstance) {
     renderizarPdfTecnico(pdf, technicalDocumentSchema.parse(revision.document), { customer: revision.design.project.job.customer.name, project: revision.design.project.name, design: revision.design.name, revision: revision.number, hash: revision.contentHash, status: revision.status, createdAt: revision.createdAt });
     pdf.end();
     return reply.type('application/pdf').header('Content-Disposition', `inline; filename="desenho-tecnico-r${revision.number}.pdf"`).send(pdf);
+  });
+
+  // "Imprimir desenho técnico" de um projeto do orçamento: o desenho usado nesse projeto (Novo orçamento)
+  // ou, sem ele, o desenho técnico do orçamento — como está agora no editor. Quem vê o orçamento pode imprimir.
+  app.get('/quotes/:id/items/:itemId/technical-pdf', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { id, itemId } = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const quote = await prisma.quote.findFirst({ where: { AND: [{ id }, escopoOrcamentos(request.user)] }, select: { id: true, number: true, customerId: true, customerNameSnapshot: true, deliveryDeadline: true, dueDate: true, items: { where: { id: itemId }, select: { id: true, projectName: true, drawingData: true } } } });
+    if (!quote?.items[0]) throw new AppError(404, 'Projeto não encontrado.', 'NOT_FOUND');
+    const [desenho] = await desenhosTecnicosDosProjetos(quote, quote.items);
+    if ('erro' in desenho) throw desenho.erro === 'EMPTY_TECHNICAL_DESIGN'
+      ? new AppError(404, 'O desenho técnico deste projeto ainda não possui peças.', 'EMPTY_TECHNICAL_DESIGN')
+      : new AppError(404, 'Este projeto ainda não possui desenho técnico. Para criá-lo, use “Adicionar desenho técnico” no projeto.', 'NO_TECHNICAL_DESIGN');
+    const pdf = new PDFDocument({ size: 'A4', margin: 36, bufferPages: true });
+    renderizarPdfTecnico(pdf, desenho.documento, desenho.dados);
+    pdf.end();
+    return reply.type('application/pdf').header('Content-Disposition', `inline; filename="desenho-tecnico-${quote.number}.pdf"`).send(pdf);
+  });
+
+  // Desenho técnico de um projeto do orçamento: abre o dele ou cria um novo, ligado só a ele.
+  // O desenho antigo do orçamento (de antes de cada projeto ter o seu) vai para o projeto que o
+  // pedir: sozinho quando o orçamento tem um projeto só; com mais de um, perguntando antes.
+  app.post('/quotes/:id/items/:itemId/technical-design', authenticated, async (request, reply) => {
+    const { id, itemId } = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const { usarDoOrcamento } = z.object({ usarDoOrcamento: z.boolean().optional() }).strict().parse(request.body ?? {});
+    const quote = await prisma.quote.findFirst({ where: { AND: [{ id }, escopoOrcamentos(request.user)] }, select: { id: true, number: true, customerId: true, items: { select: { id: true, ...selecaoProjetoParaDesenho } } } });
+    const item = quote?.items.find((entrada) => entrada.id === itemId);
+    if (!quote || !item) throw new AppError(404, 'Projeto não encontrado.', 'NOT_FOUND');
+    // Abre levando ao desenho o que mudou no orçamento (um desenho novo recebe o projeto inteiro) e grava o vínculo no projeto.
+    const abrir = async (design: { id: string; projectId: string }) => {
+      const vinculo = vinculoDoProjeto(item.drawingData);
+      const mesmo = vinculo?.designId === design.id ? vinculo : undefined;
+      const troca = await sincronizarComOrcamento(design.id, projetoSalvoParaDesenho(item), mesmo?.sincronia, request.user.id);
+      const desenhoTecnico = { designId: design.id, nome: troca.nome.slice(0, 160), versao: troca.versao, total: mesmo?.total ?? 0, aceitoEm: mesmo?.aceitoEm ?? new Date().toISOString(), ...(troca.sincronia ? { sincronia: troca.sincronia } : {}) };
+      const drawingData = item.drawingData && typeof item.drawingData === 'object' && !Array.isArray(item.drawingData) ? item.drawingData : {};
+      await prisma.quoteItem.update({ where: { id: item.id }, data: { drawingData: { ...drawingData, desenhoTecnico } as Prisma.InputJsonValue } });
+      return { designId: design.id, editorUrl: `/projetos/${design.projectId}/desenhos/${design.id}`, avisos: troca.avisos };
+    };
+    const ligado = desenhoDoProjeto(item.drawingData);
+    const doProjeto = ligado ? await prisma.design.findFirst({ where: { id: ligado, project: { job: { customerId: quote.customerId } } }, select: { id: true, projectId: true } }) : null;
+    if (doProjeto) return abrir(doProjeto);
+    const antigo = await desenhoDoOrcamentoSemProjeto(quote.id, quote.items);
+    if (antigo && (quote.items.length === 1 || usarDoOrcamento === true)) return abrir(antigo);
+    if (antigo && usarDoOrcamento === undefined) throw new AppError(409, 'Este orçamento já tem um desenho técnico que ainda não foi ligado a nenhum projeto.', 'UNASSIGNED_TECHNICAL_DESIGN');
+    const criado = await prisma.$transaction((tx) => criarDesenhoDoCliente(tx, quote.customerId, `${nomeProjeto(item)} · ${quote.number}`.slice(0, 120), request.user.id));
+    await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'DESIGN', entityId: criado.design.id, action: 'CREATED_FROM_QUOTE', current: { quoteId: quote.id, itemId: item.id, projectId: criado.project.id } } });
+    return reply.status(201).send(await abrir(criado.design));
   });
 
   app.post('/quotes/:id/technical-project', authenticated, async (request, reply) => {

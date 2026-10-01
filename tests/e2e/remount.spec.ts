@@ -22,7 +22,8 @@ test('remontagem: serviços, materiais, pagamento, persistência e documentos em
   expect(created.status()).toBe(201);
   const original = await created.json();
   await page.goto(`/orcamentos/${original.id}`);
-  await page.getByRole('link', { name: 'Desmontagem / Remontagem', exact: true }).click();
+  await page.getByRole('button', { name: 'Mais ações do orçamento' }).click();
+  await page.getByRole('menu').getByRole('menuitem', { name: 'Desmontagem / Remontagem', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Desmontagem e Remontagem', exact: true })).toBeVisible();
   await expect(page.getByText('Observações do projeto: Projeto original preservado.')).toBeVisible();
   const summary = page.locator('.quote-summary-card');

@@ -19,7 +19,7 @@ const quote = (components = [component()], notes: string | null = 'Conferir medi
   items: [{ projectName: 'Bancada da cozinha', materialNameSnapshot: 'Verde Ubatuba', productType: { name: 'Bancada' }, billedQuantity: 2.4, services: [], components, cutouts: [] }],
 });
 
-async function render(input: ReturnType<typeof quote>, artifact?: string) {
+async function render(input: ReturnType<typeof quote>, artifact?: string, projetoId?: string) {
   const pdf = new PDFDocument({ margin: 36 });
   const strokes = vi.spyOn(pdf, 'strokeColor');
   const printed = vi.spyOn(pdf, 'text');
@@ -27,7 +27,7 @@ async function render(input: ReturnType<typeof quote>, artifact?: string) {
   const paths = vi.spyOn(pdf, 'path');
   const chunks: Buffer[] = [];
   const done = new Promise<Buffer>((resolve, reject) => { pdf.on('data', (chunk) => chunks.push(chunk)); pdf.on('end', () => resolve(Buffer.concat(chunks))); pdf.on('error', reject); });
-  renderizarPdfOrcamento(pdf, input); pdf.end();
+  renderizarPdfOrcamento(pdf, input, undefined, projetoId); pdf.end();
   const buffer = await done;
   if (artifact) { mkdirSync('.test-artifacts/pdf', { recursive: true }); writeFileSync(`.test-artifacts/pdf/${artifact}.pdf`, buffer); }
   const directory = mkdtempSync(join(tmpdir(), 'inova-pdf-test-'));
@@ -179,7 +179,7 @@ describe('Desenho e observações do PDF', () => {
     expect(result.redMarkers).toBe(4);
     expect(result.pages.length).toBeGreaterThanOrEqual(2);
     for (const page of result.pages.slice(0, 2)) {
-      expect(page).toContain('Av. Visconde de Itiúba, Nº 224 - Flores - Manaus AM');
+      expect(page).toContain('Av. Visconde de Utinga, Nº 224 - Flores - Manaus AM');
       expect(page).toContain('Contatos: (92) 98181-7980 / 93994-1402');
       expect(page).toContain('CNPJ: 32.298.601/0001-19');
     }
@@ -220,5 +220,31 @@ describe('Desenho e observações do PDF', () => {
     expect(result.pages[1]).toContain('Soleira');
     expect(result.text).not.toContain('Detalhe do peitoril');
     expect(result.text).not.toContain('Medida horizontal:');
+  });
+});
+
+describe('PDF de um projeto', () => {
+  const doisProjetos = () => {
+    const base = quote();
+    return { ...base, netTotal: 2300, discountAmount: 100, items: [{ ...base.items[0], id: 'p1', total: 1440 }, { ...base.items[0], id: 'p2', projectName: 'Banheiro social', total: 960 }] };
+  };
+  const impresso = (resultado: Awaited<ReturnType<typeof render>>) => resultado.printed.map(([texto]) => String(texto));
+
+  it('o PDF completo continua com todos os projetos e o desconto final', async () => {
+    const completo = await render(doisProjetos());
+    expect(completo.pages[0]).toContain('BANCADA DA COZINHA');
+    expect(completo.pages[0]).toContain('BANHEIRO SOCIAL');
+    expect(completo.pages[0]).toContain('DESCONTO FINAL');
+    expect(impresso(completo)).toContain('R$ 2.300,00');
+  });
+
+  it('sai só o projeto escolhido, com o total dele e sem o desconto final do orçamento', async () => {
+    const projeto = await render(doisProjetos(), 'pdf-do-projeto', 'p2');
+    expect(projeto.pages[0]).toContain('BANHEIRO SOCIAL');
+    expect(projeto.text).not.toMatch(/bancada da cozinha/i);
+    expect(projeto.pages[0]).not.toContain('DESCONTO FINAL');
+    expect(impresso(projeto)).toContain('R$ 960,00');
+    expect(impresso(projeto)).not.toContain('R$ 2.300,00');
+    expect(impresso(projeto).some((texto) => texto.includes('Proposta referente apenas ao projeto “Banheiro social” do orçamento INO-2026-TESTE. O desconto final do orçamento vale para a contratação completa'))).toBe(true);
   });
 });

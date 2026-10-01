@@ -15,6 +15,8 @@ export type ManufacturingComponent = {
    * normal (lengthMm acima), compartilhado pelas duas peças; só a largura se
    * divide nas duas peças reais que a oficina precisa cortar. */
   sillTopWidthMm?: number; sillBottomWidthMm?: number; sillFinalWidthMm?: number; sillOverlapMm?: number;
+  /** Cantos arredondados: as 4 pontas com este raio. */
+  cornerRadiusMm?: number;
   edges: { side: string; customLabel?: string | null; serviceName: string; lengthMm?: number | null; heightMm?: number | null; quantity?: number }[];
 };
 const n = (value: number) => value.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
@@ -56,6 +58,7 @@ export function descricaoProducaoComponente(component: ManufacturingComponent, c
   dimensions.push(`${component.quantity} ${component.quantity === 1 ? 'peça' : 'peças'}`);
   if (component.lengthMm > 0 && component.widthMm > 0) dimensions.push(`${(component.lengthMm * component.widthMm * component.quantity / 1_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m² total`);
   lines.push({ label: 'Peça', text: dimensions.join(' · ') });
+  if (component.cornerRadiusMm) lines.push({ label: 'Cantos', text: `arredondados nas 4 pontas · raio ${cm(component.cornerRadiusMm)} cm` });
   if (parentName) lines.push({ label: 'Vínculo', text: `Adicional de ${parentName}` });
   if (children.length) lines.push({ label: 'Componentes adicionados', text: children.join(' + ') });
   for (const edge of component.edges) {

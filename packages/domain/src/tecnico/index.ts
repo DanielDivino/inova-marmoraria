@@ -8,3 +8,4 @@ export * from './estimate.js';
 export * from './cotas.js';
 export * from './orcamento.js';
 export * from './areas.js';
+export * from './sincronia.js';

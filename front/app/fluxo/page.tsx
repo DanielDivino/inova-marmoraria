@@ -1,26 +1,44 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PROJECT_WORKFLOW_LABELS, type ProjectWorkflowStatus } from '@inova/domain';
-import { QuadroProjetos } from '../../componentes/fluxo/QuadroProjetos';
+import { QuadroProjetos, type ColunaId } from '../../componentes/fluxo/QuadroProjetos';
+import { useFiltrosNaUrl } from '../../componentes/useFiltrosNaUrl';
 import { ResumoOrcamentos } from '../../componentes/fluxo/ResumoOrcamentos';
 import { PerguntaPecas, type PedidoPecas } from '../../componentes/fluxo/PerguntaPecas';
 import { somaQuantidades, type QuantidadesPecas } from '../../componentes/fluxo/SeletorPecas';
 import { api } from '../../utilitarios/api';
 import { entregaFinalDoOrcamento, filtrarCartoes, moverCartaoLocal, nomeResponsavel, OPCOES_ENTREGA, OPCOES_MATERIAL, perguntarPecas, rotuloPecas, SEM_RESPONSAVEL, trocarCartoesDoProjeto, type CartaoFluxo, type CartaoMovido, type FiltroEntrega, type FiltroFluxo, type FiltroMaterial } from '../../utilitarios/fluxo';
 import { AbasFiltro, CampoFiltro, Icone, MenuSelecao, ModalFiltros, useCelular } from '../../componentes/filtros/Filtros';
+import { confirmar } from '../../componentes/Confirmacao';
 import '../../componentes/fluxo/fluxo.css';
 
 type Aba = 'QUADRO' | 'RESUMO';
 const FILTRO_VAZIO: FiltroFluxo = { customerId: '', quoteId: '', workerId: '', entrega: 'TODAS', entregaDe: '', entregaAte: '', material: '' };
 const diaMes = (data?: string) => data ? `${data.slice(8, 10)}/${data.slice(5, 7)}` : '…';
 
-export default function FluxoTrabalhoPage() {
+export default function FluxoTrabalhoPage() { return <Suspense fallback={<main className="list-page fluxo-page">Carregando fluxo…</main>}><FluxoTrabalho /></Suspense>; }
+
+/** Filtros guardados no endereço (ex.: ao voltar de um orçamento aberto pelo fluxo). */
+function filtroDoEndereco(parametros: URLSearchParams | { get: (nome: string) => string | null }): FiltroFluxo {
+  const entrega = OPCOES_ENTREGA.find((opcao) => opcao.valor === parametros.get('entrega'))?.valor ?? 'TODAS';
+  const material = OPCOES_MATERIAL.find((opcao) => opcao.valor === parametros.get('material'))?.valor ?? '';
+  return { ...FILTRO_VAZIO, customerId: parametros.get('cliente') ?? '', quoteId: parametros.get('orcamento') ?? '', workerId: parametros.get('funcionario') ?? '', entrega, material,
+    ...(entrega === 'PERSONALIZADO' ? { entregaDe: parametros.get('entregaDe') ?? '', entregaAte: parametros.get('entregaAte') ?? '' } : {}) };
+}
+
+function FluxoTrabalho() {
+  const parametros = useSearchParams();
   const [cartoes, setCartoes] = useState<CartaoFluxo[] | null>(null);
   const [erro, setErro] = useState('');
   const [tentativa, setTentativa] = useState(0);
-  const [aba, setAba] = useState<Aba>('QUADRO');
-  const [filtro, setFiltro] = useState<FiltroFluxo>(FILTRO_VAZIO);
+  const [aba, setAba] = useState<Aba>(parametros.get('aba') === 'RESUMO' ? 'RESUMO' : 'QUADRO');
+  const [filtro, setFiltro] = useState<FiltroFluxo>(() => filtroDoEndereco(parametros));
+  // Etapa aberta no celular e o cartão para destacar ao voltar de um orçamento aberto por aqui.
+  const [coluna, setColuna] = useState(parametros.get('coluna') ?? 'TODO');
+  const [destaque] = useState(parametros.get('cartao'));
+  useFiltrosNaUrl('fluxo', { aba, cliente: filtro.customerId, orcamento: filtro.quoteId, funcionario: filtro.workerId, entrega: filtro.entrega, entregaDe: filtro.entregaDe, entregaAte: filtro.entregaAte, material: filtro.material, coluna, cartao: null }, { aba: 'QUADRO', entrega: 'TODAS', coluna: 'TODO' });
   // Só a resposta do último movimento de cada cartão atualiza a tela.
   const versoes = useRef<Record<string, number>>({});
   // O desfazer roda depois de outros movimentos: lê sempre a lista mais recente.
@@ -77,7 +95,7 @@ export default function FluxoTrabalhoPage() {
     try {
       const salvo = await api<CartaoFluxo>(`/workflow/projects/${cartao.id}/material`, { method: 'PATCH', body: JSON.stringify({ faltaMaterial: valor }) });
       aplicar(!!salvo.materialMissing);
-      avisar(valor ? `${cartao.name}: marcado com falta de material.` : `${cartao.name}: falta de material resolvida.`, true);
+      avisar(valor ? `${cartao.name}: falta de material registrada.` : `${cartao.name}: falta de material regularizada.`, true);
     } catch (cause) {
       aplicar(!valor);
       setErro(cause instanceof Error ? cause.message : 'Não foi possível marcar a falta de material.');
@@ -91,7 +109,7 @@ export default function FluxoTrabalhoPage() {
     if (!respondido && perguntarPecas(cartao, status)) { setErroPecas(''); setPergunta({ cartao, status, idsDestino, origem }); return; }
     // Entregar o último projeto encerra o orçamento, que sai de Orçamentos para o Histórico: confirma antes.
     const entregaFinal = status === 'DELIVERED' && cartao.status !== 'DELIVERED' && entregaFinalDoOrcamento(atuais, id);
-    if (entregaFinal && !window.confirm(`Com este, todos os projetos de ${cartao.quote.number} (${cartao.quote.customerName}) estarão entregues. O orçamento será marcado como entregue e vai de Orçamentos para o Histórico. Confirmar?`)) return;
+    if (entregaFinal && !await confirmar({ titulo: 'Concluir a entrega do orçamento?', mensagem: `Com esta entrega, todos os projetos de ${cartao.quote.number} (${cartao.quote.customerName}) serão concluídos. O orçamento será marcado como entregue e transferido para o Histórico.`, confirmar: 'Marcar como entregue', icone: 'entregue' })) return;
     const { cartoes: atualizados, afterId, beforeId } = moverCartaoLocal(atuais, id, status, idsDestino);
     setCartoes(atualizados); setErro(''); avisar('');
     const versao = (versoes.current[id] ?? 0) + 1;
@@ -100,12 +118,12 @@ export default function FluxoTrabalhoPage() {
       const salvo = await api<CartaoMovido>(`/workflow/projects/${id}/move`, { method: 'PATCH', body: JSON.stringify({ status, afterId, beforeId }) });
       if (salvo.quoteDelivered) {
         setCartoes((atual) => atual?.filter((entrada) => entrada.quote.id !== salvo.quote.id) ?? atual);
-        avisar(`${salvo.quote.number} · ${salvo.quote.customerName} foi entregue e saiu do quadro. Ele está no Histórico; para reabrir, use "Marcar em retrabalho" no orçamento.`);
+        avisar(`${salvo.quote.number} · ${salvo.quote.customerName} foi concluído e transferido para o Histórico. Para reabri-lo, utilize "Marcar em retrabalho" no orçamento.`);
       } else {
         // O servidor devolve todos os cartões do projeto: um cartão pode ter se juntado a outro na mesma etapa.
         if (versoes.current[id] === versao) setCartoes((atual) => atual && trocarCartoesDoProjeto(atual, salvo.projectId, salvo.projectCards));
         // Pelo menu do celular o cartão sai da etapa que está na tela: o aviso confirma para onde foi.
-        if (origem === 'menu') avisar(`${cartao.name} foi para "${PROJECT_WORKFLOW_LABELS[status]}".`, true);
+        if (origem === 'menu') avisar(`${cartao.name} movido para "${PROJECT_WORKFLOW_LABELS[status]}".`, true);
       }
     } catch (cause) {
       // O quadro volta ao que está salvo para não mostrar uma ordem que não foi gravada.
@@ -175,6 +193,6 @@ export default function FluxoTrabalhoPage() {
     <PerguntaPecas pedido={pergunta} salvando={salvandoPecas} erro={erroPecas} aoCancelar={() => { if (!salvandoPecas) setPergunta(null); }} aoParte={(pecas) => void moverParte(pecas)}
       aoTodas={() => { if (!pergunta) return; const { cartao, status, idsDestino, origem } = pergunta; setPergunta(null); void mover(cartao.id, status, idsDestino, origem, true); }} />
     {!cartoes ? !erro && <p className="empty">Carregando projetos…</p>
-      : aba === 'QUADRO' ? <QuadroProjetos cartoes={visiveis} onMover={mover} onFaltaMaterial={alternarFaltaMaterial} /> : <ResumoOrcamentos cartoes={visiveis} />}
+      : aba === 'QUADRO' ? <QuadroProjetos cartoes={visiveis} onMover={mover} onFaltaMaterial={alternarFaltaMaterial} colunaInicial={coluna as ColunaId} aoTrocarColuna={setColuna} destaque={destaque} /> : <ResumoOrcamentos cartoes={visiveis} />}
   </main>;
 }

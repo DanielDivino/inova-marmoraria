@@ -1,3 +1,4 @@
+import { enderecoLogin } from './rotas';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 export type SessionUser = { id: string; name: string; role: 'SUPER_ADMIN' | 'ADMIN' | 'SELLER'; maxDiscountPercent: number };
@@ -66,7 +67,8 @@ async function requisicaoAutenticada(path: string, init: RequestInit = {}) {
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
         limparSessao();
-        if (window.location.pathname !== '/login') window.location.replace('/login');
+        // Depois de entrar de novo, volta para a tela em que estava.
+        if (window.location.pathname !== '/login') window.location.replace(enderecoLogin(window.location.pathname + (window.location.search ?? '')));
       }
       throw cause;
     }

@@ -41,7 +41,9 @@ export const componentTypeLabels: Record<ComponentType, string> = { TOP: 'Tampo'
 export type ComponentDrawingDetail = { parentComponentIndex?: number; parentSide?: Exclude<EdgeSide, 'CUSTOM'>; sillDetailMm?: number; sillDetailHeightMm?: number;
   /** Peitoril de duas pedras sobrepostas (Orçamento Rápido) — comprimento é o
    * normal do componente (lengthMm), compartilhado pelas duas pedras. */
-  sillTopWidthMm?: number; sillBottomWidthMm?: number; sillFinalWidthMm?: number; sillOverlapMm?: number };
+  sillTopWidthMm?: number; sillBottomWidthMm?: number; sillFinalWidthMm?: number; sillOverlapMm?: number;
+  /** Cantos arredondados (acabamento do Orçamento Rápido): as 4 pontas com este raio. */
+  cornerRadiusMm?: number };
 const sillDuploNumericFields = ['sillTopWidthMm', 'sillBottomWidthMm', 'sillFinalWidthMm', 'sillOverlapMm'] as const;
 
 /** Indexes follow the persisted component sort order, so recreated IDs are safe. */
@@ -56,6 +58,7 @@ export function detalheDesenhoComponente(data: unknown, index: number): Componen
     ...(Number.isInteger(detail.sillDetailHeightMm) && detail.sillDetailHeightMm > 0 ? { sillDetailHeightMm: detail.sillDetailHeightMm } : {}),
   };
   for (const field of sillDuploNumericFields) if (Number.isInteger(detail[field]) && detail[field] > 0) result[field] = detail[field];
+  if (Number.isInteger(detail.cornerRadiusMm) && detail.cornerRadiusMm > 0) result.cornerRadiusMm = detail.cornerRadiusMm;
   return result;
 }
 

@@ -35,6 +35,7 @@ export function itemSalvoParaRascunho(saved: SavedQuoteItem): DraftItem {
       sillBottomWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillBottomWidthMm),
       sillFinalWidthCm: cm(detalheDesenhoComponente(input.drawingData, index).sillFinalWidthMm),
       sillOverlapCm: cm(detalheDesenhoComponente(input.drawingData, index).sillOverlapMm),
+      raioCantosCm: cm(detalheDesenhoComponente(input.drawingData, index).cornerRadiusMm),
       appliedTotal: m2Fechado && valorDoM2Fechado(saved.components[index], saved) ? undefined : price(component.appliedTotal), edges: component.edges.map((edge) => ({ ...edge, lengthCm: cm(edge.lengthMm), heightCm: cm(edge.heightMm), appliedTotal: price(edge.appliedSubtotal) })),
     })),
     cutouts: input.cutouts.map((cutout, index) => ({ ...cutout, id: saved.cutouts[index].id, lengthCm: cm(cutout.lengthMm), widthCm: cm(cutout.widthMm), diameterCm: cm(cutout.diameterMm), positionXCm: cm(cutout.positionX), positionYCm: cm(cutout.positionY), appliedTotal: price(cutout.appliedSubtotal) })),
@@ -68,6 +69,7 @@ export function rascunhoParaEntradaItem(draft: DraftItem, saved?: SavedQuoteItem
       ...(component.componentType === 'SILL' && component.sillBottomWidthCm?.trim() ? { sillBottomWidthMm: centimetrosParaMilimetros(component.sillBottomWidthCm) } : {}),
       ...(component.componentType === 'SILL' && component.sillFinalWidthCm?.trim() ? { sillFinalWidthMm: centimetrosParaMilimetros(component.sillFinalWidthCm) } : {}),
       ...(component.componentType === 'SILL' && component.sillOverlapCm?.trim() ? { sillOverlapMm: centimetrosParaMilimetros(component.sillOverlapCm) } : {}),
+      ...(component.raioCantosCm?.trim() && centimetrosParaMilimetros(component.raioCantosCm) > 0 ? { cornerRadiusMm: centimetrosParaMilimetros(component.raioCantosCm) } : {}),
     };
   }) : [];
   const hasDetails = componentDetails.some((detail) => Object.keys(detail).length);

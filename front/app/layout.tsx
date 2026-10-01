@@ -5,6 +5,7 @@ import './application.css';
 import './stone-theme.css';
 import './dark-theme.css';
 import './mobile.css';
+import './janelas.css';
 import { EstruturaAplicacao } from '../componentes/ApplicationShell';
 
 export const metadata: Metadata = {

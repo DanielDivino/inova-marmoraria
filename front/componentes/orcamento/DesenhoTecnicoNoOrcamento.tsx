@@ -14,12 +14,12 @@ export type DesenhoDoCliente = { id: string; nome: string; atualizadoEm: string;
 export type DesenhoUsado = Parameters<DesenhoNoOrcamento['aoUsar']>[0];
 
 /**
- * Desenho técnico dentro do Novo orçamento. Cada desenho é um rascunho do
- * cliente (fica salvo mesmo sem ir para o orçamento); "Usar no orçamento"
- * leva as peças e o valor para o projeto do resumo. Sem cliente, pede para
- * escolher um ou abrir um orçamento sem cadastro.
+ * Desenho técnico dentro do Novo orçamento. Em destaque, o desenho do projeto aberto: criado já com
+ * as peças do Orçamento Rápido e ligado ao projeto (ou, se já existe, aberto). Abaixo, os outros
+ * rascunhos do cliente e um desenho em branco; "Usar no orçamento" leva as peças e o valor para o
+ * projeto do resumo. Sem cliente, pede para escolher um ou abrir um orçamento sem cadastro.
  */
-export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRevisar, aoEscolherCliente, aoSemCadastro, aoUsar }: {
+export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRevisar, aoEscolherCliente, aoSemCadastro, aoUsar, antesDeAbrir, projetoAtual, aoCriarDoProjeto }: {
   cliente: { id: string; name: string } | null;
   /** Desenhos já usados em projetos deste orçamento (designId). */
   desenhosNoOrcamento: string[];
@@ -27,6 +27,12 @@ export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRe
   aoEscolherCliente: () => void;
   aoSemCadastro: () => void;
   aoUsar: (desenho: DesenhoUsado) => void;
+  /** Antes de abrir: o desenho de um projeto deste orçamento recebe o que mudou no Orçamento Rápido. */
+  antesDeAbrir?: (designId: string) => Promise<void>;
+  /** Projeto aberto no orçamento: peças já medidas e o desenho dele, se já tiver. */
+  projetoAtual?: { nome: string; pecas: number; designId?: string } | null;
+  /** Cria o desenho do projeto aberto, já com as peças dele, e devolve o id. */
+  aoCriarDoProjeto?: () => Promise<string>;
 }) {
   const [janela, setJanela] = useState(false);
   const [desenhos, setDesenhos] = useState<DesenhoDoCliente[] | null>(null);
@@ -50,7 +56,13 @@ export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRe
     return () => { document.body.style.overflow = antes; };
   }, [aberto]);
 
-  const abrir = (id: string) => { setJanela(false); setErro(''); setAberto(id); };
+  const [preparando, setPreparando] = useState<string | null>(null);
+  const abrir = async (id: string) => {
+    if (preparando) return;
+    setErro(''); setPreparando(id);
+    try { await antesDeAbrir?.(id); } finally { setPreparando(null); }
+    setJanela(false); setAberto(id);
+  };
   const criar = async (evento: FormEvent) => {
     evento.preventDefault();
     if (!clienteId || criando) return;
@@ -58,8 +70,15 @@ export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRe
     try {
       const criado = await api<{ designId: string }>(`/customers/${clienteId}/designs`, { method: 'POST', body: JSON.stringify({ name: nome.trim() || undefined }) });
       setNome('');
-      abrir(criado.designId);
+      void abrir(criado.designId);
     } catch (causa) { setErro(causa instanceof Error ? causa.message : 'Não foi possível começar o desenho.'); }
+    finally { setCriando(false); }
+  };
+  const criarDoProjeto = async () => {
+    if (!aoCriarDoProjeto || criando) return;
+    setCriando(true); setErro('');
+    try { const id = await aoCriarDoProjeto(); setJanela(false); setAberto(id); }
+    catch (causa) { setErro(causa instanceof Error ? causa.message : 'Não foi possível criar o desenho do projeto.'); }
     finally { setCriando(false); }
   };
   const fechar = () => { setAberto(null); void carregar(); };
@@ -74,23 +93,31 @@ export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRe
     <ModalFiltros aberto={janela} aoFechar={() => setJanela(false)} titulo={cliente ? `Desenho técnico · ${cliente.name}` : 'Desenho técnico'} rotuloFechar="Fechar" className="orc-desenho-janela"
       rodape={<button type="button" className="botao-contorno" onClick={() => setJanela(false)}>Fechar</button>}>
       {!cliente ? <div className="orc-desenho-sem-cliente">
-        <p>O desenho fica salvo como rascunho do cliente. Escolha o cliente deste orçamento primeiro.</p>
+        <p>O desenho é salvo como rascunho do cliente. Selecione primeiro o cliente deste orçamento.</p>
         <div className="orc-desenho-acoes">
           <button type="button" className="botao-destaque" onClick={() => { setJanela(false); aoEscolherCliente(); }}><Icone nome="pessoa" tamanho={16} />Escolher cliente</button>
           <button type="button" className="botao-contorno" onClick={() => { setJanela(false); aoSemCadastro(); }}><Icone nome="raio" tamanho={16} />Orçamento sem cadastro</button>
         </div>
       </div> : <>
-        <p className="orc-desenho-ajuda">Cada desenho fica salvo como rascunho de {cliente.name}. As peças e o valor só entram no resumo do orçamento quando você clica em <strong>Usar no orçamento</strong>.</p>
+        {projetoAtual && <section className="orc-desenho-projeto" aria-label="Desenho técnico deste projeto">
+          <Icone nome="esquadro" tamanho={20} />
+          <div><strong>{projetoAtual.nome}</strong><small>{projetoAtual.designId ? 'Este projeto já tem desenho técnico. Ao abrir, ele recebe o que mudou no Orçamento Rápido.'
+            : projetoAtual.pecas ? `O desenho começa com ${projetoAtual.pecas === 1 ? 'a peça' : `as ${projetoAtual.pecas} peças`} do Orçamento Rápido e fica ligado a este projeto.` : 'O desenho fica ligado a este projeto; as peças que você medir no Orçamento Rápido entram nele.'}</small></div>
+          {projetoAtual.designId
+            ? <button type="button" className="botao-destaque" disabled={!!preparando} onClick={() => void abrir(projetoAtual.designId!)}>{preparando === projetoAtual.designId ? 'Abrindo…' : 'Abrir desenho do projeto'}</button>
+            : <button type="button" className="botao-destaque" disabled={criando} onClick={() => void criarDoProjeto()}><Icone nome="mais" tamanho={16} />{criando ? 'Criando…' : 'Criar desenho do projeto'}</button>}
+        </section>}
+        <p className="orc-desenho-ajuda">Cada desenho fica salvo como rascunho de {cliente.name}. As mudanças feitas no desenho só entram no resumo do orçamento quando você clica em <strong>Usar no orçamento</strong>.</p>
         {erro && <p className="form-error" role="alert">{erro}</p>}
         {desenhos === null ? <p className="orc-desenho-ajuda">Carregando…</p> : desenhos.length > 0 && <ul className="orc-desenho-lista" aria-label="Desenhos do cliente">
           {desenhos.map((desenho) => <li key={desenho.id}>
             <div><strong>{desenho.nome}</strong><small>{desenho.pecas} {desenho.pecas === 1 ? 'peça' : 'peças'} · atualizado em {new Date(desenho.atualizadoEm).toLocaleDateString('pt-BR')} · <span className={desenhosNoOrcamento.includes(desenho.id) ? 'no-orcamento' : undefined}>{situacao(desenho)}</span></small></div>
-            <button type="button" className="botao-contorno" onClick={() => abrir(desenho.id)}>Abrir</button>
+            <button type="button" className="botao-contorno" disabled={!!preparando} onClick={() => void abrir(desenho.id)}>{preparando === desenho.id ? 'Abrindo…' : 'Abrir'}</button>
           </li>)}
         </ul>}
         <form className="orc-desenho-novo" onSubmit={(evento) => void criar(evento)}>
-          <label>Novo desenho<input value={nome} maxLength={120} placeholder="Ex.: Cozinha, Banheiro social" onChange={(evento) => setNome(evento.target.value)} /></label>
-          <button type="submit" className="botao-destaque" disabled={criando}><Icone nome="mais" tamanho={16} />{criando ? 'Criando…' : 'Começar desenho'}</button>
+          <label>Desenho em branco, sem ligar a um projeto<input value={nome} maxLength={120} placeholder="Ex.: Cozinha, Banheiro social" onChange={(evento) => setNome(evento.target.value)} /></label>
+          <button type="submit" className="botao-destaque" disabled={criando}><Icone nome="mais" tamanho={16} />{criando ? 'Criando…' : 'Começar em branco'}</button>
         </form>
       </>}
     </ModalFiltros>

@@ -18,8 +18,8 @@ label.seletor-pecas-nome { cursor: pointer; }
 .seletor-pecas-quantidade button:disabled { opacity: .4; }
 .seletor-pecas-quantidade output { min-width: 22px; font-size: 15px; font-weight: 700; text-align: center; }
 .seletor-pecas-quantidade small { color: var(--muted); font-size: 11px; white-space: nowrap; }
-.modal-pecas .modal-filtros-campos p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
-.modal-pecas .modal-filtros-campos p strong { color: var(--ink); }
+.modal-pecas .janela-corpo p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.modal-pecas .janela-corpo p strong { color: var(--ink); }
 .modal-pecas-lista { display: grid; gap: 4px; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--soft); font-size: 12px; list-style: none; }
 .modal-pecas-lista li { display: flex; justify-content: space-between; gap: 12px; }
 .modal-pecas-lista small { color: var(--muted); }
