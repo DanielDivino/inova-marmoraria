@@ -163,7 +163,11 @@ try {
   // 7) Tela do orçamento: um Exportar em cada projeto, no lugar dos botões de PDF e de impressão.
   await page.getByRole('heading', { name: /ORC-2026-99/ }).waitFor();
   for (const antigo of ['PDF do projeto', 'Imprimir desenho', 'Imprimir desenho técnico']) await expect(page.getByRole('button', { name: antigo, exact: true })).toHaveCount(0);
-  const cartao = nome => page.locator('.detail-card').filter({ has: page.locator('span', { hasText: nome.toUpperCase() }) });
+  // Projetos em blocos compactos: abre o bloco antes de usar o que está dentro dele.
+  const cartao = nome => page.locator('.projeto-bloco').filter({ has: page.locator('.projeto-bloco-nome strong', { hasText: new RegExp(`^${nome}$`, 'i') }) });
+  const abrirBloco = async nome => { const cabeca = cartao(nome).locator('.projeto-bloco-cabeca'); if ((await cabeca.getAttribute('aria-expanded')) !== 'true') await cabeca.click(); };
+  await abrirBloco('Cozinha');
+  await abrirBloco('Banheiro social');
   const opcoes = page.getByRole('region', { name: 'Opções do PDF' });
   const caixinha = rotulo => opcoes.getByLabel(rotulo, { exact: true });
   const gerar = async () => { const [popup] = await Promise.all([context.waitForEvent('page'), opcoes.getByRole('button', { name: 'Gerar PDF' }).click()]); await popup.close(); };
@@ -225,6 +229,7 @@ try {
   await escolha.getByRole('button', { name: 'Cancelar' }).click();
   await escolha.waitFor({ state: 'detached' });
   assert.equal(desenhosPedidos.length, 1, 'cancelar não cria nem liga desenho');
+  await abrirBloco('Cozinha');
   await cartao('Cozinha').getByRole('button', { name: 'Adicionar desenho técnico' }).click();
   await escolha.getByRole('button', { name: 'Criar um novo' }).click();
   await page.waitForURL('**/projetos/pz/desenhos/dz?**');

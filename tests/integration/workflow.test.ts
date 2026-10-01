@@ -312,4 +312,28 @@ describe('Produção e entrega por peças', () => {
     const seller = await login('fluxo-vendedor@example.test', 'FluxoTest@2026');
     expect((await request('GET', `/quotes/${naoIniciado.id}/entregas`, seller)).statusCode).toBe(404);
   });
+  it('retrabalho de um projeto: as peças voltam (para entregar de novo ou refazer) e o orçamento entregue reabre', async () => {
+    const quote = await approvedQuote(admin, ['Cozinha', 'Banheiro']);
+    const cozinha = quote.items.find((projeto: any) => projeto.projectName === 'Cozinha');
+    const retrabalho = (corpo: object) => request('POST', `/quotes/${quote.id}/items/${cozinha.id}/retrabalho`, admin, corpo);
+    // Ainda em produção: nada volta.
+    expect((await retrabalho({ destino: 'DONE' })).json()).toMatchObject({ error: 'NOTHING_TO_REWORK' });
+    for (const card of await board(admin, quote.id)) await move(admin, card.id, { status: 'DELIVERED' });
+    expect((await request('GET', `/quotes/${quote.id}`, admin)).json()).toMatchObject({ executionStatus: 'COMPLETED' });
+
+    const entregarDeNovo = await retrabalho({ destino: 'DONE', motivo: 'Peça entregue no endereço errado' });
+    expect(entregarDeNovo.statusCode, entregarDeNovo.body).toBe(200);
+    expect(entregarDeNovo.json()).toMatchObject({ executionStatus: 'REWORK', completedAt: null });
+    const quadro = await board(admin, quote.id);
+    expect([column(quadro, 'DONE'), column(quadro, 'DELIVERED')]).toEqual([['Cozinha'], ['Banheiro']]);
+    expect((await retrabalho({ destino: 'IN_PROGRESS' })).statusCode).toBe(200);
+    expect(column(await board(admin, quote.id), 'IN_PROGRESS')).toEqual(['Cozinha']);
+    const eventos = (await request('GET', `/quotes/${quote.id}/historico`, admin)).json().eventos.map((evento: any) => [evento.titulo, evento.detalhe ?? '']);
+    expect(eventos).toContainEqual(['Cozinha em retrabalho', 'Volta para “Produzido – entrega/montagem” · Peça entregue no endereço errado']);
+    expect(eventos).toContainEqual(['Cozinha em retrabalho', 'Volta para “Em andamento”']);
+    expect(eventos.filter(([titulo]: string[]) => titulo === 'Encaminhado para retrabalho')).toHaveLength(1);
+    // Serviço ainda não iniciado: sem retrabalho.
+    const naoIniciado = await approvedQuote(admin, ['Lavabo'], 'NOT_STARTED');
+    expect((await request('POST', `/quotes/${naoIniciado.id}/items/${naoIniciado.items[0].id}/retrabalho`, admin, { destino: 'IN_PROGRESS' })).json()).toMatchObject({ error: 'REWORK_UNAVAILABLE' });
+  });
 });

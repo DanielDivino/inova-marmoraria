@@ -834,7 +834,11 @@ export default function EditorOrcamento() {
     <DesenhoTecnicoNoOrcamento cliente={customer ? { id: customer.id, name: customer.name } : null} desenhosNoOrcamento={items.flatMap((projeto) => vinculoDesenho(projeto)?.designId ?? [])}
       podeRevisar={!!currentUser && temPermissao(currentUser.role, 'technical')} aoEscolherCliente={openCustomerSearch} aoSemCadastro={() => void orcamentoSemCadastro()} aoUsar={usarDesenhoTecnico} antesDeAbrir={levarOrcamentoAoDesenho}
       projetoAtual={customer && item ? { nome: item.projectName.trim() || `Projeto ${activeIndex + 1}`, pecas: item.components.filter((component) => component.lengthCm.trim() && component.widthCm.trim()).length, designId: vinculoDesenho(item)?.designId } : null}
-      aoCriarDoProjeto={criarDesenhoDoProjeto} />
+      aoCriarDoProjeto={criarDesenhoDoProjeto} aoExcluir={(designId) => setItems((atual) => atual.map((projeto) => {
+        if (vinculoDesenho(projeto)?.designId !== designId) return projeto;
+        const { desenhoTecnico: _vinculo, ...drawingData } = projeto.drawingData ?? {};
+        return { ...projeto, drawingData };
+      }))} />
     {!quickMode && <div className="project-navigation"><EtapasProjeto current={currentStep} completed={completedSteps} onSelect={navigateStep} /><button type="button" className="view-all-button" aria-pressed={showAll} onClick={() => setShowAll((value) => !value)}>{showAll ? 'Ver por etapas' : 'Ver tudo'}</button></div>}
     {!quickMode && !temDesenho && <button type="button" className="botao-contorno botao-contorno-destaque concluir-detalhamento" onClick={concluirDetalhamento}><Icone nome="marcado" />Concluir detalhamento</button>}
     </div>

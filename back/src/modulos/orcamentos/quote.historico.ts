@@ -71,7 +71,18 @@ export function montarHistorico(orcamento: Orcamento, registros: Registro[]): { 
       case 'QUOTE:DUPLICATED': eventos.push({ ...base(registro), titulo: 'Orçamento criado a partir de uma cópia', tom: 'neutro', icone: 'criado' }); break;
       case 'QUOTE:UPDATED': eventos.push({ ...base(registro), titulo: 'Orçamento editado', tom: 'neutro', icone: 'editado' }); break;
       case 'QUOTE:CONTACT_UPDATED': eventos.push({ ...base(registro), titulo: 'Contato do cliente atualizado', tom: 'neutro', icone: 'contato' }); break;
-      case 'QUOTE:STATUS_CHANGED': eventos.push({ ...base(registro), ...situacao(anterior, atual), icone: 'situacao' }); break;
+      case 'QUOTE:STATUS_CHANGED': {
+        // Aprovação parcial: quais projetos o cliente não aprovou.
+        const naoAprovados = Array.isArray(atual.projetosNaoAprovados) ? atual.projetosNaoAprovados.map(texto).filter(Boolean) : [];
+        eventos.push({ ...base(registro), ...situacao(anterior, atual), ...(naoAprovados.length ? { titulo: 'Orçamento aprovado em parte', detalhe: `Não ${naoAprovados.length === 1 ? 'aprovado' : 'aprovados'}: ${naoAprovados.join(', ')}` } : {}), icone: 'situacao' });
+        break;
+      }
+      case 'QUOTE_ITEM:REWORK_STARTED':
+        eventos.push({ ...base(registro), titulo: `${projeto} em retrabalho`, detalhe: [`Volta para “${PROJECT_WORKFLOW_LABELS[texto(atual.destino) as ProjectWorkflowStatus] ?? texto(atual.destino)}”`, texto(atual.motivo)].filter(Boolean).join(' · '), tom: 'amarelo', icone: 'fluxo' });
+        break;
+      case 'QUOTE_ITEM:APPROVAL_CHANGED':
+        eventos.push({ ...base(registro), titulo: atual.aprovado ? `${projeto} aprovado pelo cliente` : `${projeto} marcado como não aprovado`, tom: atual.aprovado ? 'verde' : 'amarelo', icone: 'situacao' });
+        break;
       case 'QUOTE:DEADLINE_UPDATED': {
         const { partes, notas } = mudancasDeAcompanhamento(anterior, atual);
         if (partes.length) eventos.push({ ...base(registro), titulo: 'Prazos atualizados', detalhe: partes.join(' · '), tom: 'azul', icone: 'prazo' });

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { DesenhoNoOrcamento } from '../desenhos/EditorTecnico';
 import { api } from '../../utilitarios/api';
 import { Icone, ModalFiltros } from '../filtros/Filtros';
+import { confirmar } from '../Confirmacao';
 import './desenho-no-orcamento.css';
 
 // O editor (e o three.js da vista 3D) só carrega quando um desenho é aberto.
@@ -19,7 +20,7 @@ export type DesenhoUsado = Parameters<DesenhoNoOrcamento['aoUsar']>[0];
  * rascunhos do cliente e um desenho em branco; "Usar no orçamento" leva as peças e o valor para o
  * projeto do resumo. Sem cliente, pede para escolher um ou abrir um orçamento sem cadastro.
  */
-export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRevisar, aoEscolherCliente, aoSemCadastro, aoUsar, antesDeAbrir, projetoAtual, aoCriarDoProjeto }: {
+export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRevisar, aoEscolherCliente, aoSemCadastro, aoUsar, antesDeAbrir, projetoAtual, aoCriarDoProjeto, aoExcluir }: {
   cliente: { id: string; name: string } | null;
   /** Desenhos já usados em projetos deste orçamento (designId). */
   desenhosNoOrcamento: string[];
@@ -33,6 +34,8 @@ export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRe
   projetoAtual?: { nome: string; pecas: number; designId?: string } | null;
   /** Cria o desenho do projeto aberto, já com as peças dele, e devolve o id. */
   aoCriarDoProjeto?: () => Promise<string>;
+  /** Desenho excluído: os projetos deste orçamento ligados a ele ficam sem desenho técnico. */
+  aoExcluir?: (designId: string) => void;
 }) {
   const [janela, setJanela] = useState(false);
   const [desenhos, setDesenhos] = useState<DesenhoDoCliente[] | null>(null);
@@ -81,6 +84,24 @@ export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRe
     catch (causa) { setErro(causa instanceof Error ? causa.message : 'Não foi possível criar o desenho do projeto.'); }
     finally { setCriando(false); }
   };
+  const [excluindo, setExcluindo] = useState<string | null>(null);
+  const excluir = async (desenho: DesenhoDoCliente) => {
+    if (excluindo) return;
+    const neste = desenhosNoOrcamento.includes(desenho.id);
+    const outros = desenho.usadoEm.map((uso) => uso.number);
+    const efeitos = [
+      neste ? 'O projeto deste orçamento que usa este desenho fica sem desenho técnico; as peças do Orçamento Rápido continuam.' : '',
+      outros.length ? `Ele também está ligado a ${outros.join(', ')}: esses projetos ficam sem desenho técnico.` : '',
+    ].filter(Boolean).join(' ');
+    if (!await confirmar({ titulo: `Excluir o desenho “${desenho.nome}”?`, mensagem: `O desenho e as versões dele serão apagados. Esta ação não pode ser desfeita.${efeitos ? `\n\n${efeitos}` : ''}`, confirmar: 'Excluir desenho', perigo: true })) return;
+    setExcluindo(desenho.id); setErro('');
+    try {
+      await api(`/designs/${desenho.id}`, { method: 'DELETE' });
+      aoExcluir?.(desenho.id);
+      setDesenhos((atual) => atual?.filter((entrada) => entrada.id !== desenho.id) ?? atual);
+    } catch (causa) { setErro(causa instanceof Error ? causa.message : 'Não foi possível excluir o desenho.'); }
+    finally { setExcluindo(null); }
+  };
   const fechar = () => { setAberto(null); void carregar(); };
   const rascunhos = desenhos?.length ?? 0;
   const situacao = (desenho: DesenhoDoCliente) => desenhosNoOrcamento.includes(desenho.id) ? 'Neste orçamento'
@@ -112,7 +133,10 @@ export function DesenhoTecnicoNoOrcamento({ cliente, desenhosNoOrcamento, podeRe
         {desenhos === null ? <p className="orc-desenho-ajuda">Carregando…</p> : desenhos.length > 0 && <ul className="orc-desenho-lista" aria-label="Desenhos do cliente">
           {desenhos.map((desenho) => <li key={desenho.id}>
             <div><strong>{desenho.nome}</strong><small>{desenho.pecas} {desenho.pecas === 1 ? 'peça' : 'peças'} · atualizado em {new Date(desenho.atualizadoEm).toLocaleDateString('pt-BR')} · <span className={desenhosNoOrcamento.includes(desenho.id) ? 'no-orcamento' : undefined}>{situacao(desenho)}</span></small></div>
-            <button type="button" className="botao-contorno" disabled={!!preparando} onClick={() => void abrir(desenho.id)}>{preparando === desenho.id ? 'Abrindo…' : 'Abrir'}</button>
+            <div className="orc-desenho-item-acoes">
+              <button type="button" className="botao-contorno" disabled={!!preparando || !!excluindo} onClick={() => void abrir(desenho.id)}>{preparando === desenho.id ? 'Abrindo…' : 'Abrir'}</button>
+              <button type="button" className="orc-desenho-excluir" aria-label={`Excluir o desenho ${desenho.nome}`} title="Excluir desenho" disabled={!!preparando || !!excluindo} onClick={() => void excluir(desenho)}>{excluindo === desenho.id ? '…' : '×'}</button>
+            </div>
           </li>)}
         </ul>}
         <form className="orc-desenho-novo" onSubmit={(evento) => void criar(evento)}>

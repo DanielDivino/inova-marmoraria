@@ -11,7 +11,7 @@ if (!/^inova_test_[a-f0-9]{32}$/.test(process.env.INOVA_TEST_SCHEMA ?? '') || ne
 const app = await criarAplicacao();
 type Auth = Record<string, string>;
 let admin: Auth, vendedor: Auth, outro: Auth, catalogo: CatalogoEstimativa, produto: string, cliente: any, sequencia = 0;
-const request = (method: 'GET' | 'POST' | 'PUT' | 'PATCH', url: string, auth: Auth, payload?: unknown) => app.inject({ method, url, headers: auth, ...(payload === undefined ? {} : { payload: payload as object }) });
+const request = (method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, auth: Auth, payload?: unknown) => app.inject({ method, url, headers: auth, ...(payload === undefined ? {} : { payload: payload as object }) });
 async function login(email: string, password = process.env.SEED_PASSWORD!) {
   const response = await request('POST', '/auth/login', {}, { email, password });
   expect(response.statusCode, response.body).toBe(200);
@@ -312,6 +312,29 @@ describe('Desenho técnico dentro do Novo orçamento', () => {
       const lido = (await request('GET', `/designs/${designId}/draft`, vendedor)).json().draft;
       const segundo = await request('PUT', `/designs/${designId}/draft`, vendedor, { baseVersion: lido.version, document: { ...lido.document, pieces: [{ ...lido.document.pieces[0], name: 'Tampo da pia' }] } });
       expect(segundo.statusCode, segundo.body).toBe(200);
+    });
+
+    it('excluir desenho: os projetos ligados ficam sem desenho técnico; o que foi liberado para a produção não sai', async () => {
+      const orcamento = await novoOrcamento('Cozinha');
+      const { designId } = (await abrir(orcamento, orcamento.items[0].id)).json();
+      expect((await request('DELETE', `/designs/${designId}`, outro)).statusCode).toBe(404);
+      const excluido = await request('DELETE', `/designs/${designId}`, vendedor);
+      expect(excluido.statusCode, excluido.body).toBe(204);
+      expect((await request('GET', `/designs/${designId}/draft`, admin)).statusCode).toBe(404);
+      expect((await request('GET', `/quotes/${orcamento.id}`, vendedor)).json().items[0].drawingData.desenhoTecnico).toBeUndefined();
+      expect((await request('GET', `/customers/${cliente.id}/designs`, vendedor)).json().designs.map((desenho: any) => desenho.id)).not.toContain(designId);
+      // As peças do orçamento continuam; abrir de novo cria outro desenho para o projeto.
+      expect((await abrir(orcamento, orcamento.items[0].id)).statusCode).toBe(201);
+
+      const liberado = (await request('POST', `/customers/${cliente.id}/designs`, vendedor, { name: 'Liberado' })).json().designId;
+      await salvarDesenho(liberado);
+      const revisao = await request('POST', `/designs/${liberado}/revisions`, admin);
+      expect(revisao.statusCode, revisao.body).toBe(201);
+      expect((await request('POST', `/revisions/${revisao.json().id}/decisions`, admin, { decision: 'APPROVE', warningsAcknowledged: true })).statusCode).toBe(200);
+      expect((await request('POST', `/revisions/${revisao.json().id}/release`, admin)).statusCode).toBe(200);
+      const recusado = await request('DELETE', `/designs/${liberado}`, admin);
+      expect(recusado.statusCode).toBe(409);
+      expect(recusado.json()).toMatchObject({ error: 'DESIGN_IN_PRODUCTION' });
     });
 
     it('cantos arredondados: ficam no projeto salvo e o desenho recebe a peça Arredondada; raio maior que a peça é recusado', async () => {

@@ -41,7 +41,7 @@ export function motivoSemEntrega(quote: { status: string; executionStatus: strin
 export async function listarEntregas(tx: Tx, quoteId: string, user: AuthUser) {
   const quote = await tx.quote.findFirst({ where: { id: quoteId, ...escopoOrcamentos(user) }, select: {
     number: true, status: true, executionStatus: true,
-    items: { select: selectProjetoEntrega, orderBy: { id: 'asc' } },
+    items: { where: { declinedAt: null }, select: selectProjetoEntrega, orderBy: { id: 'asc' } },
     projectDeliveries: { orderBy: { sequence: 'asc' }, select: { id: true, quoteItemId: true, sequence: true, document: true, createdAt: true, createdBy: { select: { name: true } } } },
   } });
   if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');

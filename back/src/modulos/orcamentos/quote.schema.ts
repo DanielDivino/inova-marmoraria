@@ -62,9 +62,9 @@ value.cutouts.forEach((cutout, index) => { if (cutout.componentIndex !== undefin
 export const updateQuoteItemSchema = quoteItemBaseSchema.partial();
 export const createQuoteSchema = z.object({ customerId: z.string().cuid(), parentQuoteId: z.string().cuid().optional().nullable(), validUntil: z.coerce.date().optional().nullable(), discountAmount: money.default(0), notes: z.string().max(3000).optional().nullable(), items: z.array(quoteItemSchema).min(1), ...trackingSchema.shape });
 export const updateQuoteSchema = createQuoteSchema.omit({ customerId: true, items: true, parentQuoteId: true }).partial();
-const legacyStatusSchema = z.object({ status: z.enum(['DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED']), executionStatus: z.enum(EXECUTION_STATUSES).optional(), reason: z.string().min(3).max(500).optional(), estimatedBusinessDays: z.number().int().min(1).max(90).optional(), approvedAt: z.coerce.date().optional(), completedAt: z.coerce.date().optional() });
+const legacyStatusSchema = z.object({ status: z.enum(['DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED']), projetosNaoAprovados: z.array(z.string().cuid()).max(200).optional(), executionStatus: z.enum(EXECUTION_STATUSES).optional(), reason: z.string().min(3).max(500).optional(), estimatedBusinessDays: z.number().int().min(1).max(90).optional(), approvedAt: z.coerce.date().optional(), completedAt: z.coerce.date().optional() });
 export const updateStatusSchema = z.union([
-  z.object({ workStatus: z.enum(WORK_STATUSES), reason: z.string().min(3).max(500).optional() }).strict().transform(({ workStatus, reason }) => ({ ...WORK_STATUS_STORAGE[workStatus], workStatus, reason })),
+  z.object({ workStatus: z.enum(WORK_STATUSES), reason: z.string().min(3).max(500).optional(), projetosNaoAprovados: z.array(z.string().cuid()).max(200).optional() }).strict().transform(({ workStatus, reason, projetosNaoAprovados }) => ({ ...WORK_STATUS_STORAGE[workStatus], workStatus, reason, projetosNaoAprovados })),
   legacyStatusSchema,
 ]);
 export const calculateQuoteSchema = z.object({ lines: z.array(z.object({ billingUnit: billingUnitSchema, unitPrice: money, lengthMm: z.number().positive().optional(), widthMm: z.number().positive().optional(), quantity: z.number().positive().optional(), billedQuantity: z.number().positive().optional() })).min(1), discount: money.default(0) });

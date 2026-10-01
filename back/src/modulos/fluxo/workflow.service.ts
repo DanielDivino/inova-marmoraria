@@ -19,10 +19,10 @@ export const moverProjetoSchema = z.object({
 });
 
 /** Só projetos de orçamentos aprovados e já iniciados podem ser movidos no quadro. O vendedor vê apenas os seus. */
-export const escopoFluxo = (user: AuthUser) => ({ quote: { status: 'APPROVED', executionStatus: { notIn: [...EXECUCOES_FORA_DO_FLUXO] }, ...escopoOrcamentos(user) } }) satisfies Prisma.QuoteItemWhereInput;
+export const escopoFluxo = (user: AuthUser) => ({ declinedAt: null, quote: { status: 'APPROVED', executionStatus: { notIn: [...EXECUCOES_FORA_DO_FLUXO] }, ...escopoOrcamentos(user) } }) satisfies Prisma.QuoteItemWhereInput;
 
 /** A listagem traz também os que ainda não iniciaram (coluna "Aguardando início"); histórico e entregues ficam fora. */
-const escopoListagem = (user: AuthUser) => ({ quote: { ...escopoOrcamentos(user), OR: [{ status: { in: ['DRAFT', 'SENT'] } }, { status: 'APPROVED', executionStatus: { not: 'COMPLETED' } }] } }) satisfies Prisma.QuoteItemWhereInput;
+const escopoListagem = (user: AuthUser) => ({ declinedAt: null, quote: { ...escopoOrcamentos(user), OR: [{ status: { in: ['DRAFT', 'SENT'] } }, { status: 'APPROVED', executionStatus: { not: 'COMPLETED' } }] } }) satisfies Prisma.QuoteItemWhereInput;
 
 /** O que é preciso para saber as peças do projeto (as mesmas da OS). */
 export const selectPecas = {
@@ -206,7 +206,7 @@ export async function marcarFaltaMaterial(tx: Tx, cardId: string, input: z.infer
  * "Marcar como entregue" — sai de Orçamentos e vai para o Histórico.
  */
 export async function entregarOrcamentoSeCompleto(tx: Tx, quote: { id: string; status: string; executionStatus: string; completedAt: Date | null }, user: AuthUser) {
-  const projetos = await tx.quoteItem.findMany({ where: { quoteId: quote.id }, select: { ...selectPecas, workflowCards: { select: { id: true, pieces: true, status: true }, orderBy: ordemDosCartoes } } });
+  const projetos = await tx.quoteItem.findMany({ where: { quoteId: quote.id, declinedAt: null }, select: { ...selectPecas, workflowCards: { select: { id: true, pieces: true, status: true }, orderBy: ordemDosCartoes } } });
   const faltaEntregar = projetos.some((projeto) => {
     const porCartao = distribuirPecas(pecasDoProjeto(projeto), projeto.workflowCards);
     return projeto.workflowCards.some((cartao) => cartao.status !== 'DELIVERED' && totalPecas(porCartao.get(cartao.id) ?? {}) > 0);
@@ -218,4 +218,32 @@ export async function entregarOrcamentoSeCompleto(tx: Tx, quote: { id: string; s
     previous: { status: quote.status, executionStatus: quote.executionStatus, completedAt: quote.completedAt },
     current: { status: quote.status, executionStatus: 'COMPLETED', completedAt, reason: 'Todos os projetos entregues no fluxo de trabalho' } } });
   return true;
+}
+
+/**
+ * Retrabalho de um projeto: as peças voltam no fluxo de trabalho — para "Em andamento" (refazer: as
+ * produzidas e as entregues) ou para "Produzido – entrega/montagem" (entregar de novo: as entregues) —
+ * e o orçamento fica "Em retrabalho" (se já tinha sido entregue, sai do Histórico). As notas de
+ * entrega continuam guardadas.
+ */
+export async function retrabalharProjeto(tx: Tx, quoteId: string, quoteItemId: string, destino: 'IN_PROGRESS' | 'DONE', motivo: string | undefined, user: AuthUser) {
+  const quote = await tx.quote.findFirst({ where: { id: quoteId, ...escopoOrcamentos(user) }, select: { status: true, executionStatus: true, completedAt: true, items: { where: { id: quoteItemId }, select: { id: true, projectName: true, declinedAt: true, components: { select: { label: true, componentType: true } } } } } });
+  const projeto = quote?.items[0];
+  if (!quote || !projeto) throw new AppError(404, 'Projeto não encontrado neste orçamento.', 'NOT_FOUND');
+  if (quote.status !== 'APPROVED' || quote.executionStatus === 'NOT_STARTED') throw new AppError(409, 'O retrabalho fica disponível depois que o serviço do orçamento é iniciado.', 'REWORK_UNAVAILABLE');
+  if (projeto.declinedAt) throw new AppError(409, 'Este projeto não foi aprovado pelo cliente.', 'ITEM_DECLINED');
+  const voltam: ProjectWorkflowStatus[] = destino === 'IN_PROGRESS' ? ['DONE', 'DELIVERED'] : ['DELIVERED'];
+  const cartoes = await tx.workflowCard.findMany({ where: { quoteItemId, status: { in: voltam } }, select: { id: true }, orderBy: ordemDosCartoes });
+  if (!cartoes.length) throw new AppError(409, destino === 'IN_PROGRESS' ? 'Este projeto ainda não foi produzido nem entregue.' : 'Este projeto ainda não teve peças entregues.', 'NOTHING_TO_REWORK');
+  let position = ((await tx.workflowCard.aggregate({ where: { status: destino }, _max: { position: true } }))._max.position ?? 0) + 1;
+  for (const cartao of cartoes) await tx.workflowCard.update({ where: { id: cartao.id }, data: { status: destino, position: position++, completedAt: null } });
+  await juntarNaColuna(tx, quoteItemId, destino, cartoes[0].id);
+  const nome = nomeProjeto(projeto);
+  await tx.auditLog.create({ data: { userId: user.id, entityType: 'QUOTE_ITEM', entityId: quoteItemId, action: 'REWORK_STARTED', current: { quoteId, destino, ...(motivo ? { motivo } : {}) } } });
+  if (quote.executionStatus !== 'REWORK') {
+    await tx.quote.update({ where: { id: quoteId }, data: { executionStatus: 'REWORK', completedAt: null } });
+    await tx.auditLog.create({ data: { userId: user.id, entityType: 'QUOTE', entityId: quoteId, action: 'STATUS_CHANGED',
+      previous: { status: quote.status, executionStatus: quote.executionStatus, completedAt: quote.completedAt },
+      current: { status: quote.status, executionStatus: 'REWORK', reason: `Retrabalho: ${nome}` } } });
+  }
 }

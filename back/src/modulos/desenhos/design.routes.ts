@@ -156,6 +156,29 @@ export async function registrarRotasDesenhos(app: FastifyInstance) {
     return reply.send({ id: result.id, version: result.version, schemaVersion: result.schemaVersion, document: input.document, updatedAt: result.updatedAt, diagnostics });
   });
 
+  // Excluir o desenho (o × na lista de desenhos do cliente). O que já foi para a produção (liberado,
+  // ligado ao comercial ou exportado) não pode ser apagado. Os projetos de orçamento ligados a ele ficam
+  // sem desenho técnico; as peças deles continuam.
+  app.delete('/designs/:id', desenhoAcessivel, async (request, reply) => {
+    const { id } = idSchema.parse(request.params);
+    const desenho = await prisma.design.findUnique({ where: { id }, select: { name: true, projectId: true, project: { select: { name: true, job: { select: { name: true, customerId: true } }, _count: { select: { designs: true } } } } } });
+    if (!desenho) throw new AppError(404, 'Desenho técnico não encontrado.', 'DESIGN_NOT_FOUND');
+    const naProducao = await prisma.designRevision.count({ where: { designId: id, OR: [{ releases: { some: {} } }, { commercialLinks: { some: {} } }, { exports: { some: {} } }] } });
+    if (naProducao) throw new AppError(409, 'Este desenho já foi liberado para a produção e não pode ser excluído.', 'DESIGN_IN_PRODUCTION');
+    const ligados = await prisma.quoteItem.findMany({ where: { drawingData: { path: ['desenhoTecnico', 'designId'], equals: id } }, select: { id: true, drawingData: true } });
+    await prisma.$transaction(async (tx) => {
+      for (const item of ligados) {
+        const { desenhoTecnico: _vinculo, ...drawingData } = item.drawingData as Record<string, unknown>;
+        await tx.quoteItem.update({ where: { id: item.id }, data: { drawingData: drawingData as Prisma.InputJsonValue } });
+      }
+      await tx.design.delete({ where: { id } });
+      // O desenho do cliente tem um projeto só para ele: sem o desenho, o projeto também sai.
+      if (desenho.project.job.name === ATENDIMENTO_DESENHOS && desenho.project._count.designs === 1) await tx.project.delete({ where: { id: desenho.projectId } });
+    });
+    await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'DESIGN', entityId: id, action: 'DELETED', previous: { name: desenho.project.name, customerId: desenho.project.job.customerId, quoteItems: ligados.map((item) => item.id) } } });
+    return reply.status(204).send();
+  });
+
   // Cópia independente do desenho como está agora (projeto duplicado no orçamento): mexer em um não muda o outro.
   app.post('/designs/:id/copy', desenhoAcessivel, async (request, reply) => {
     const { id } = idSchema.parse(request.params);

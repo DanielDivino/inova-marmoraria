@@ -72,6 +72,10 @@ try {
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await lista().waitFor({ state: 'detached' });
+  // De "aguardando" para aprovado, a janela de aprovação pergunta antes (quais projetos o cliente aprovou).
+  const aprovacao = page.getByRole('dialog', { name: 'Confirmar aprovação' });
+  await aprovacao.getByRole('button', { name: 'Confirmar aprovação' }).click();
+  await aprovacao.waitFor({ state: 'detached' });
   await page.waitForTimeout(300);
   assert.equal(situacoes.length, 1, 'escolher pelo teclado muda o status');
   assert.equal(situacoes[0].status, 'APPROVED');

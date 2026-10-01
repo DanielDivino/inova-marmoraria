@@ -77,7 +77,10 @@ async function requisicaoAutenticada(path: string, init: RequestInit = {}) {
   return response;
 }
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  return (await requisicaoAutenticada(path, init)).json() as Promise<T>;
+  const resposta = await requisicaoAutenticada(path, init);
+  // 204 (ex.: excluir): sem conteúdo para ler.
+  if (resposta.status === 204) return undefined as T;
+  return resposta.json() as Promise<T>;
 }
 export async function buscarArquivoApi(path: string): Promise<Blob> {
   return (await requisicaoAutenticada(path)).blob();

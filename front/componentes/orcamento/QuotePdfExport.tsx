@@ -15,7 +15,7 @@ type Partes = { orcamento: boolean; valores: boolean; desenhos: boolean; tecnico
  * Exportar: caixinhas independentes e tudo no mesmo PDF, nesta ordem — orçamento, desenhos em
  * ordem de serviço e desenho técnico. O mesmo no orçamento todo (topo) e em cada projeto.
  */
-function Exportar({ caminho, arquivo, disponivel, titulo, noProjeto = false }: { caminho: string; arquivo: string; disponivel: PartesDisponiveis; titulo: string; noProjeto?: boolean }) {
+function Exportar({ caminho, arquivo, disponivel, titulo, noProjeto = false, abrirAgora = false, aoAbrir }: { caminho: string; arquivo: string; disponivel: PartesDisponiveis; titulo: string; noProjeto?: boolean; abrirAgora?: boolean; aoAbrir?: () => void }) {
   const panelId = useId();
   const caixa = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -29,6 +29,13 @@ function Exportar({ caminho, arquivo, disponivel, titulo, noProjeto = false }: {
     if (params.get('pdf') === '1') setOpen(true);
     if (params.has('individualPrices')) setPartes((atual) => ({ ...atual, valores: params.get('individualPrices') === 'true' }));
   }, [noProjeto]);
+  // Pedido de fora (ex.: "Exportar PDF" no ⋯ do projeto): abre as opções e as mostra na tela.
+  useEffect(() => {
+    if (!abrirAgora) return;
+    setOpen(true);
+    aoAbrir?.();
+    caixa.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [abrirAgora, aoAbrir]);
   useEffect(() => {
     if (!open) return;
     const fora = (event: PointerEvent) => { if (!caixa.current?.contains(event.target as Node)) setOpen(false); };
@@ -71,6 +78,6 @@ export function ExportarPdfOrcamento({ quoteId, quoteNumber, customerName, dispo
 }
 
 /** Exportar de um projeto só, no cartão do projeto. */
-export function ExportarPdfProjeto({ quoteId, itemId, quoteNumber, customerName, projectName, disponivel }: { quoteId: string; itemId: string; quoteNumber: string; customerName: string; projectName: string; disponivel: PartesDisponiveis }) {
-  return <Exportar caminho={`/quotes/${quoteId}/items/${itemId}/pdf`} arquivo={nomeArquivoPdf(customerName, `${quoteNumber} - ${projectName}`)} disponivel={disponivel} titulo={`Exportar ${projectName}`} noProjeto />;
+export function ExportarPdfProjeto({ quoteId, itemId, quoteNumber, customerName, projectName, disponivel, abrirAgora, aoAbrir }: { quoteId: string; itemId: string; quoteNumber: string; customerName: string; projectName: string; disponivel: PartesDisponiveis; abrirAgora?: boolean; aoAbrir?: () => void }) {
+  return <Exportar caminho={`/quotes/${quoteId}/items/${itemId}/pdf`} arquivo={nomeArquivoPdf(customerName, `${quoteNumber} - ${projectName}`)} disponivel={disponivel} titulo={`Exportar ${projectName}`} noProjeto abrirAgora={abrirAgora} aoAbrir={aoAbrir} />;
 }

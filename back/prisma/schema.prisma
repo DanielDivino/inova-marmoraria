@@ -276,6 +276,8 @@ model Quote {
   deadlineNote String?
   validUntil      DateTime?
   discountAmount  Decimal     @default(0) @db.Decimal(12, 2)
+  /// Desconto negociado para o orçamento completo, guardado enquanto há projetos não aprovados (o desconto em vigor é a parte proporcional dos aprovados).
+  fullDiscountAmount Decimal?  @db.Decimal(12, 2)
   grossTotal      Decimal     @default(0) @db.Decimal(12, 2)
   netTotal        Decimal     @default(0) @db.Decimal(12, 2)
   notes           String?
@@ -517,6 +519,8 @@ model QuoteItem {
   materialSubtotal      Decimal     @db.Decimal(12, 2)
   servicesSubtotal      Decimal     @default(0) @db.Decimal(12, 2)
   total                 Decimal     @db.Decimal(12, 2)
+  /// Projeto que o cliente não aprovou (aprovação parcial): fica no orçamento, mas fora do valor, do fluxo e da entrega.
+  declinedAt            DateTime?
   quote                 Quote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   productType           ProductType @relation(fields: [productTypeId], references: [id])
   material              Material    @relation(fields: [materialId], references: [id])

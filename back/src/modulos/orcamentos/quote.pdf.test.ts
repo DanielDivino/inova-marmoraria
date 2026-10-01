@@ -50,8 +50,8 @@ describe('Opções e agrupamento comercial do PDF', () => {
     const quick = { ...item, projectName: 'Cozinha rápida', drawingData: { entryMode: 'QUICK', detailingStatus: 'PENDING' }, components: [{ id: 'top', label: 'Bancada', lengthMm: 2400, widthMm: 600, quantity: 1, billableArea: 1.44, edges: [] }] };
     const result = await render(1008, [quick], 'orcamento-rapido');
     const texts = result.calls.map(([text]) => text);
-    expect(texts).toContain('À VISTA');
-    expect(texts).toContain('CARTÃO');
+    expect(texts).toContain('VALOR DO ORÇAMENTO À VISTA');
+    expect(texts).toContain('VALOR DO ORÇAMENTO TOTAL NO CARTÃO');
     expect(texts).not.toContain('OS');
     expect(result.pages).toBe(0);
     const detailed = { ...quick, projectName: 'Banheiro detalhado', drawingData: { entryMode: 'DETAILED', detailingStatus: 'COMPLETED' } };
@@ -106,7 +106,7 @@ describe('Opções e agrupamento comercial do PDF', () => {
     expect(texts).not.toContain('ACABAMENTOS E SERVIÇOS POR METRO LINEAR · TOTAL DO ORÇAMENTO');
     expect(texts.includes('VALOR TOTAL')).toBe(options.individualPrices);
     expect(texts.includes('R$ 160,00')).toBe(options.individualPrices);
-    expect(texts.includes('DESCONTO FINAL')).toBe(true);
+    expect(texts.includes('DESCONTO CONCEDIDO')).toBe(true);
     expect(texts.includes('OS')).toBe(options.drawings);
     expect(texts.some(text => text.includes('Acabamento 45° no lado Inferior'))).toBe(options.drawings);
     expect(texts.some(text => text.includes('Conferir medidas antes de produzir.'))).toBe(true);
@@ -265,29 +265,30 @@ describe('Paginação final da ordem de serviço', () => {
     const withoutNote = await render(1440, items);
     const withNote = await render(1440, items, undefined, 'Pagamento em dinheiro, metade no início da obra, metade no fim.');
     expect(withNote.pages).toBe(withoutNote.pages);
-    expect(withNote.calls.some(([text]) => text.includes('Observação: Pagamento em dinheiro'))).toBe(true);
+    expect(withNote.calls.some(([text]) => text === 'Pagamento em dinheiro, metade no início da obra, metade no fim.')).toBe(true);
   });
 });
 
-describe('Condição de pagamento Pix no PDF', () => {
-  it.each([[1440, 'R$ 1.584,00'], [100.10, 'R$ 110,11'], [0, 'R$ 0,00']])('mostra o cartão com 10%% sobre o valor à vista de %s sem alterar o orçamento', async (total, expected) => {
+describe('Valores do orçamento no PDF', () => {
+  it.each([[1440, 'R$ 1.584,00', 'R$ 1.440,00'], [100.10, 'R$ 110,11', 'R$ 100,10'], [0, 'R$ 0,00', 'R$ 0,00']])('à vista de %s: o total (no cartão, 10%% a mais) em cima e, embaixo e maior, o valor à vista', async (total, cartao, aVista) => {
     const result = await render(total);
-    const normalIndex = result.calls.findIndex(([text]) => text === 'À VISTA');
-    const pixIndex = result.calls.findIndex(([text]) => text === 'CARTÃO');
-    expect(pixIndex).toBeGreaterThan(normalIndex);
-    expect(result.calls[pixIndex + 1][0].replaceAll('\u00a0', ' ')).toBe(expected);
-    expect(result.calls.some(([text]) => text.includes('50% do valor deve ser pago antecipadamente para iniciar o trabalho.'))).toBe(true);
-    expect(result.calls[pixIndex][2]).toBe(Number(result.calls[normalIndex][2]) + 19);
-    expect(result.calls.filter(([text]) => text === 'CARTÃO')).toHaveLength(1);
+    const totalIndex = result.calls.findIndex(([text]) => text === 'VALOR DO ORÇAMENTO TOTAL NO CARTÃO');
+    const vistaIndex = result.calls.findIndex(([text]) => text === 'VALOR DO ORÇAMENTO À VISTA');
+    expect(vistaIndex).toBeGreaterThan(totalIndex);
+    expect(result.calls[totalIndex + 1][0].replaceAll('\u00a0', ' ')).toBe(cartao);
+    expect(result.calls[vistaIndex + 1][0].replaceAll('\u00a0', ' ')).toBe(aVista);
+    expect(Number(result.calls[vistaIndex][2])).toBeGreaterThan(Number(result.calls[totalIndex][2]));
+    expect(result.calls.some(([text]) => text === 'À vista: 50% do valor antecipado para o início do trabalho.')).toBe(true);
+    expect(result.calls.filter(([text]) => text === 'VALOR DO ORÇAMENTO TOTAL NO CARTÃO')).toHaveLength(1);
     expect(result.quote.netTotal).toBe(total);
     expect(result.quote.discountAmount).toBe(100);
   });
-  it('reserva espaço para os dois totais e assinaturas ao terminar uma página cheia', async () => {
+  it('reserva espaço para os valores e as assinaturas ao terminar uma página cheia', async () => {
     const result = await render(1440, Array.from({ length: 7 }, () => item));
-    const normal = result.calls.find(([text]) => text === 'À VISTA')!;
-    const pix = result.calls.find(([text]) => text === 'CARTÃO')!;
-    expect(normal[2]).toBeGreaterThan(120);
-    expect(pix[2]).toBeCloseTo(Number(normal[2]) + 19, 5);
+    const total = result.calls.find(([text]) => text === 'VALOR DO ORÇAMENTO TOTAL NO CARTÃO')!;
+    const vista = result.calls.find(([text]) => text === 'VALOR DO ORÇAMENTO À VISTA')!;
+    expect(total[2]).toBeGreaterThan(52);
+    expect(Number(vista[2])).toBeGreaterThan(Number(total[2]));
     expect(result.pages).toBeGreaterThanOrEqual(2);
   });
 });
@@ -310,7 +311,7 @@ describe('Desenho de um único projeto', () => {
     const texts = printed.mock.calls.map(([text]) => String(text));
     expect(texts).toContain('2. Banheiro');
     expect(texts.some((text) => text.includes('Cozinha'))).toBe(false);
-    expect(texts).not.toContain('À VISTA');
+    expect(texts).not.toContain('VALOR DO ORÇAMENTO À VISTA');
     // A primeira folha do documento já é a folha de desenho.
     expect(pages.mock.calls).toHaveLength(0);
   });
@@ -341,6 +342,24 @@ describe('Cantos arredondados na folha de OS', () => {
     expect(raio).toBeCloseTo(largura * 100 / 2000, 1);
     expect(raio).toBeLessThan(altura / 2);
     expect(result.calls.map(([texto]) => texto)).toContain('Cantos: arredondados nas 4 pontas · raio 10 cm');
+  });
+});
+
+describe('Condições e informações do orçamento no PDF', () => {
+  const textos = (resultado: Awaited<ReturnType<typeof render>>) => resultado.calls.map(([texto]) => String(texto));
+  it('todo PDF de orçamento traz as condições de pagamento e as informações importantes', async () => {
+    const lista = textos(await render(1500, [item], 'orcamento-condicoes'));
+    expect(lista).toEqual(expect.arrayContaining([
+      'CONDIÇÕES DE PAGAMENTO', 'À vista: 50% do valor antecipado para o início do trabalho.', 'Cartão de crédito: pagamento no fechamento do orçamento, parcelado em até 6x sem juros.',
+      'INFORMAÇÕES IMPORTANTES', 'As medidas serão conferidas no local da obra; por isso, a medição e os valores podem ser ajustados após essa conferência.',
+      'Em bordas de piscina e escadas, a argamassa é fornecida pelo cliente.', 'Pedras naturais podem apresentar variação de tonalidade e veios.',
+    ]));
+    // Orçamento sem M² fechado (medidas exatas): não fala em múltiplos de 5 cm.
+    expect(lista.some((texto) => texto.includes('múltiplos de 5 cm'))).toBe(false);
+  });
+  it('com M² fechado, explica que o metro quadrado é calculado em múltiplos de 5 cm', async () => {
+    const lista = textos(await render(1500, [{ ...item, drawingData: { m2Fechado: true } }]));
+    expect(lista).toContain('O metro quadrado é comercializado e calculado em múltiplos de 5 cm: as medidas de cada peça são arredondadas para cima no cálculo.');
   });
 });
 

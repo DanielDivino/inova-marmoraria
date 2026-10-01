@@ -60,6 +60,18 @@ describe('linha do tempo do orçamento', () => {
     expect(marcos.map((marco) => [marco.rotulo, marco.data])).toEqual([['Emissão', '2026-09-29'], ['Validade', '2026-10-13'], ['Aprovação', '2026-09-30'], ['Data limite', null], ['Entrega', '2026-10-10']]);
   });
 
+  it('aprovação parcial: diz quais projetos não foram aprovados; mudanças depois aparecem por projeto', () => {
+    const { eventos } = montarHistorico({ ...orcamento, workerAssignments: [] }, [
+      registro('QUOTE', 'STATUS_CHANGED', '2026-10-01T10:00:00Z', { status: 'SENT' }, { status: 'APPROVED', executionStatus: 'NOT_STARTED', projetosNaoAprovados: ['Projeto 2'] }),
+      registro('QUOTE_ITEM', 'APPROVAL_CHANGED', '2026-10-02T10:00:00Z', { aprovado: false }, { quoteId: 'q1', aprovado: true }, 'i2'),
+    ]);
+    expect(eventos.map((evento) => [evento.titulo, evento.detalhe ?? ''])).toEqual([
+      ['Projeto 2 aprovado pelo cliente', ''],
+      ['Orçamento aprovado em parte', 'Não aprovado: Projeto 2'],
+      ['Orçamento criado', ''],
+    ]);
+  });
+
   it('desistência do cliente tem título próprio', () => {
     const { eventos } = montarHistorico({ ...orcamento, workerAssignments: [] }, [registro('QUOTE', 'STATUS_CHANGED', '2026-10-03T10:00:00Z', { status: 'APPROVED', executionStatus: 'IN_PROGRESS' }, { status: 'CANCELLED', reason: 'Cliente desistiu' })]);
     expect(eventos[0]).toMatchObject({ titulo: 'Desistência do cliente', tom: 'vermelho' });
