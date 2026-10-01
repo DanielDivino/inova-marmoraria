@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { cabecalhoEmpresaPdf as header, assinaturasPdf, cabecalhoOrdemServicoPdf, normalizarNomeMaterial, pdfDate, rotuloEntregaPdf } from './pdf-layout.js';
+import { AREIA, cabecalhoEmpresaPdf as header, assinaturasPdf, cabecalhoOrdemServicoPdf, normalizarNomeMaterial, pdfDate, rotuloEntregaPdf } from './pdf-layout.js';
 import { montarLinhasPdf, type QuotePdfLine } from './quote.pdf-lines.js';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
 import { renderizarPdfTecnico } from '../desenhos/technical.pdf.js';
@@ -320,7 +320,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pi
     return true;
   };
   const commercialHeader = () => {
-    pdf.fillColor('#d1cfcc').rect(36, y, 523, 17).fill();
+    pdf.fillColor(AREIA.claro).rect(36, y, 523, 17).fill();
     pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(7);
     columns.forEach(column => pdf.text(column.label, column.x, y + 5, { width: column.width, align: 'center' }));
     y += 17;
@@ -351,7 +351,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pi
     const titleSize = materialFontSize(pdf, title, 515, 8, 5.5);
     const height = Math.max(16, pdf.font('Helvetica-Bold').fontSize(titleSize).heightOfString(title, { width: 515, lineBreak: false }) + 8);
     commercialSpace(height + 45);
-    pdf.fillColor('#aaa7a4').rect(36, y, 523, height).fill();
+    pdf.fillColor(AREIA.escuro).rect(36, y, 523, height).fill();
     // PDFKit still wraps when width is supplied, even with lineBreak:false.
     // Position each coloured fragment explicitly without a wrapping width.
     pdf.font('Helvetica-Bold').fontSize(titleSize);
@@ -378,7 +378,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pi
     commercial.items[index].forEach(commercialRow);
     linearByItem[index].forEach(commercialRow);
     commercialSpace(27);
-    pdf.fillColor('#f1efec').rect(36, y, 523, 18).fill();
+    pdf.fillColor(AREIA.suave).rect(36, y, 523, 18).fill();
     // Compact project summary: keep the area under the MEDIDA column and the
     // project amount in the value column, avoiding a second summary line.
     const summaryMeasureColumn = columns[3];
@@ -437,7 +437,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pi
   const topoDosTotais = y + 4;
   let linhaY = topoDosTotais;
   for (const [indice, linha] of linhasDosTotais.entries()) {
-    if (linha.destaque) pdf.fillColor('#f1efec').rect(36, linhaY, 523, linha.altura).fill();
+    if (linha.destaque) pdf.fillColor(AREIA.suave).rect(36, linhaY, 523, linha.altura).fill();
     if (indice) pdf.lineWidth(.5).moveTo(36, linhaY).lineTo(559, linhaY).stroke('#e2ddd5');
     const textoY = linhaY + (linha.altura - linha.tamanho) / 2 + .5;
     pdf.font(linha.fraco ? 'Helvetica' : 'Helvetica-Bold').fontSize(linha.tamanho).fillColor(linha.fraco ? '#5f5a52' : '#17251f')

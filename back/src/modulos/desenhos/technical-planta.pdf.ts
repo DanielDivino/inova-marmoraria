@@ -1,11 +1,12 @@
 import { areasDaPeca, cotasDaPeca, distanciasAteBordas, faixaDentroDaPeca, NOME_AREA, edgeLength, edgePoint, featureContour, formatMeasure, rotate, sampleContour, type CotaLado, type Feature, type Piece, type Point, type TechnicalDocument } from '@inova/domain/technical';
+import { AREIA } from '../orcamentos/pdf-layout.js';
 
 type Pdf = PDFKit.PDFDocument;
 
 /** Mesma paleta do orçamento e da nota de entrega; pedra e recortes como no desenho do orçamento. */
 export const COR = {
   tinta: '#17251f', rotulo: '#6f685e', apagado: '#9a9388', ouro: '#8a6320', dourado: '#b6811e', linha: '#dfd9cf', forte: '#8f887c',
-  cabecalho: '#dcd9d3', zebra: '#f7f5f1', creme: '#fbf5e6', borda: '#e6cf8f', pedra: '#fff7e5', cota: '#80776a', textoCota: '#4f4940', recorte: '#8b6b3a',
+  cabecalho: AREIA.claro, zebra: AREIA.zebra, creme: '#fbf5e6', borda: '#e6cf8f', pedra: '#fff7e5', cota: '#80776a', textoCota: '#4f4940', recorte: '#8b6b3a',
 };
 export const ROTULO_RECURSO: Record<Feature['type'], string> = { SINK: 'Cuba', SCULPTED_SINK: 'Cuba esculpida', CUTOUT: 'Recorte / cooktop', HOLE: 'Furo', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', EDGE_FINISH: 'Acabamento de borda' };
 const BORDA = { SKIRT: { fundo: '#ead49b', traco: '#9b6817' }, BACKSPLASH: { fundo: '#dde3d4', traco: '#52654c' }, EDGE_FINISH: { fundo: COR.dourado, traco: COR.dourado } };
