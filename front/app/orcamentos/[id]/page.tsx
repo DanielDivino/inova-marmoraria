@@ -9,6 +9,9 @@ import { StatusOrcamento } from '../../../componentes/QuoteStatus';
 import { useSession } from '../../../componentes/ApplicationShell';
 import { api, ApiError } from '../../../utilitarios/api';
 import { ExportarPdfOrcamento, ExportarPdfProjeto } from '../../../componentes/orcamento/QuotePdfExport';
+import { BlocoProjeto } from '../../../componentes/orcamento/BlocoProjeto';
+import { JanelaAprovacao } from '../../../componentes/orcamento/JanelaAprovacao';
+import { JanelaRetrabalho, type DestinoRetrabalho } from '../../../componentes/orcamento/JanelaRetrabalho';
 import { NotaEntregaProjeto, type EntregasOrcamento } from '../../../componentes/orcamento/NotaEntregaProjeto';
 import { Icone, type NomeIcone } from '../../../componentes/filtros/Filtros';
 import { MenuAcoes, type AcaoMenu } from '../../../componentes/MenuAcoes';
@@ -28,8 +31,10 @@ type Quote = {
   parentQuote?: { id: string; number: string } | null; complements?: { id: string; number: string; netTotal: number }[];
   number: string; customerId: string; createdAt?: string; status: string; executionStatus?: string; approvedAt?: string; completedAt?: string; validUntil?: string; dueDate?: string; deliveryDeadline?: string; installationDeadline?: string; deadlineConfirmed?: boolean; deadlineNote?: string | null; customerNameSnapshot: string; customerPhoneSnapshot?: string; workAddressSnapshot?: string;
   discountAmount: number; grossTotal: number; netTotal: number; notes?: string;
+  /** Desconto negociado para o orçamento completo, enquanto há projetos não aprovados. */
+  fullDiscountAmount?: number | null;
   workerAssignments?: WorkerAssignment[];
-  items: (SavedQuoteItem & { id: string; materialNameSnapshot: string; unitPriceSnapshot: number; billedQuantity: number; materialSubtotal: number; total: number; calculationMode: 'DIMENSIONS' | 'MANUAL_M2'; productType: { name: string }; services: { serviceNameSnapshot: string; billedQuantity: number; unitPriceSnapshot: number; subtotal: number; calculatedSubtotal: number; appliedSubtotal: number; billingUnitSnapshot: string }[]; components: Component[]; cutouts: Cutout[] })[];
+  items: (SavedQuoteItem & { id: string; declinedAt?: string | null; materialNameSnapshot: string; unitPriceSnapshot: number; billedQuantity: number; materialSubtotal: number; total: number; calculationMode: 'DIMENSIONS' | 'MANUAL_M2'; productType: { name: string }; services: { serviceNameSnapshot: string; billedQuantity: number; unitPriceSnapshot: number; subtotal: number; calculatedSubtotal: number; appliedSubtotal: number; billingUnitSnapshot: string }[]; components: Component[]; cutouts: Cutout[] })[];
 };
 const cm = (millimeters: number) => (millimeters / 10).toLocaleString('pt-BR');
 const dateLabel = (value?: string) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não definida';
@@ -60,18 +65,63 @@ export default function QuoteDetailPage() {
   // Projetos com desenho técnico (Exportar e "Adicionar desenho técnico"); null enquanto carrega.
   const [comTecnico, setComTecnico] = useState<Set<string> | null>(null);
   const [notaPedida, setNotaPedida] = useState<string | null>(null);
+  // "Confirmar aprovação": a situação escolhida, enquanto a janela pergunta quais projetos o cliente aprovou.
+  const [aprovacaoPedida, setAprovacaoPedida] = useState<{ status: string; executionStatus?: string } | null>(null);
+  // Projetos em blocos compactos: quais estão abertos e quais aparecem (todos, aprovados ou não aprovados).
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const [filtroProjetos, setFiltroProjetos] = useState<'todos' | 'aprovados' | 'nao-aprovados'>('todos');
+  const [alterandoAprovacao, setAlterandoAprovacao] = useState<string | null>(null);
+  // "Exportar PDF" no ⋯ do projeto: o bloco abre com as opções de exportação à mostra.
+  const [exportarProjeto, setExportarProjeto] = useState<string | null>(null);
+  const exportacaoAberta = useCallback(() => setExportarProjeto(null), []);
+  // Retrabalho de um projeto: a janela pergunta para onde as peças voltam.
+  const [retrabalho, setRetrabalho] = useState<Quote['items'][number] | null>(null);
+  const [enviandoRetrabalho, setEnviandoRetrabalho] = useState(false);
+  const [erroRetrabalho, setErroRetrabalho] = useState('');
   const carregarEntregas = useCallback(() => api<EntregasOrcamento>(`/quotes/${id}/entregas`).then(setEntregas).catch(() => setEntregas(null)), [id]);
   useEffect(() => { if (quote?.status === 'APPROVED') void carregarEntregas(); else setEntregas(null); }, [quote?.status, quote?.executionStatus, carregarEntregas]);
   // "Gerar nota de entrega" no Fluxo abre esta página com ?entrega=<projeto>.
   useEffect(() => { setNotaPedida(new URLSearchParams(window.location.search).get('entrega')); }, []);
+  const quantidadeDeProjetos = quote?.items.length ?? 0;
+  useEffect(() => {
+    if (!quote) return;
+    const pedido = notaPedida ?? window.location.hash.replace(/^#projeto-/, '');
+    setAbertos(new Set(quote.items.length === 1 ? [quote.items[0].id] : quote.items.some((item) => item.id === pedido) ? [pedido] : []));
+    // Só ao abrir o orçamento (ou ao mudar a quantidade de projetos), não a cada atualização.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, !!quote, quantidadeDeProjetos, notaPedida]);
   useEffect(() => { api<{ projetos: string[] }>(`/quotes/${id}/desenhos-tecnicos`).then((resposta) => setComTecnico(new Set(resposta.projetos))).catch(() => setComTecnico(new Set())); }, [id]);
   useEffect(() => { api<Quote>(`/quotes/${id}`).then(setQuote).catch((cause) => setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o orçamento.')); if (canTeam) api<Worker[]>('/workers?active=true').then(setWorkers).catch(() => setWorkers([])); }, [id, canTeam]);
   if (error && !quote) return <main className="list-page"><Caminho itens={[{ rotulo: 'Orçamentos', href: enderecoDaLista('orcamentos') }]} /><p className="form-error">{error}</p><p><Link className="secondary-button" href={enderecoDaLista('orcamentos')}>← Voltar aos orçamentos</Link></p></main>;
   if (!quote) return <main className="list-page"><p className="empty">Carregando orçamento…</p></main>;
-  const individualDiscount = descontosIndividuais(quote.items);
+  // Projetos que o cliente não aprovou ficam fora do valor.
+  const recusados = quote.items.filter((item) => item.declinedAt);
+  const individualDiscount = descontosIndividuais(quote.items.filter((item) => !item.declinedAt));
   const entregasPorProjeto = new Map(entregas?.projects.map((projeto) => [projeto.id, projeto]) ?? []);
   const totalDiscountGiven = individualDiscount + quote.discountAmount;
- async function changeStatus(payload: { status: string; executionStatus?: string; reason?: string }) {
+ /** Depois da aprovação: aprova de novo, ou tira a aprovação de, um projeto (o valor do orçamento acompanha). */
+ async function alterarAprovacao(item: Quote['items'][number], aprovado: boolean) {
+    const nome = nomeProjeto(item);
+    const pergunta = aprovado
+      ? { titulo: `Aprovar “${nome}”?`, mensagem: 'O projeto volta ao valor do orçamento e ao fluxo de trabalho.', confirmar: 'Aprovar projeto' }
+      : { titulo: `Marcar “${nome}” como não aprovado?`, mensagem: 'O projeto sai do valor do orçamento e do fluxo de trabalho, e continua aqui para consulta.', confirmar: 'Marcar como não aprovado', perigo: true };
+    if (alterandoAprovacao || !await confirmar(pergunta)) return;
+    setAlterandoAprovacao(item.id); setError('');
+    try { setQuote(await api<Quote>(`/quotes/${id}/items/${item.id}/aprovacao`, { method: 'PATCH', body: JSON.stringify({ aprovado }) })); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível alterar a aprovação do projeto.'); }
+    finally { setAlterandoAprovacao(null); }
+  }
+ async function enviarRetrabalho(destino: DestinoRetrabalho, motivo: string) {
+    if (!retrabalho || enviandoRetrabalho) return;
+    setEnviandoRetrabalho(true); setErroRetrabalho('');
+    try {
+      setQuote(await api<Quote>(`/quotes/${id}/items/${retrabalho.id}/retrabalho`, { method: 'POST', body: JSON.stringify({ destino, ...(motivo ? { motivo } : {}) }) }));
+      setRetrabalho(null);
+      void carregarEntregas();
+    } catch (cause) { setErroRetrabalho(cause instanceof Error ? cause.message : 'Não foi possível colocar o projeto em retrabalho.'); }
+    finally { setEnviandoRetrabalho(false); }
+  }
+ async function changeStatus(payload: { status: string; executionStatus?: string; reason?: string; projetosNaoAprovados?: string[] }) {
     if (updating) return;
     setUpdating(true); setError('');
     try { setQuote(await api<Quote>(`/quotes/${id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })); }
@@ -141,7 +191,7 @@ export default function QuoteDetailPage() {
   const emExecucao = quote.status === 'APPROVED' && execucao !== 'COMPLETED';
   const perguntarAntes = (opcoes: Parameters<typeof confirmar>[0], payload: Parameters<typeof changeStatus>[0]) => async () => { if (await confirmar(opcoes)) void changeStatus(payload); };
   const entregar = () => void changeStatus({ status: 'APPROVED', executionStatus: 'COMPLETED' });
-  const principal: { rotulo: string; icone: NomeIcone; acao: () => void } | null = pendente ? { rotulo: 'Confirmar aprovação', icone: 'marcado', acao: () => void changeStatus({ status: 'APPROVED' }) }
+  const principal: { rotulo: string; icone: NomeIcone; acao: () => void } | null = pendente ? { rotulo: 'Confirmar aprovação', icone: 'marcado', acao: () => setAprovacaoPedida({ status: 'APPROVED' }) }
     : !emExecucao ? null
     : execucao === 'NOT_STARTED' ? { rotulo: 'Iniciar serviço', icone: 'andamento', acao: () => void changeStatus({ status: 'APPROVED', executionStatus: 'IN_PROGRESS' }) }
     : execucao === 'PAUSED' ? { rotulo: 'Retomar produção', icone: 'andamento', acao: () => void changeStatus({ status: 'APPROVED', executionStatus: 'IN_PROGRESS', reason: 'Produção retomada' }) }
@@ -174,7 +224,7 @@ export default function QuoteDetailPage() {
         <div className="orcamento-topo-nome"><h1>{quote.number}</h1><StatusOrcamento quote={quote} icones /><HistoricoOrcamento quoteId={id} numero={quote.number} cliente={quote.customerNameSnapshot} /></div>
       </div>
       <div className="orcamento-topo-acoes">
-        <select className="orcamento-status" aria-label="Status do orçamento" title="Status do orçamento" value={currentWorkStatus} disabled={updating} onChange={(event) => { const value = event.target.value as WorkStatus; if (value === 'PENDING_APPROVAL') void changeStatus({ status: 'SENT' }); else if (value === 'REJECTED') void changeStatus({ status: 'REJECTED', reason: 'Status alterado no acompanhamento' }); else void changeStatus({ status: WORK_STATUS_STORAGE[value].status, executionStatus: WORK_STATUS_STORAGE[value].executionStatus }); }}>{WORK_STATUSES.map(status => <option value={status} key={status}>{WORK_STATUS_LABELS[status]}</option>)}</select>
+        <select className="orcamento-status" aria-label="Status do orçamento" title="Status do orçamento" value={currentWorkStatus} disabled={updating} onChange={(event) => { const value = event.target.value as WorkStatus; if (value === 'PENDING_APPROVAL') void changeStatus({ status: 'SENT' }); else if (value === 'REJECTED') void changeStatus({ status: 'REJECTED', reason: 'Status alterado no acompanhamento' }); else if (pendente && WORK_STATUS_STORAGE[value].status === 'APPROVED') setAprovacaoPedida({ status: 'APPROVED', executionStatus: WORK_STATUS_STORAGE[value].executionStatus }); else void changeStatus({ status: WORK_STATUS_STORAGE[value].status, executionStatus: WORK_STATUS_STORAGE[value].executionStatus }); }}>{WORK_STATUSES.map(status => <option value={status} key={status}>{WORK_STATUS_LABELS[status]}</option>)}</select>
         <ExportarPdfOrcamento quoteId={id} quoteNumber={quote.number} customerName={quote.customerNameSnapshot} disponivel={{ desenhos: quote.items.some(item => projetoTemDesenho(item.drawingData)), tecnico: !!comTecnico?.size }} />
         <MenuAcoes rotulo="Mais ações do orçamento" titulo="Orçamento" grupos={[acoesDoOrcamento, acoesDaSituacao]} />
         {principal && <button type="button" className="botao-principal" disabled={updating} onClick={principal.acao}><Icone nome={principal.icone} tamanho={16} />{principal.rotulo}</button>}
@@ -215,15 +265,46 @@ export default function QuoteDetailPage() {
         </footer>
       </form>
     </section>
-    <div className="cards">{quote.items.map((item) => <article className="detail-card" id={`projeto-${item.id}`} key={item.id}>
-      <span>{nomeProjeto(item).toUpperCase()}</span><div className="projeto-impressoes"><ExportarPdfProjeto quoteId={id} itemId={item.id} quoteNumber={quote.number} customerName={quote.customerNameSnapshot} projectName={nomeProjeto(item)} disponivel={{ desenhos: projetoTemDesenho(item.drawingData), tecnico: !!comTecnico?.has(item.id) }} />{!projetoTemDesenho(item.drawingData) && podeEditarOrcamento(quote) && <Link className="secondary-button" href={enderecoOrcamento(id, origem, { tela: 'editar', parametros: { detail: item.id } })}>Adicionar desenhos</Link>}{canTechnical && comTecnico && !comTecnico.has(item.id) && <button type="button" className="secondary-button" disabled={!!openingDesign} onClick={() => void abrirDesenhoTecnico(item)}>{openingDesign === item.id ? 'Abrindo desenho…' : 'Adicionar desenho técnico'}</button>}</div>{entregas && entregasPorProjeto.has(item.id) && <NotaEntregaProjeto quoteId={id} customerName={quote.customerNameSnapshot} projeto={entregasPorProjeto.get(item.id)!} canDeliver={entregas.canDeliver} reason={entregas.reason} abrirAoCarregar={notaPedida === item.id}
+    <section className="projetos-orcamento" aria-label="Projetos do orçamento">
+      <header className="projetos-orcamento-topo">
+        <h2>Projetos <small>{quote.items.length}</small></h2>
+        {recusados.length > 0 && <div className="projetos-filtro" role="group" aria-label="Mostrar projetos">
+          {([['todos', 'Todos', quote.items.length], ['aprovados', 'Aprovados', quote.items.length - recusados.length], ['nao-aprovados', 'Não aprovados', recusados.length]] as const).map(([valor, rotulo, total]) =>
+            <button key={valor} type="button" aria-pressed={filtroProjetos === valor} onClick={() => setFiltroProjetos(valor)}>{rotulo}<b>{total}</b></button>)}
+        </div>}
+      </header>
+      <div className="projetos-blocos">{quote.items.map((item, indice) => ({ item, indice })).filter(({ item }) => filtroProjetos === 'todos' || (filtroProjetos === 'aprovados') === !item.declinedAt).map(({ item, indice }) => <BlocoProjeto key={item.id} id={`projeto-${item.id}`} tom={indice}
+        nome={nomeProjeto(item)} valor={formatarMoeda(item.total)} aberto={abertos.has(item.id)}
+        resumo={[[...new Set(item.components.length ? item.components.map(component => component.materialNameSnapshot ?? item.materialNameSnapshot) : [item.materialNameSnapshot])].join(' · '), `${item.billedQuantity.toLocaleString('pt-BR')} m²`, item.components.length ? `${item.components.length} ${item.components.length === 1 ? 'peça' : 'peças'}` : ''].filter(Boolean).join(' · ')}
+        situacao={quote.status === 'APPROVED' ? item.declinedAt ? 'nao-aprovado' : 'aprovado' : undefined}
+        aoAlternar={() => setAbertos((atual) => { const proximo = new Set(atual); if (proximo.has(item.id)) proximo.delete(item.id); else proximo.add(item.id); return proximo; })}
+        acaoRapida={quote.status === 'APPROVED' && (quote.executionStatus ?? 'NOT_STARTED') !== 'NOT_STARTED' && !item.declinedAt
+          ? <button type="button" className="projeto-bloco-retrabalho" title="Retrabalho: as peças voltam para a produção ou para a entrega" onClick={() => { setErroRetrabalho(''); setRetrabalho(item); }}><Icone nome="refazer" tamanho={13} /><span>Retrabalho</span></button> : undefined}
+        acoes={[[
+          { rotulo: 'Exportar PDF', icone: 'download', aoEscolher: () => { setAbertos((atual) => new Set(atual).add(item.id)); setExportarProjeto(item.id); } },
+          ...(!projetoTemDesenho(item.drawingData) && podeEditarOrcamento(quote) ? [{ rotulo: 'Adicionar desenhos', icone: 'lapis', href: enderecoOrcamento(id, origem, { tela: 'editar', parametros: { detail: item.id } }) } satisfies AcaoMenu] : []),
+          ...(canTechnical ? [{ rotulo: comTecnico?.has(item.id) ? 'Desenho técnico' : 'Adicionar desenho técnico', icone: 'esquadro', desabilitada: !!openingDesign, aoEscolher: () => void abrirDesenhoTecnico(item) } satisfies AcaoMenu] : []),
+        ], quote.status === 'APPROVED' && quote.executionStatus !== 'COMPLETED' && quote.items.length > 1 ? [item.declinedAt
+          ? { rotulo: 'Aprovar projeto', icone: 'marcado', desabilitada: !!alterandoAprovacao, aoEscolher: () => void alterarAprovacao(item, true) }
+          : { rotulo: 'Marcar como não aprovado', icone: 'recusado', perigo: true, desabilitada: !!alterandoAprovacao || recusados.length === quote.items.length - 1, aoEscolher: () => void alterarAprovacao(item, false) }] : []]}>
+<div className="projeto-impressoes"><ExportarPdfProjeto quoteId={id} itemId={item.id} quoteNumber={quote.number} customerName={quote.customerNameSnapshot} projectName={nomeProjeto(item)} disponivel={{ desenhos: projetoTemDesenho(item.drawingData), tecnico: !!comTecnico?.has(item.id) }} abrirAgora={exportarProjeto === item.id} aoAbrir={exportacaoAberta} />{!projetoTemDesenho(item.drawingData) && podeEditarOrcamento(quote) && <Link className="secondary-button" href={enderecoOrcamento(id, origem, { tela: 'editar', parametros: { detail: item.id } })}>Adicionar desenhos</Link>}{canTechnical && comTecnico && !comTecnico.has(item.id) && <button type="button" className="secondary-button" disabled={!!openingDesign} onClick={() => void abrirDesenhoTecnico(item)}>{openingDesign === item.id ? 'Abrindo desenho…' : 'Adicionar desenho técnico'}</button>}</div>{entregas && entregasPorProjeto.has(item.id) && <NotaEntregaProjeto quoteId={id} customerName={quote.customerNameSnapshot} projeto={entregasPorProjeto.get(item.id)!} canDeliver={entregas.canDeliver} reason={entregas.reason} abrirAoCarregar={notaPedida === item.id}
         aoRegistrar={(nota) => { void carregarEntregas(); if (nota.quoteDelivered) void api<Quote>(`/quotes/${id}`).then(setQuote); }} />}<SavedItemDrawing item={item} notes={quote.notes} /><strong>{[...new Set(item.components.length ? item.components.map(component => component.materialNameSnapshot ?? item.materialNameSnapshot) : [item.materialNameSnapshot])].join(' · ')}</strong>
       <small>{item.calculationMode === 'MANUAL_M2' ? 'Área manual registrada' : 'Área calculada pelos componentes'} · {item.billedQuantity.toLocaleString('pt-BR')} m² · Material: {formatarMoeda(item.materialSubtotal)}</small>
       {item.components.map((component) => <div className="quote-component" key={component.id}><strong>{component.label}</strong><small>{component.materialNameSnapshot ?? item.materialNameSnapshot}</small><small>{cm(component.lengthMm)} × {cm(component.widthMm)} cm · {component.orientation === 'HORIZONTAL' ? 'horizontal' : 'vertical'} · qtd. {component.quantity} · {(component.lengthMm * component.widthMm * component.quantity / 1_000_000).toLocaleString('pt-BR')} m²</small><small>Calculado: {formatarMoeda(Number(component.calculatedTotal))} · Aplicado: {formatarMoeda(Number(component.appliedTotal))} · Desconto: {formatarMoeda(Math.max(0, Number(component.calculatedTotal) - Number(component.appliedTotal)))}</small>{component.edges.map((edge, index) => <small key={`${edge.side}-${index}`}>↳ {rotuloLadoBorda(edge.side)}: {edge.serviceNameSnapshot} · Calculado {formatarMoeda(Number(edge.calculatedSubtotal))} · Aplicado {formatarMoeda(Number(edge.appliedSubtotal))}</small>)}</div>)}
       {item.cutouts.map((cutout) => <small key={cutout.id}>Recorte: {cutout.label ?? cutout.cutoutType}{cutout.lengthMm && cutout.widthMm ? ` · ${cm(cutout.lengthMm)} × ${cm(cutout.widthMm)} cm` : ''}</small>)}
       {item.services.map((service, index) => <small key={`${service.serviceNameSnapshot}-${index}`}>+ {service.serviceNameSnapshot}: calculado {formatarMoeda(Number(service.calculatedSubtotal))} · aplicado {formatarMoeda(Number(service.appliedSubtotal))} · desconto {formatarMoeda(Math.max(0, Number(service.calculatedSubtotal) - Number(service.appliedSubtotal)))}</small>)}
       <b>{formatarMoeda(item.total)}</b>
-    </article>)}</div>
-    <section className="detail-total"><span>Total bruto</span><strong>{formatarMoeda(quote.grossTotal)}</strong><span>Descontos individuais</span><strong>- {formatarMoeda(individualDiscount)}</strong><span>Desconto geral</span><strong>- {formatarMoeda(quote.discountAmount)}</strong><span>Desconto total dado</span><strong>- {formatarMoeda(totalDiscountGiven)}</strong><b>Total do orçamento: {formatarMoeda(quote.netTotal)}</b></section>
+      {quote.status === 'APPROVED' && quote.executionStatus !== 'COMPLETED' && quote.items.length > 1 && <div className="projeto-bloco-aprovacao">
+        {item.declinedAt
+          ? <><small>O cliente não aprovou este projeto: ele está fora do valor e do fluxo de trabalho.</small><button type="button" className="botao-contorno" disabled={!!alterandoAprovacao} onClick={() => void alterarAprovacao(item, true)}>Aprovar projeto</button></>
+          : <button type="button" className="text-button" disabled={!!alterandoAprovacao || recusados.length === quote.items.length - 1} onClick={() => void alterarAprovacao(item, false)}>Marcar como não aprovado</button>}
+      </div>}
+    </BlocoProjeto>)}</div>
+    </section>
+    {retrabalho && <JanelaRetrabalho projeto={nomeProjeto(retrabalho)} ocupada={enviandoRetrabalho} erro={erroRetrabalho} aoFechar={() => setRetrabalho(null)} aoConfirmar={(destino, motivo) => void enviarRetrabalho(destino, motivo)} />}
+    {aprovacaoPedida && <JanelaAprovacao numero={quote.number} cliente={quote.customerNameSnapshot} ocupada={updating}
+      projetos={quote.items.map((item) => ({ id: item.id, nome: nomeProjeto(item), total: item.total }))} descontoCompleto={quote.fullDiscountAmount ?? quote.discountAmount}
+      aoFechar={() => setAprovacaoPedida(null)} aoConfirmar={(naoAprovados) => { const pedido = aprovacaoPedida; setAprovacaoPedida(null); void changeStatus({ ...pedido, ...(naoAprovados.length ? { projetosNaoAprovados: naoAprovados } : {}) }); }} />}
+    <section className="detail-total"><span>Total bruto</span><strong>{formatarMoeda(quote.grossTotal)}</strong><span>Descontos individuais</span><strong>- {formatarMoeda(individualDiscount)}</strong><span>Desconto geral</span><strong>- {formatarMoeda(quote.discountAmount)}</strong><span>Desconto total dado</span><strong>- {formatarMoeda(totalDiscountGiven)}</strong><b>Total do orçamento: {formatarMoeda(quote.netTotal)}</b>{recusados.length > 0 && <small className="detail-total-fora">{recusados.length === 1 ? '1 projeto não aprovado fica' : `${recusados.length} projetos não aprovados ficam`} fora do valor: {formatarMoeda(recusados.reduce((soma, item) => soma + item.total, 0))}</small>}</section>
   </main>;
 }

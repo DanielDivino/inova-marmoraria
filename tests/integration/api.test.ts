@@ -274,9 +274,40 @@ describe('Orçamento, snapshots, edição e relacionamentos', () => {
     expect(decodeURIComponent(String(response.headers['content-disposition']))).toContain(`${q.number} - Banheiro social`);
     const text = execFileSync('pdftotext', ['-', '-'], { input: response.rawPayload, encoding: 'utf8' });
     expect(text).toContain('BANHEIRO SOCIAL'); expect(text).toContain('432,10');
-    expect(text).not.toContain('COZINHA'); expect(text).not.toContain('DESCONTO FINAL');
+    expect(text).not.toContain('COZINHA'); expect(text).not.toContain('DESCONTO CONCEDIDO');
     const outro = await quote();
     expect((await request('GET', `/quotes/${outro.id}/items/${banheiro.id}/pdf`)).statusCode).toBe(404);
+  });
+  it('aprovação parcial: o projeto não aprovado sai do valor (desconto na mesma proporção), do fluxo e do PDF; aprovar de novo devolve', async () => {
+    const q = await quote({ items: [item({ projectName: 'Cozinha' }), item({ projectName: 'Banheiro', components: [{ ...item().components[0], appliedTotal: 400 }] })], discountAmount: 100 });
+    const [cozinha, banheiro] = q.items;
+    const bruto = cozinha.total + banheiro.total;
+    expect(q.grossTotal).toBe(bruto);
+    const cartoes = async () => (await request('GET', '/workflow/projects')).json().filter((cartao: any) => cartao.quote.id === q.id).length;
+    expect(await cartoes()).toBe(2);
+    // Nenhum projeto aprovado não é aprovação.
+    expect((await request('PATCH', `/quotes/${q.id}/status`, { status: 'APPROVED', projetosNaoAprovados: [cozinha.id, banheiro.id] })).json()).toMatchObject({ error: 'NO_APPROVED_PROJECT' });
+
+    const aprovado = await request('PATCH', `/quotes/${q.id}/status`, { status: 'APPROVED', projetosNaoAprovados: [banheiro.id] });
+    expect(aprovado.statusCode, aprovado.body).toBe(200);
+    const desconto = Math.round(100 * cozinha.total / bruto * 100) / 100;
+    expect(aprovado.json()).toMatchObject({ status: 'APPROVED', grossTotal: cozinha.total, discountAmount: desconto, netTotal: Math.round((cozinha.total - desconto) * 100) / 100 });
+    expect(aprovado.json().items.find((entrada: any) => entrada.id === banheiro.id).declinedAt).toBeTruthy();
+    expect(await cartoes()).toBe(1);
+    const texto = execFileSync('pdftotext', ['-', '-'], { input: (await request('GET', `/quotes/${q.id}/pdf?drawings=false`)).rawPayload, encoding: 'utf8' });
+    expect(texto).toContain('COZINHA');
+    expect(texto).not.toContain('BANHEIRO');
+    expect((await request('GET', `/quotes/${q.id}/historico`)).json().eventos.map((evento: any) => [evento.titulo, evento.detalhe])).toContainEqual(['Orçamento aprovado em parte', 'Não aprovado: Banheiro']);
+
+    // O último projeto aprovado não pode ser retirado; aprovar o banheiro depois devolve o valor e o desconto.
+    expect((await request('PATCH', `/quotes/${q.id}/items/${cozinha.id}/aprovacao`, { aprovado: false })).json()).toMatchObject({ error: 'NO_APPROVED_PROJECT' });
+    const devolvido = await request('PATCH', `/quotes/${q.id}/items/${banheiro.id}/aprovacao`, { aprovado: true });
+    expect(devolvido.statusCode, devolvido.body).toBe(200);
+    expect(devolvido.json()).toMatchObject({ grossTotal: bruto, discountAmount: 100, netTotal: bruto - 100 });
+    expect(await cartoes()).toBe(2);
+    // Orçamento ainda aguardando aprovação: a aprovação dos projetos não muda por projeto.
+    const pendente = await quote();
+    expect((await request('PATCH', `/quotes/${pendente.id}/items/${pendente.items[0].id}/aprovacao`, { aprovado: false })).statusCode).toBe(409);
   });
   it('histórico do orçamento: linha do tempo com o que aconteceu, só para quem vê o orçamento', async () => {
     const q = await quote();

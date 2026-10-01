@@ -168,6 +168,11 @@ try {
   await page.screenshot({ path: resolve(output, '06-topo-e-menu.png'), clip: { x: 230, y: 80, width: 1050, height: 420 } });
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Confirmar aprovação' }).click();
+  // A janela pergunta quais projetos o cliente aprovou (aqui, o único projeto).
+  const aprovacao = page.getByRole('dialog', { name: 'Confirmar aprovação' });
+  await aprovacao.getByText('Confirmar que o cliente aprovou o projeto “Cozinha”?').waitFor();
+  await aprovacao.getByRole('button', { name: 'Confirmar aprovação' }).click();
+  await aprovacao.waitFor({ state: 'detached' });
   await page.waitForTimeout(300);
   assert.deepEqual(mudancasDeSituacao, [{ status: 'APPROVED' }]);
   await page.getByRole('button', { name: 'Iniciar serviço' }).waitFor();

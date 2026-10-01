@@ -11,6 +11,10 @@
 .orc-desenho-lista { display: grid; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
 .orc-desenho-lista li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); }
 .orc-desenho-lista li > div { min-width: 0; }
+.orc-desenho-lista li > .orc-desenho-item-acoes { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.orc-desenho-excluir { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; }
+.orc-desenho-excluir:hover:not(:disabled), .orc-desenho-excluir:focus-visible { border-color: #c9473c; color: #b3261e; background: #fbeceb; outline: none; }
+html.inova-dark .inova-theme .orc-desenho-excluir:hover:not(:disabled) { background: #3a2422; color: #f08b80; }
 .orc-desenho-lista strong, .orc-desenho-lista small { display: block; }
 .orc-desenho-lista small { margin-top: 3px; color: var(--muted); font-size: 12px; }
 .orc-desenho-lista .no-orcamento { color: #7c5718; font-weight: 700; }

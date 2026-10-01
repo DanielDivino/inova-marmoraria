@@ -28,6 +28,12 @@ it('consulta cancelável mantém o timeout para não deixar a busca carregando i
   await assertion;
 });
 
+it('resposta 204 (sem conteúdo, como ao excluir) não quebra ao ler', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
+  const { api } = await import('./api');
+  await expect(api('/designs/d1', { method: 'DELETE' })).resolves.toBeUndefined();
+});
+
 it('cancelar uma pesquisa obsoleta não encerra a sessão', async () => {
   vi.stubGlobal('fetch', vi.fn((_path, init) => new Promise((_resolve, reject) => {
     init.signal.addEventListener('abort', () => reject(new DOMException('Abortado', 'AbortError')));

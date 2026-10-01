@@ -62,6 +62,7 @@ await page.route('**/api/**', async route => {
     return route.fulfill({ json: { id: 'rascunho', version: versao, schemaVersion: 1, document: documento, updatedAt: new Date().toISOString(), diagnostics: [] } });
   }
   if (path === `/api/designs/${designId}/draft`) return route.fulfill({ json: { design: { id: designId, name: 'Desenho técnico', project: { id: 'p', name: 'Cozinha', job: { customer: { name: cliente.name, phone: cliente.phone } } } }, draft: { id: 'rascunho', version: versao, schemaVersion: 1, document: documento, updatedAt: new Date().toISOString() }, diagnostics: [] } });
+  if (path === `/api/designs/${designId}` && method === 'DELETE') { desenhos.splice(0, desenhos.length); return route.fulfill({ status: 204, body: '' }); }
   if (path === `/api/designs/${designId}`) return route.fulfill({ json: { revisions: [] } });
   errors.push('API não prevista: ' + method + ' ' + path);
   return route.fulfill({ status: 404, json: {} });
@@ -164,8 +165,23 @@ try {
   await tela.getByRole('button', { name: '← Voltar ao orçamento' }).click();
   await tela.waitFor({ state: 'detached' });
 
+  // 5) O × da lista exclui o desenho: o projeto fica sem desenho técnico (as peças continuam no orçamento).
+  await page.getByRole('button', { name: /^Desenho técnico/ }).click();
+  const lista = page.getByRole('list', { name: 'Desenhos do cliente' });
+  await lista.getByText('Neste orçamento').waitFor();
+  await lista.getByRole('button', { name: 'Excluir o desenho Cozinha' }).click();
+  const pergunta = page.getByRole('alertdialog', { name: 'Excluir o desenho “Cozinha”?' });
+  await pergunta.getByText('O projeto deste orçamento que usa este desenho fica sem desenho técnico', { exact: false }).waitFor();
+  await page.screenshot({ path: resolve(output, '03-excluir-desenho.png') });
+  await pergunta.getByRole('button', { name: 'Excluir desenho' }).click();
+  await doProjeto.getByRole('button', { name: 'Criar desenho do projeto' }).waitFor();
+  assert.equal(await lista.locator('li').count(), 0, 'some da lista');
+  await page.keyboard.press('Escape');
+  await page.getByText(/Desenho técnico deste projeto/).waitFor({ state: 'detached' });
+  assert.equal(await medida('Comprimento', 1).inputValue(), '2,40', 'as peças continuam');
+
   assert.deepEqual(errors, []);
-  console.log('OK: desenho técnico do projeto aberto — criado já com as 4 peças do Orçamento Rápido (cantos arredondados viram a peça Arredondada) e ligado ao projeto; depois, abrir leva a medida mudada e os cantos retirados no orçamento.');
+  console.log('OK: desenho técnico do projeto aberto — criado já com as 4 peças do Orçamento Rápido (cantos arredondados viram a peça Arredondada) e ligado ao projeto; depois, abrir leva a medida mudada e os cantos retirados no orçamento; o × da lista exclui o desenho e o projeto fica sem ele.');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

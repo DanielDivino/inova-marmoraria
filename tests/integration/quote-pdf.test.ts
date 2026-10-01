@@ -234,7 +234,7 @@ describe('PDF de um projeto', () => {
     const completo = await render(doisProjetos());
     expect(completo.pages[0]).toContain('BANCADA DA COZINHA');
     expect(completo.pages[0]).toContain('BANHEIRO SOCIAL');
-    expect(completo.pages[0]).toContain('DESCONTO FINAL');
+    expect(completo.pages[0]).toContain('DESCONTO CONCEDIDO');
     expect(impresso(completo)).toContain('R$ 2.300,00');
   });
 
@@ -242,7 +242,7 @@ describe('PDF de um projeto', () => {
     const projeto = await render(doisProjetos(), 'pdf-do-projeto', 'p2');
     expect(projeto.pages[0]).toContain('BANHEIRO SOCIAL');
     expect(projeto.text).not.toMatch(/bancada da cozinha/i);
-    expect(projeto.pages[0]).not.toContain('DESCONTO FINAL');
+    expect(projeto.pages[0]).not.toContain('DESCONTO CONCEDIDO');
     expect(impresso(projeto)).toContain('R$ 960,00');
     expect(impresso(projeto)).not.toContain('R$ 2.300,00');
     expect(impresso(projeto).some((texto) => texto.includes('Proposta referente apenas ao projeto “Banheiro social” do orçamento INO-2026-TESTE. O desconto final do orçamento vale para a contratação completa'))).toBe(true);
