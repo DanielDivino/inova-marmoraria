@@ -97,6 +97,7 @@
   html .inova-theme .quick-table .quick-item-group[data-collapsed=true] [data-quick-row] > td:not(.quick-description, .quick-item-total, .quick-actions) { display: none; }
   html .inova-theme .quick-table .quick-item-group[data-collapsed=true] .quick-description > .quick-mobile-label,
   html .inova-theme .quick-table .quick-item-group[data-collapsed=true] .quick-description > .type-description-field,
+  html .inova-theme .quick-table .quick-item-group[data-collapsed=true] > .quick-presa-row,
   html .inova-theme .quick-table .quick-item-group[data-collapsed=true] > .quick-info-row,
   html .inova-theme .quick-table .quick-item-group[data-collapsed=true] > .quick-details-row { display: none; }
   html .inova-theme .quick-table .quick-collapse-toggle { display: flex; width: 100%; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 10px; border: 0; background: transparent; color: var(--ink); text-align: left; font-size: 14px; font-weight: 650; }

@@ -1,29 +1,30 @@
 import { acabamentoBordaPedra } from '../orcamentos/edge-finishes.js';
 import { componentTypeLabels } from '../orcamentos/component-details.js';
 import { bounds, contornoDosParametros, edgeLength, EPS, sampleContour, world } from './geometry.js';
-import { formaDaPeca, retangulosDaPeca, type FormaNoDesenho, type LadoRetangulo, type Retangulo } from './orcamento.js';
+import { ehPecaNoLado, formaDaPeca, retangulosDaPeca, type FormaNoDesenho, type LadoRetangulo, type Retangulo } from './orcamento.js';
 import { featureSchema, pieceSchema, type Feature, type Piece, type TechnicalDocument } from './schema.js';
 
 /**
  * Orçamento Rápido → desenho técnico: o caminho de volta do "Usar no orçamento". O projeto guarda,
- * no vínculo com o desenho, de onde veio cada parte (peça, rodabanca, borda e recorte do desenho) e
+ * no vínculo com o desenho, de onde veio cada parte (peça, rodabanca, saia, borda e recorte do desenho) e
  * como ele estava na última troca com o desenho (`base`). Ao abrir o desenho pelo orçamento, só o
  * que mudou no orçamento desde então vai para o desenho; o resto do que foi feito lá (posição,
  * formato, cotas, textos) fica como está.
  * - nome, pedra e medidas das peças retangulares (inclusive com cantos arredondados); peça em L, U,
  *   curva ou desenho livre muda de medida só no desenho (vira aviso);
  * - cantos arredondados: a peça retangular vira a "Arredondada" do desenho (e volta a ter cantos retos);
- * - peça nova no orçamento entra no desenho como retângulo, ao lado das outras; rodabanca nova presa
- *   a uma peça retangular entra no lado dela; peça removida sai do desenho;
- * - saia e acabamento marcados num lado vão para esse lado; cuba, cooktop e furo, para a peça (na
- *   posição do orçamento ou no centro), e o que sai do orçamento sai do desenho.
+ * - peça nova no orçamento entra no desenho como retângulo, ao lado das outras; rodabanca ou saia
+ *   nova (Tipo/descrição) presa a uma peça retangular entra no lado dela; peça removida sai do desenho;
+ * - acabamento marcado num lado vai para esse lado (e a saia dos orçamentos antigos, lançada como
+ *   acabamento); cuba, cooktop e furo, para a peça (na posição do orçamento ou no centro), e o que
+ *   sai do orçamento sai do desenho.
  */
 export type LadoNoOrcamento = LadoRetangulo | 'CUSTOM';
 export type PecaNoOrcamento = {
   id: string; label: string; componentType: string; lengthMm: number; widthMm: number; materialId?: string;
   /** Cantos arredondados nas 4 pontas (acabamento do Orçamento Rápido). */
   raioCantosMm?: number;
-  /** Rodabanca presa a uma peça do orçamento. */
+  /** Rodabanca ou saia presa a uma peça do orçamento. */
   paiId?: string; ladoPai?: LadoRetangulo;
   bordas: { side: LadoNoOrcamento; serviceId: string; lengthMm?: number; heightMm?: number }[];
 };
@@ -34,7 +35,7 @@ export type RecorteNoOrcamento = {
 export type ProjetoNoOrcamento = { nome: string; pecas: PecaNoOrcamento[]; recortes: RecorteNoOrcamento[] };
 export type OrigemNoDesenho = { pecaId: string; recursoId?: string; forma: FormaNoDesenho; parte: number };
 export type SincroniaDesenho = {
-  /** Componente do orçamento → peça (ou rodabanca) do desenho. */
+  /** Componente do orçamento → peça (ou rodabanca/saia) do desenho. */
   pecas: Record<string, OrigemNoDesenho>;
   /** Componente do orçamento → "LADO:TIPO" → recurso (saia ou acabamento) do desenho. */
   bordas: Record<string, Record<string, string>>;
@@ -213,31 +214,32 @@ export function sincronizarDesenho(doc: TechnicalDocument, projeto: ProjetoNoOrc
     alterado = true;
   };
   const semOrigem = projeto.pecas.filter((peca) => !baseDaPeca.has(peca.id) && !sincronia.pecas[peca.id]);
-  for (const peca of semOrigem.filter((entrada) => entrada.componentType !== 'BACKSPLASH' || !entrada.paiId)) adicionarRetangulo(peca);
-  // Rodabanca presa a uma peça retangular do desenho entra no lado dela; presa a outra forma, vira peça à parte.
-  for (const peca of semOrigem.filter((entrada) => entrada.componentType === 'BACKSPLASH' && entrada.paiId)) {
+  for (const peca of semOrigem.filter((entrada) => !ehPecaNoLado(entrada.componentType) || !entrada.paiId)) adicionarRetangulo(peca);
+  // Rodabanca ou saia presa a uma peça retangular do desenho entra no lado dela; presa a outra forma, vira peça à parte.
+  for (const peca of semOrigem.filter((entrada) => ehPecaNoLado(entrada.componentType) && entrada.paiId)) {
     const origemPai = sincronia.pecas[peca.paiId!];
     const pai = origemPai && !origemPai.recursoId && origemPai.forma === 'RETANGULO' ? pecaDoDesenho(origemPai.pecaId) : undefined;
     const lado = pai && peca.ladoPai ? ladoDaPeca(pai, peca.ladoPai) : undefined;
     if (!pai || !lado) { adicionarRetangulo(peca); continue; }
     const id = novoId();
-    documento.features.push(featureSchema.parse({ id, type: 'BACKSPLASH', pieceId: pai.id, name: nomeNoDesenho(peca) || 'Rodabanca', x: 0, y: 0, edgeId: lado, startMm: 0,
+    documento.features.push(featureSchema.parse({ id, type: peca.componentType, pieceId: pai.id, name: nomeNoDesenho(peca), x: 0, y: 0, edgeId: lado, startMm: 0,
       extentMm: Math.min(Math.max(1, peca.lengthMm), edgeLength(pai, lado)), heightMm: Math.max(1, peca.widthMm) }));
     sincronia.pecas[peca.id] = { pecaId: pai.id, recursoId: id, forma: origemPai.forma, parte: 0 };
     novas.add(peca.id);
     alterado = true;
   }
 
-  // 3) Mudanças nas peças que já estavam no desenho: nome, medidas, pedra; rodabanca: extensão e altura.
+  // 3) Mudanças nas peças que já estavam no desenho: nome, medidas, pedra; rodabanca e saia: extensão e altura.
   for (const peca of projeto.pecas) {
     const antes = baseDaPeca.get(peca.id), origem = sincronia.pecas[peca.id];
     if (!antes || !origem || novas.has(peca.id)) continue;
     if (origem.recursoId) {
-      const rodabanca = recursoDoDesenho(origem.recursoId), dona = rodabanca && pecaDoDesenho(rodabanca.pieceId);
-      if (!rodabanca || !dona) continue;
-      if (peca.label !== antes.label && nomeNoDesenho(peca)) { rodabanca.name = nomeNoDesenho(peca); alterado = true; }
-      if (peca.lengthMm !== antes.lengthMm) { rodabanca.extentMm = Math.min(Math.max(1, peca.lengthMm), edgeLength(dona, rodabanca.edgeId!) - rodabanca.startMm); alterado = true; }
-      if (peca.widthMm !== antes.widthMm) { rodabanca.heightMm = Math.max(1, peca.widthMm); alterado = true; }
+      const faixa = recursoDoDesenho(origem.recursoId), dona = faixa && pecaDoDesenho(faixa.pieceId);
+      if (!faixa || !dona) continue;
+      if (peca.componentType !== antes.componentType && ehPecaNoLado(peca.componentType)) { faixa.type = peca.componentType; alterado = true; }
+      if ((peca.label !== antes.label || peca.componentType !== antes.componentType) && nomeNoDesenho(peca)) { faixa.name = nomeNoDesenho(peca); alterado = true; }
+      if (peca.lengthMm !== antes.lengthMm) { faixa.extentMm = Math.min(Math.max(1, peca.lengthMm), edgeLength(dona, faixa.edgeId!) - faixa.startMm); alterado = true; }
+      if (peca.widthMm !== antes.widthMm) { faixa.heightMm = Math.max(1, peca.widthMm); alterado = true; }
       continue;
     }
     const alvo = pecaDoDesenho(origem.pecaId);
@@ -258,7 +260,8 @@ export function sincronizarDesenho(doc: TechnicalDocument, projeto: ProjetoNoOrc
     }
   }
 
-  // 4) Saia e acabamento de cada lado (nas peças retangulares; em L/U, só avisa o que não dá para marcar).
+  // 4) Acabamento de cada lado — e a saia lançada como acabamento nos orçamentos antigos (nas peças
+  //    retangulares; em L/U, só avisa o que não dá para marcar).
   for (const peca of projeto.pecas) {
     const origem = sincronia.pecas[peca.id];
     if (!origem || origem.recursoId) continue;

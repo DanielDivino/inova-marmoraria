@@ -81,13 +81,20 @@ try {
   await page.getByRole('button', { name: '+ Acabamentos', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Acabamentos da peça' });
   await dialog.locator('fieldset').filter({ hasText: 'Acabamento 45°' }).getByLabel('Inferior', { exact: true }).check();
-  await dialog.locator('fieldset').filter({ hasText: 'Saia' }).getByLabel('Inferior', { exact: true }).check();
+  // Saia não é acabamento: fica no Tipo/descrição, cobrada pela área como as outras peças.
+  assert.equal(await dialog.locator('fieldset').filter({ hasText: 'Saia' }).count(), 0, 'Saia saiu dos acabamentos');
   await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
-  // Altura da saia nas opções da peça (lista compacta de acabamentos).
+  await page.getByRole('button', { name: '+ Adicionar item', exact: true }).click();
+  await page.getByLabel('Tipo da peça 2', { exact: true }).focus();
+  await page.getByLabel('Tipo da peça 2', { exact: true }).selectOption('SKIRT');
+  await page.getByLabel('Peça onde fica a saia 2', { exact: true }).selectOption({ label: 'Peça 1 · Tampo' });
+  assert.equal(await page.getByLabel('Lado da saia 2', { exact: true }).inputValue(), 'FRONT');
+  // Presa ao lado Inferior, a saia pega o comprimento dele (2,50 m); a altura vai na largura.
+  assert.equal(await page.getByLabel('Comprimento da peça 2 (m)', { exact: true }).inputValue(), '2,50');
+  await page.getByLabel('Largura da peça 2 (m)', { exact: true }).fill('0,10');
   const opcoes = page.locator('[data-quick-row]').first().locator('.quick-options-button:visible').first();
   await opcoes.click();
   const painel = page.locator('#' + await opcoes.getAttribute('aria-controls'));
-  await painel.locator('.quick-acabamento').filter({ hasText: 'Saia' }).getByLabel(/Altura do acabamento/).fill('10');
   await screenshot('02-medidas');
   // 2,50 × 0,60 m (R$ 900) + 45° em 2,50 m (R$ 175) + saia de 10 cm (R$ 150).
   await assertTotalContains('1.225,00');
@@ -133,11 +140,11 @@ try {
   await step(2);
   assert.equal(await page.locator('#project-step-2').isVisible(), true);
   assert.equal(await page.locator('ellipse.drawing-cutout').count(), 1);
-  assert.match(await page.locator('.manufacturing-description').innerText(), /Saia no lado Inferior/);
+  assert.match(await page.locator('.manufacturing-description').innerText(), /Adicional de 1\. Tampo · lado Inferior/);
   assert.match(await page.locator('.manufacturing-description').innerText(), /56 × 34 cm/);
   await screenshot('05-desenho');
   await step(1);
-  assert.equal(await root.getByLabel('Comprimento (m)', { exact: true }).inputValue(), '2,50');
+  assert.equal(await root.getByLabel('Comprimento (m)', { exact: true }).first().inputValue(), '2,50');
   await page.getByRole('button', { name: 'Ver tudo', exact: true }).click();
   for (const number of [1, 2]) assert.equal(await page.locator('#project-step-' + number).isVisible(), true);
   await page.getByRole('button', { name: 'Ver por etapas', exact: true }).click();
@@ -149,10 +156,10 @@ try {
     }
     await screenshot('06-responsivo-' + width);
     await step(1);
-    const inferiorButton = root.getByRole('button', { name: 'Editar acabamentos — Inferior', exact: true });
+    const inferiorButton = root.getByRole('button', { name: 'Editar acabamentos — Inferior', exact: true }).first();
     if ((await inferiorButton.getAttribute('aria-expanded')) !== 'true') await inferiorButton.click();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Acabamentos sem overflow em ' + width);
-    await root.locator('.component-edge-layout').screenshot({ path: resolve(output, 'acabamentos-' + width + '.png') });
+    await root.locator('.component-edge-layout').first().screenshot({ path: resolve(output, 'acabamentos-' + width + '.png') });
     await root.getByRole('button', { name: 'Fechar edição do lado', exact: true }).click();
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -173,7 +180,9 @@ try {
   await page.getByRole('alertdialog', { name: 'Excluir Segundo projeto?' }).getByRole('button', { name: 'Excluir projeto', exact: true }).click();
   await page.locator('.quote-summary-actions').getByRole('button', { name: 'Salvar orçamento', exact: true }).click();
   await page.waitForURL('**/orcamentos/saved-test');
-  assert.equal(saved.items[0].components[0].edges.length, 2);
+  assert.equal(saved.items[0].components[0].edges.length, 1, 'Só o 45° é acabamento');
+  assert.deepEqual([saved.items[0].components[1].componentType, saved.items[0].components[1].lengthMm, saved.items[0].components[1].widthMm], ['SKIRT', 2500, 100], 'Saia salva como peça');
+  assert.deepEqual(saved.items[0].drawingData.componentDetails[1], { parentComponentIndex: 0, parentSide: 'FRONT' }, 'Saia presa ao lado Inferior');
   assert.equal(saved.items[0].components[0].orientation, 'HORIZONTAL', 'Orientação interna preservada');
   assert(saved.items[0].services.some((servico) => servico.serviceId === 'oval-cut'), 'Corte de cuba oval salvo como serviço do projeto');
   const recorte = saved.items[0].drawingData.productionPlan.cutouts[0];
@@ -182,7 +191,7 @@ try {
   assert.equal(saved.notes, undefined, 'observações se editam na tela do orçamento');
   assert.equal(saved.validUntil, undefined, 'validade calculada no servidor');
   assert.deepEqual(errors, []);
-  console.log('OK: Orçamento Rápido, acabamentos, opções da peça, cortes e furos, outros serviços, desconto, recorte de produção no desenho, Ver tudo, rascunho, salvamento e 4 larguras sem overflow e sem campo Orientação. Nenhuma API real chamada.');
+  console.log('OK: Orçamento Rápido, acabamentos, saia no Tipo/descrição presa ao lado, opções da peça, cortes e furos, outros serviços, desconto, recorte de produção no desenho, Ver tudo, rascunho, salvamento e 4 larguras sem overflow e sem campo Orientação. Nenhuma API real chamada.');
 } finally {
   await browser.close();
 }

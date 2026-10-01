@@ -10,6 +10,8 @@ export type ManufacturingCutout = {
 };
 export type ManufacturingComponent = {
   label?: string; componentType?: string; orientation?: string; lengthMm: number; widthMm: number; quantity: number;
+  /** Rodabanca, saia ou vista: o lado da peça onde fica. */
+  parentSide?: string;
   sillDetailMm?: number; sillDetailHeightMm?: number;
   /** Peitoril de duas pedras sobrepostas (Orçamento Rápido): comprimento é o
    * normal (lengthMm acima), compartilhado pelas duas peças; só a largura se
@@ -59,7 +61,7 @@ export function descricaoProducaoComponente(component: ManufacturingComponent, c
   if (component.lengthMm > 0 && component.widthMm > 0) dimensions.push(`${(component.lengthMm * component.widthMm * component.quantity / 1_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m² total`);
   lines.push({ label: 'Peça', text: dimensions.join(' · ') });
   if (component.cornerRadiusMm) lines.push({ label: 'Cantos', text: `arredondados nas 4 pontas · raio ${cm(component.cornerRadiusMm)} cm` });
-  if (parentName) lines.push({ label: 'Vínculo', text: `Adicional de ${parentName}` });
+  if (parentName) lines.push({ label: 'Vínculo', text: `Adicional de ${parentName}${component.parentSide && component.parentSide !== 'CUSTOM' ? ` · lado ${rotuloLadoBorda(component.parentSide)}` : ''}` });
   if (children.length) lines.push({ label: 'Componentes adicionados', text: children.join(' + ') });
   for (const edge of component.edges) {
     const length = edge.lengthMm ?? (['FRONT', 'BACK'].includes(edge.side) ? component.lengthMm : edge.side === 'CUSTOM' ? 0 : component.widthMm);

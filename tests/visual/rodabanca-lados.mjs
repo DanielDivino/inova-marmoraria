@@ -54,22 +54,21 @@ try {
   await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,50');
   await page.getByRole('button', { name: '+ Acabamentos', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Acabamentos da peça' });
-  await dialog.locator('fieldset').filter({ hasText: 'Vista' }).getByLabel('Direito', { exact: true }).check();
+  // Vista não é acabamento (fica no Tipo/descrição).
+  assert.equal(await dialog.locator('fieldset').filter({ hasText: 'Vista' }).count(), 0);
   await dialog.locator('fieldset').filter({ hasText: 'Acabamento 45°' }).getByLabel('Direito', { exact: true }).check();
   await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
-  // Altura da vista nas opções da peça (lista compacta de acabamentos).
   const opcoes = page.locator('[data-quick-row]').first().locator('.quick-options-button:visible').first();
   await opcoes.click();
   const painel = page.locator('#' + await opcoes.getAttribute('aria-controls'));
-  await painel.locator('.quick-acabamento').filter({ hasText: 'Vista' }).getByLabel(/Altura do acabamento/).fill('5');
-  await expect(painel.locator('.quick-acabamento')).toHaveCount(2);
-  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('297,50');
+  await expect(painel.locator('.quick-acabamento')).toHaveCount(1);
+  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('280,00');
   // Rodabanca cobrada: peça própria no orçamento rápido (tipo "Rodabanca"), 0,50 × 0,10 m de Branco Dallas = R$ 35,00.
   await page.getByRole('button', { name: '+ Adicionar item', exact: true }).click();
   await page.getByLabel('Tipo da peça 2', { exact: true }).selectOption('BACKSPLASH');
   await page.getByLabel('Comprimento da peça 2 (m)', { exact: true }).fill('0,50');
   await page.getByLabel('Largura da peça 2 (m)', { exact: true }).fill('0,10');
-  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('332,50');
+  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('315,00');
 
   // No desenho (produção), a rodabanca fica presa a um lado pelo mapa de lados da peça:
   // o comprimento vem do lado escolhido (Direito = largura 50 cm) e o valor do orçamento não muda.
@@ -80,18 +79,17 @@ try {
     if ((await botao.getAttribute('aria-expanded')) !== 'true') await botao.click();
   };
   await lado('Direito');
-  await expect(peca.locator('.map-edge-editor')).toContainText('Vista');
   await expect(peca.locator('.map-edge-editor')).toContainText('Acabamento 45°');
   await peca.getByLabel('Adicionar acabamento — Direito', { exact: true }).selectOption('__backsplash');
   await expect(peca.getByLabel('Editar comprimento — Rodabanca', { exact: true })).toContainText('50 cm');
   await peca.getByLabel('Altura da rodabanca (cm)', { exact: true }).fill('10');
-  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('332,50');
+  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('315,00');
   // Uma segunda rodabanca no lado Superior copia o comprimento (70 cm).
   await lado('Superior');
   await peca.getByLabel('Adicionar acabamento — Superior', { exact: true }).selectOption('__backsplash');
   await expect(peca.getByLabel('Editar comprimento — Rodabanca', { exact: true })).toContainText('70 cm');
   await peca.getByLabel('Altura da rodabanca (cm)', { exact: true }).last().fill('10');
-  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('332,50');
+  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('315,00');
   mkdirSync('.test-artifacts/rodabanca-lados', { recursive: true });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -108,12 +106,12 @@ try {
   await lado('Superior');
   await peca.getByRole('button', { name: 'Remover Rodabanca — Superior', exact: true }).click();
   await expect(peca.getByRole('button', { name: 'Remover Rodabanca — Superior', exact: true })).toHaveCount(0);
-  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('332,50');
+  await expect(page.locator('.quote-summary-card .summary-grand-total')).toContainText('315,00');
   await page.getByRole('button', { name: 'Salvar orçamento', exact: true }).first().click();
   await page.waitForURL('**/orcamentos/saved');
   const item = saved.items[0];
   assert.deepEqual(item.components.map((peca) => [peca.componentType, peca.lengthMm, peca.widthMm]), [['TOP', 700, 500], ['BACKSPLASH', 500, 100]], 'Bancada e rodabanca cobrada');
-  assert.equal(item.components[0].edges.length, 2);
+  assert.equal(item.components[0].edges.length, 1);
   // Produção: a rodabanca presa ao lado Direito (50 × 10 cm) fica no plano; a do lado Superior foi removida.
   const presas = item.drawingData.productionPlan.pieces.filter((peca) => peca.parentSide);
   assert.deepEqual(presas.map((peca) => [peca.componentType, peca.parentSide, peca.lengthMm, peca.widthMm]), [['BACKSPLASH', 'RIGHT', 500, 100]]);

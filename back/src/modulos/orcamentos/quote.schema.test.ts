@@ -3,9 +3,11 @@ import { createQuoteSchema, quoteItemSchema, quoteComponentSchema, quoteCutoutSc
 const id = 'cm00000000000000000000001';
 const component = { label: 'Tampo', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 1900, widthMm: 400 };
 describe('Validação centralizada de orçamento', () => {
-  it('aceita rodabanca vinculada a um lado e rejeita vínculos inválidos', () => {
+  it('aceita rodabanca, saia e vista vinculadas a um lado e rejeita vínculos inválidos', () => {
     const input = { materialId: id, productTypeId: id, components: [component, { ...component, componentType: 'BACKSPLASH' }], drawingData: { componentDetails: [{}, { parentComponentIndex: 0, parentSide: 'RIGHT' }] } };
     expect(quoteItemSchema.safeParse(input).success).toBe(true);
+    for (const componentType of ['SKIRT', 'VISTA']) expect(quoteItemSchema.safeParse({ ...input, components: [component, { ...component, componentType }] }).success).toBe(true);
+    expect(quoteItemSchema.safeParse({ ...input, components: [component, { ...component, componentType: 'THRESHOLD' }] }).success).toBe(false);
     for (const detail of [{ parentSide: 'RIGHT' }, { parentComponentIndex: 0, parentSide: 'CUSTOM' }]) {
       expect(quoteItemSchema.safeParse({ ...input, drawingData: { componentDetails: [{}, detail] } }).success).toBe(false);
     }

@@ -60,32 +60,29 @@ describe('desenho técnico → projeto do orçamento', () => {
     expect(estimarDesenho(doc, catalogo).linhas[0]).toMatchObject({ quantidade: 1.586, subtotal: calcularSubtotalMaterial(1.586, 600), detalhe: 'Peça curva ou diagonal: cobrada pelo retângulo 2m44 × 65cm' });
   });
 
-  it('bordas caem no lado de cada parte, rodabanca fica presa à parede e a cuba na parte onde está', () => {
+  it('acabamentos caem no lado de cada parte, rodabanca e saia viram peças (Tipo/descrição) e a cuba fica na parte onde está', () => {
     const item = desenhoParaOrcamento(cozinhaEmU(), catalogo.services);
     expect(item.componentes.map(({ id, label, componentType, lengthMm, widthMm }) => ({ id, label, componentType, lengthMm, widthMm }))).toEqual([
       { id: 'u', label: 'Peça 1 · parte 1', componentType: 'TOP', lengthMm: 2600, widthMm: 600 },
       { id: 'u#2', label: 'Peça 1 · parte 2', componentType: 'TOP', lengthMm: 600, widthMm: 900 },
       { id: 'u#3', label: 'Peça 1 · parte 3', componentType: 'TOP', lengthMm: 600, widthMm: 900 },
+      { id: 'saia', label: 'Saia · Peça 1', componentType: 'SKIRT', lengthMm: 1500, widthMm: 40 },
       { id: 'roda', label: 'Rodabanca · Peça 1', componentType: 'BACKSPLASH', lengthMm: 2600, widthMm: 100 },
     ]);
-    // Saia no lado de fora (1m50): 60cm no fundo e 90cm no braço, cada trecho no lado inteiro da parte.
-    expect(item.componentes[0].bordas).toEqual([
-      { recursoId: 'saia', tipo: 'SKIRT', side: 'LEFT', ladoInteiro: true, lengthMm: 600, heightMm: 40, serviceId: 's-saia' },
-      { recursoId: 'borda', tipo: 'EDGE_FINISH', side: 'FRONT', ladoInteiro: false, lengthMm: 1400, serviceId: 's-45' },
-    ]);
-    expect(item.componentes[1].bordas).toEqual([{ recursoId: 'saia', tipo: 'SKIRT', side: 'LEFT', ladoInteiro: true, lengthMm: 900, heightMm: 40, serviceId: 's-saia' }]);
-    expect(item.componentes[3]).toMatchObject({ paiId: 'u', ladoPai: 'BACK' });
+    expect(item.componentes[0].bordas).toEqual([{ recursoId: 'borda', tipo: 'EDGE_FINISH', side: 'FRONT', ladoInteiro: false, lengthMm: 1400, serviceId: 's-45' }]);
+    expect(item.componentes[1].bordas).toEqual([]);
+    // Saia no lado de fora (1m50) passa por duas partes (fundo e braço): uma peça só, sem lado único.
+    expect(item.componentes[3]).not.toHaveProperty('paiId');
+    expect(item.componentes[4]).toMatchObject({ paiId: 'u', ladoPai: 'BACK' });
     expect(item.recortes).toEqual([{ recursoId: 'cuba', pecaId: 'u', componente: 0, cutoutType: 'SINK', label: 'Cuba', lengthMm: 500, widthMm: 400, positionX: 1300, positionY: 300, serviceId: 's-cuba' }]);
     expect(item.materialId).toBe('granito');
   });
 
   it('a estimativa é a soma do projeto que vai para o orçamento, parte por parte', () => {
     const estimativa = estimarDesenho(cozinhaEmU(), catalogo, { servicosGerais: [{ serviceId: 's-montagem' }, { serviceId: 's-montagem' }] });
-    const pedra = [2600 * 600, 600 * 900, 600 * 900, 2600 * 100].map((mm2) => calcularSubtotalMaterial(mm2 / 1_000_000, 600));
+    const pedra = [2600 * 600, 600 * 900, 600 * 900, 2600 * 100, 1500 * 40].map((mm2) => calcularSubtotalMaterial(mm2 / 1_000_000, 600));
     const esperado = calcularTotalOrcamento([
       ...pedra,
-      calcularAcabamentoBorda({ name: 'Saia', lengthMm: 600, heightMm: 40, quantity: 1, materialPrice: 600, servicePrice: 0 }).subtotal,
-      calcularAcabamentoBorda({ name: 'Saia', lengthMm: 900, heightMm: 40, quantity: 1, materialPrice: 600, servicePrice: 0 }).subtotal,
       calcularAcabamentoBorda({ name: 'Acabamento 45°', lengthMm: 1400, quantity: 1, materialPrice: 600, servicePrice: 70 }).subtotal,
       calcularLinha({ billingUnit: 'UNIT', unitPrice: 180, billedQuantity: 1 }).subtotal,
       300,
@@ -94,7 +91,7 @@ describe('desenho técnico → projeto do orçamento', () => {
     expect(estimativa.problemas).toEqual([]);
     expect(estimativa.item.servicos).toEqual([{ serviceId: 's-montagem', quantidade: 1 }]);
     expect(estimativa.linhas.find((linha) => linha.id === 'u')).toMatchObject({ quantidade: 2.64, detalhe: '3 partes: 2m60 × 60cm + 60cm × 90cm + 60cm × 90cm' });
-    expect(estimativa.linhas.find((linha) => linha.id === 'saia')).toMatchObject({ quantidade: .06, detalhe: '2 trechos: 60cm + 90cm' });
+    expect(estimativa.linhas.find((linha) => linha.id === 'saia')).toMatchObject({ grupo: 'PEDRA', descricao: 'Saia · Peça 1', quantidade: .06, unidade: 'm²' });
     expect(estimativa.linhas.filter((linha) => linha.id.startsWith('geral-'))).toHaveLength(1);
   });
 
@@ -116,9 +113,10 @@ describe('desenho técnico → projeto do orçamento', () => {
   it('aponta o que falta para ir ao orçamento', () => {
     const doc = cozinhaEmU();
     doc.pieces[0] = { ...doc.pieces[0], material: undefined };
+    // A saia é pedra: não depende do serviço "Saia" do catálogo, só da pedra da peça.
     const semSaia = { ...catalogo, services: catalogo.services.filter((servico) => servico.id !== 's-saia') };
     const estimativa = estimarDesenho(doc, semSaia);
-    expect(estimativa.problemas).toEqual(expect.arrayContaining(['Peça 1: Escolha a pedra da peça.', 'Saia · Peça 1: Cadastre o serviço “Saia” (metro linear) em Materiais e serviços.']));
+    expect(estimativa.problemas).toEqual(['Peça 1: Escolha a pedra da peça.', 'Saia · Peça 1: Escolha a pedra da peça.', 'Rodabanca · Peça 1: Escolha a pedra da peça.']);
     expect(estimarDesenho(emptyTechnicalDocument(), catalogo).problemas).toEqual(['Desenhe ao menos uma peça.']);
   });
 });
