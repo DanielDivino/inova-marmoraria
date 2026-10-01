@@ -154,8 +154,8 @@ async function criarCartoesFluxo(tx: Tx, quoteItemId: string, preservados?: Work
   await tx.workflowCard.create({ data: { id: quoteItemId, quoteItemId, status: 'TODO', position: (ultimo._max.position ?? -1) + 1 } });
 }
 
-async function persistirItem(tx: Tx, quoteId: string, item: BuiltItem, existingId?: string, cartoesFluxo?: WorkflowCard[]) {
-  const created = await tx.quoteItem.create({ data: { ...(existingId ? { id: existingId } : {}), quoteId, projectName: item.projectName, environment: item.environment, productTypeId: item.productTypeId, materialId: item.materialId, materialNameSnapshot: item.materialNameSnapshot, billingUnitSnapshot: item.billingUnitSnapshot, unitPriceSnapshot: item.unitPriceSnapshot, quantity: item.quantity, calculationMode: item.calculationMode, manualJustification: item.manualJustification, drawingSchemaVersion: item.drawingSchemaVersion, drawingData: item.drawingData, billedQuantity: item.billedQuantity, materialSubtotal: item.materialSubtotal, servicesSubtotal: item.servicesSubtotal, total: item.total, services: { create: item.services }, components: { create: item.components.map((component: any) => ({ ...(component.id ? { id: component.id } : {}), materialId: component.materialId, materialNameSnapshot: component.materialNameSnapshot, billingUnitSnapshot: component.billingUnitSnapshot, unitPriceSnapshot: component.unitPriceSnapshot, label: component.label, componentType: component.componentType, orientation: component.orientation, shape: component.shape, lengthMm: component.lengthMm, widthMm: component.widthMm, quantity: component.quantity, billableArea: component.billableArea, subtotal: component.subtotal, calculatedTotal: component.calculatedTotal, appliedTotal: component.appliedTotal, hasManualPriceOverride: component.hasManualPriceOverride, sortOrder: component.sortOrder, edges: { create: component.edges } })) } }, include: { components: { orderBy: { sortOrder: 'asc' } } } });
+async function persistirItem(tx: Tx, quoteId: string, item: BuiltItem, existingId?: string, cartoesFluxo?: WorkflowCard[], declinedAt?: Date | null) {
+  const created = await tx.quoteItem.create({ data: { ...(existingId ? { id: existingId } : {}), ...(declinedAt ? { declinedAt } : {}), quoteId, projectName: item.projectName, environment: item.environment, productTypeId: item.productTypeId, materialId: item.materialId, materialNameSnapshot: item.materialNameSnapshot, billingUnitSnapshot: item.billingUnitSnapshot, unitPriceSnapshot: item.unitPriceSnapshot, quantity: item.quantity, calculationMode: item.calculationMode, manualJustification: item.manualJustification, drawingSchemaVersion: item.drawingSchemaVersion, drawingData: item.drawingData, billedQuantity: item.billedQuantity, materialSubtotal: item.materialSubtotal, servicesSubtotal: item.servicesSubtotal, total: item.total, services: { create: item.services }, components: { create: item.components.map((component: any) => ({ ...(component.id ? { id: component.id } : {}), materialId: component.materialId, materialNameSnapshot: component.materialNameSnapshot, billingUnitSnapshot: component.billingUnitSnapshot, unitPriceSnapshot: component.unitPriceSnapshot, label: component.label, componentType: component.componentType, orientation: component.orientation, shape: component.shape, lengthMm: component.lengthMm, widthMm: component.widthMm, quantity: component.quantity, billableArea: component.billableArea, subtotal: component.subtotal, calculatedTotal: component.calculatedTotal, appliedTotal: component.appliedTotal, hasManualPriceOverride: component.hasManualPriceOverride, sortOrder: component.sortOrder, edges: { create: component.edges } })) } }, include: { components: { orderBy: { sortOrder: 'asc' } } } });
   // Mesma razão do id de componente: preserva o id do cliente desde a criação,
   // pra productionPlan.cutouts (sourceCutoutId) não precisar reconciliar depois.
   for (const cutout of item.cutouts) { const component = cutout.componentIndex === undefined ? undefined : created.components[cutout.componentIndex]; await tx.quoteItemCutout.create({ data: { ...(cutout.id ? { id: cutout.id } : {}), quoteItemId: created.id, componentId: component?.id, cutoutType: cutout.cutoutType, sizePending: cutout.sizePending ?? false, label: cutout.label, lengthMm: cutout.lengthMm, widthMm: cutout.widthMm, diameterMm: cutout.diameterMm, positionX: cutout.positionX, positionY: cutout.positionY, quantity: cutout.quantity, serviceId: cutout.serviceId, serviceNameSnapshot: cutout.serviceNameSnapshot, billingUnitSnapshot: cutout.billingUnitSnapshot, unitPriceSnapshot: cutout.unitPriceSnapshot, billedQuantity: cutout.billedQuantity, calculatedSubtotal: cutout.calculatedSubtotal, appliedSubtotal: cutout.appliedSubtotal, hasManualPriceOverride: cutout.hasManualPriceOverride, sortOrder: cutout.sortOrder } }); }
@@ -185,7 +185,7 @@ export async function adicionarItemOrcamento(tx: Tx, quoteId: string, input: Quo
   const item = await montarItem(tx, input, user); const grossTotal = calcularTotalOrcamento([Number(quote.grossTotal), item.total]); const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); const created = await persistirItem(tx, quoteId, item); await tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) } }); return created;
 }
 
-export async function recalcularOrcamento(tx: Tx, quoteId: string, user: AuthUser) { const quote = await tx.quote.findUnique({ where: { id: quoteId }, include: { items: true } }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND'); const grossTotal = calcularTotalOrcamento(quote.items.map(item => Number(item.total))); const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); return tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) }, include: incluirOrcamento(user) }); }
+export async function recalcularOrcamento(tx: Tx, quoteId: string, user: AuthUser) { const quote = await tx.quote.findUnique({ where: { id: quoteId }, include: { items: true } }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND'); const grossTotal = calcularTotalOrcamento(quote.items.filter(item => !item.declinedAt).map(item => Number(item.total))); const discount = Number(quote.discountAmount); validarDesconto(user, grossTotal, discount); return tx.quote.update({ where: { id: quoteId }, data: { grossTotal, netTotal: calcularTotalOrcamento([grossTotal], discount) }, include: incluirOrcamento(user) }); }
 
 export async function editarOrcamento(tx: Tx, id: string, input: z.infer<typeof editQuoteSchema>, user: AuthUser) {
   // Internal validation must also account for complements created by administrators.
@@ -201,6 +201,8 @@ export async function editarOrcamento(tx: Tx, id: string, input: z.infer<typeof 
   const ids = input.items.map((item) => item.id).filter(Boolean);
   if (new Set(ids).size !== ids.length) throw new AppError(422, 'Projetos repetidos no envio.', 'DUPLICATE_ITEMS');
   let grossTotal = 0;
+  // Valor de todos os projetos, inclusive os não aprovados (base do desconto do orçamento completo).
+  let brutoCompleto = 0;
   for (const item of input.items) {
     const saved = item.id ? before.items.find((entry) => entry.id === item.id) : undefined;
     if (item.id && !saved) throw new AppError(422, 'Projeto não pertence a este orçamento.', 'INVALID_ITEM');
@@ -208,14 +210,18 @@ export async function editarOrcamento(tx: Tx, id: string, input: z.infer<typeof 
     const financial = (value: unknown) => canonical({ ...quoteItemSchema.parse(value), projectName: null, environment: null, drawingData: undefined });
     if (saved && financial(item) === financial(itemSalvoParaEntrada(saved))) {
       await tx.quoteItem.update({ where: { id: saved.id }, data: { projectName: item.projectName, environment: item.environment, ...(item.drawingData ? { drawingData: item.drawingData as Prisma.InputJsonValue, drawingSchemaVersion: 1 } : {}) } });
-      grossTotal = calcularTotalOrcamento([grossTotal, Number(saved.total)]); continue;
+      // Projeto que o cliente não aprovou continua fora do valor.
+      if (!saved.declinedAt) grossTotal = calcularTotalOrcamento([grossTotal, Number(saved.total)]);
+      brutoCompleto = calcularTotalOrcamento([brutoCompleto, Number(saved.total)]);
+      continue;
     }
     const built = await montarItem(tx, item, user, saved);
     // Recriar o projeto não o tira da coluna nem da posição em que está no Kanban (nem desfaz a divisão por peças).
     const cartoesFluxo = saved ? await tx.workflowCard.findMany({ where: { quoteItemId: saved.id } }) : undefined;
     if (saved) await tx.quoteItem.delete({ where: { id: saved.id } });
-    await persistirItem(tx, id, built, saved?.id, cartoesFluxo);
-    grossTotal = calcularTotalOrcamento([grossTotal, built.total]);
+    await persistirItem(tx, id, built, saved?.id, cartoesFluxo, saved?.declinedAt);
+    if (!saved?.declinedAt) grossTotal = calcularTotalOrcamento([grossTotal, built.total]);
+    brutoCompleto = calcularTotalOrcamento([brutoCompleto, built.total]);
   }
   await tx.quoteItem.deleteMany({ where: { quoteId: id, id: { in: before.items.filter((item) => !ids.includes(item.id)).map((item) => item.id) } } });
   validarDesconto(user, grossTotal, input.discountAmount);
@@ -224,6 +230,7 @@ export async function editarOrcamento(tx: Tx, id: string, input: z.infer<typeof 
     ...(before.customerId !== input.customerId ? { customerNameSnapshot: customer.name, customerPhoneSnapshot: customer.phone, workAddressSnapshot: customer.address } : {}),
     validUntil: input.validUntil, notes: input.notes, ...(input.deliveryDeadline !== undefined ? { deliveryDeadline: input.deliveryDeadline ? new Date(input.deliveryDeadline + 'T00:00:00.000Z') : null } : {}), ...(input.installationDeadline !== undefined ? { installationDeadline: input.installationDeadline ? new Date(input.installationDeadline + 'T00:00:00.000Z') : null } : {}), ...(input.deadlineConfirmed !== undefined ? { deadlineConfirmed: input.deadlineConfirmed } : {}), ...(input.deadlineNote !== undefined ? { deadlineNote: input.deadlineNote } : {}), discountAmount: input.discountAmount, grossTotal,
     netTotal: calcularTotalOrcamento([grossTotal], input.discountAmount),
+    fullDiscountAmount: brutoCompleto !== grossTotal && grossTotal > 0 ? arredondarMoeda(input.discountAmount * brutoCompleto / grossTotal) : null,
     ...(before.status === 'DRAFT' ? { status: 'SENT' as const } : {}),
   }, include: incluirOrcamento(user) });
   await tx.auditLog.create({ data: { userId: user.id, entityType: 'QUOTE', entityId: id, action: 'UPDATED',

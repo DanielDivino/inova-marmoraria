@@ -16,6 +16,7 @@ export function serializarOrcamento(orcamento: any) {
     discountAmount: Number(orcamento.discountAmount),
     grossTotal: Number(orcamento.grossTotal),
     netTotal: Number(orcamento.netTotal),
+    fullDiscountAmount: orcamento.fullDiscountAmount == null ? null : Number(orcamento.fullDiscountAmount),
     items: orcamento.items?.map((item: any) => ({
       ...item,
       unitPriceSnapshot: Number(item.unitPriceSnapshot),

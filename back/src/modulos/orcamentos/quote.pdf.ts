@@ -291,7 +291,8 @@ const rotuloValidade = (quote: any) => quote.validUntil ? pdfDate(quote.validUnt
 export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pick<QuotePdfOptions, 'individualPrices' | 'drawings'> = { individualPrices: false, drawings: true }, projetoId?: string) {
   const deliveryLabel = rotuloEntregaPdf(quote);
   const projeto = projetoId ? quote.items.find((item: any) => item.id === projetoId) : undefined;
-  const itens: any[] = projeto ? [projeto] : quote.items;
+  // Orçamento aprovado em parte: o PDF do orçamento traz só os projetos aprovados.
+  const itens: any[] = projeto ? [projeto] : quote.items.filter((item: any) => !item.declinedAt);
   header(pdf, 'ORÇAMENTO', quote);
   pdf.font('Helvetica-Bold').fontSize(8).fillColor('#17251f').text('CLIENTE:', 36, 124).font('Helvetica').text(quote.customerNameSnapshot, 92, 124);
   pdf.font('Helvetica-Bold').text('ENDEREÇO:', 36, 137).font('Helvetica').text(quote.workAddressSnapshot ?? 'Não informado', 92, 137);
@@ -393,58 +394,70 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pi
     }
     y += 27;
   });
-  // Keep the closing area compact: fixed payment notes and optional customer
-  // observations stay on the left, while totals stay close to their values on
-  // the right. This avoids a separate footer section on the first sheet.
+  // Fechamento da folha do orçamento: a tabela com o valor total (no cartão) e o valor à vista, em
+  // destaque; embaixo, as condições de pagamento, as informações importantes (em todo PDF de
+  // orçamento) e as observações deste orçamento.
   const notes = String(quote.notes ?? '').trim();
-  // Medidas na mesma largura e fonte em que os textos são escritos, para nada encostar.
   const leftX = 36;
-  const leftWidth = 270;
-  pdf.font('Helvetica-Bold').fontSize(7.5);
-  const paymentText = 'CONDIÇÃO DE PAGAMENTO: 50% do valor deve ser pago antecipadamente para iniciar o trabalho.';
-  const paymentHeight = pdf.heightOfString(paymentText, { width: leftWidth });
-  pdf.font('Helvetica').fontSize(7);
+  const leftWidth = 523;
   const desconto = projeto ? 0 : Number(quote.discountAmount);
-  const avisoProjeto = projeto ? `\nProposta referente apenas ao projeto “${nomeProjeto(projeto)}” do orçamento ${quote.number}.${Number(quote.discountAmount) > 0 ? ' O desconto final do orçamento vale para a contratação completa e não está incluído neste valor.' : ''}` : '';
-  const caveatText = `Valores sujeitos à conferência de medidas em obra. Pedras naturais podem\napresentar variação de tonalidade e veios.${avisoProjeto}`;
-  const caveatHeight = pdf.heightOfString(caveatText, { width: leftWidth });
-  const notesHeight = notes ? pdf.fontSize(7.5).heightOfString(`Observação: ${notes}`, { width: leftWidth }) : 0;
-  const discountHeight = options.individualPrices && desconto > 0 ? 19 : 0;
+  const m2Fechado = itens.some((item: any) => item.drawingData?.m2Fechado === true);
+  const avisoProjeto = projeto ? `Proposta referente apenas ao projeto “${nomeProjeto(projeto)}” do orçamento ${quote.number}.${Number(quote.discountAmount) > 0 ? ' O desconto final do orçamento vale para a contratação completa e não está incluído neste valor.' : ''}` : '';
+  const blocos: { titulo: string; linhas: string[]; itens: boolean }[] = [
+    { titulo: 'CONDIÇÕES DE PAGAMENTO', itens: true, linhas: [
+      'À vista: 50% do valor antecipado para o início do trabalho.',
+      'Cartão de crédito: pagamento no fechamento do orçamento, parcelado em até 6x sem juros.',
+    ] },
+    { titulo: 'INFORMAÇÕES IMPORTANTES', itens: true, linhas: [
+      'As medidas serão conferidas no local da obra; por isso, a medição e os valores podem ser ajustados após essa conferência.',
+      ...(m2Fechado ? ['O metro quadrado é comercializado e calculado em múltiplos de 5 cm: as medidas de cada peça são arredondadas para cima no cálculo.'] : []),
+      'Em bordas de piscina e escadas, a argamassa é fornecida pelo cliente.',
+      'Pedras naturais podem apresentar variação de tonalidade e veios.',
+      ...(avisoProjeto ? [avisoProjeto] : []),
+    ] },
+    ...(notes ? [{ titulo: 'OBSERVAÇÕES', itens: false, linhas: [notes] }] : []),
+  ];
+  // Medidas na mesma largura e fonte em que os textos são escritos, para nada encostar.
+  const recuo = 8;
+  const alturaDoTexto = (texto: string, itens: boolean) => pdf.font('Helvetica').fontSize(7).heightOfString(texto, { width: leftWidth - (itens ? recuo : 0) });
+  const alturaDosBlocos = blocos.reduce((soma, bloco) => soma + 11 + bloco.linhas.reduce((linhas, linha) => linhas + alturaDoTexto(linha, bloco.itens) + 2, 0) + 6, 0);
+  // Valores no mesmo tom do documento (como a linha "TOTAL DO PROJETO"): linhas finas, o total no
+  // cartão e, embaixo e um pouco maior, o valor à vista sobre o fundo claro.
+  const linhasDosTotais: { rotulo: string; valor: string; tamanho: number; altura: number; destaque?: boolean; fraco?: boolean }[] = [
+    ...(desconto > 0 ? [{ rotulo: 'DESCONTO CONCEDIDO', valor: '- ' + money(desconto), tamanho: 7, altura: 15, fraco: true }] : []),
+    { rotulo: 'VALOR DO ORÇAMENTO TOTAL NO CARTÃO', valor: money(calcularTotalCartao(projeto ? Number(projeto.total) : Number(quote.netTotal))), tamanho: 8, altura: 17 },
+    { rotulo: 'VALOR DO ORÇAMENTO À VISTA', valor: money(projeto ? Number(projeto.total) : Number(quote.netTotal)), tamanho: 9.5, altura: 21, destaque: true },
+  ];
+  const alturaDosTotais = linhasDosTotais.reduce((soma, linha) => soma + linha.altura, 0);
   const footerSignatureY = 735;
-  const closingHeight = Math.max(
-    Math.max(paymentHeight + caveatHeight + 16 + (notes ? 16 + notesHeight : 0), 57 + discountHeight) + 70,
-    footerSignatureY - y + 20,
-  );
+  const closingHeight = Math.max(alturaDosTotais + 18 + alturaDosBlocos + 70, footerSignatureY - y + 20);
   if (y + closingHeight > 770) { pdf.addPage(); y = 52; }
-  const cashTotal = projeto ? Number(projeto.total) : Number(quote.netTotal);
-  const cardTotal = calcularTotalCartao(cashTotal);
-  const totalsX = 285;
-  const totalsLabelWidth = 165;
-  const totalsValueX = 455;
-  const totalsValueWidth = 104;
-  const blockTop = y + 5;
-  pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(7.5)
-    .text(paymentText, leftX, blockTop, { width: leftWidth });
-  pdf.font('Helvetica').fontSize(7).fillColor('#5f5a52')
-    .text(caveatText, leftX, blockTop + paymentHeight + 5, { width: leftWidth });
-  const observationsTop = blockTop + paymentHeight + caveatHeight + 13;
-  if (notes) {
-    pdf.font('Helvetica-Bold').fontSize(8).fillColor('#17251f').text('OBSERVAÇÕES', leftX, observationsTop, { width: leftWidth });
-    pdf.font('Helvetica').fontSize(7.5).fillColor('#5f5a52').text(`Observação: ${notes}`, leftX, observationsTop + 13, { width: leftWidth });
+  // Rótulo no meio da área da esquerda, valor na coluna da direita.
+  const colunaValor = 410;
+  const topoDosTotais = y + 4;
+  let linhaY = topoDosTotais;
+  for (const [indice, linha] of linhasDosTotais.entries()) {
+    if (linha.destaque) pdf.fillColor('#f1efec').rect(36, linhaY, 523, linha.altura).fill();
+    if (indice) pdf.lineWidth(.5).moveTo(36, linhaY).lineTo(559, linhaY).stroke('#e2ddd5');
+    const textoY = linhaY + (linha.altura - linha.tamanho) / 2 + .5;
+    pdf.font(linha.fraco ? 'Helvetica' : 'Helvetica-Bold').fontSize(linha.tamanho).fillColor(linha.fraco ? '#5f5a52' : '#17251f')
+      .text(linha.rotulo, 36, textoY, { width: colunaValor - 36, align: 'center', lineBreak: false })
+      .text(linha.valor, colunaValor, textoY, { width: 559 - colunaValor - 8, align: 'right', lineBreak: false });
+    linhaY += linha.altura;
   }
-  let totalsY = blockTop;
-  if (desconto > 0) {
-    pdf.font('Helvetica').fontSize(8).fillColor('#5f5a52')
-      .text('DESCONTO FINAL', totalsX, totalsY, { width: totalsLabelWidth, align: 'right' })
-      .text('- ' + money(desconto), totalsValueX, totalsY, { width: totalsValueWidth, align: 'right' });
-    totalsY += 19;
+  pdf.lineWidth(.5).moveTo(colunaValor, topoDosTotais).lineTo(colunaValor, linhaY).stroke('#e2ddd5');
+  pdf.lineWidth(.7).moveTo(36, topoDosTotais).lineTo(559, topoDosTotais).moveTo(36, linhaY).lineTo(559, linhaY).stroke('#b8b2a8');
+  let blocoY = linhaY + 14;
+  for (const bloco of blocos) {
+    pdf.font('Helvetica-Bold').fontSize(7.5).fillColor('#17251f').text(bloco.titulo, leftX, blocoY, { width: leftWidth, lineBreak: false });
+    blocoY += 11;
+    for (const linha of bloco.linhas) {
+      if (bloco.itens) pdf.font('Helvetica').fontSize(7).fillColor('#b6811e').text('•', leftX, blocoY, { lineBreak: false });
+      pdf.font('Helvetica').fontSize(7).fillColor('#5f5a52').text(linha, leftX + (bloco.itens ? recuo : 0), blocoY, { width: leftWidth - (bloco.itens ? recuo : 0) });
+      blocoY += alturaDoTexto(linha, bloco.itens) + 2;
+    }
+    blocoY += 6;
   }
-  pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(10)
-    .text('À VISTA', totalsX, totalsY, { width: totalsLabelWidth, align: 'right' })
-    .text(money(cashTotal), totalsValueX, totalsY, { width: totalsValueWidth, align: 'right' });
-  pdf.fontSize(9)
-    .text('CARTÃO', totalsX, totalsY + 19, { width: totalsLabelWidth, align: 'right' })
-    .text(money(cardTotal), totalsValueX, totalsY + 19, { width: totalsValueWidth, align: 'right' });
   // The signatures belong to the footer of the commercial sheet, regardless
   // of how much content the closing block has above them.
   assinaturasPdf(pdf, footerSignatureY);
@@ -488,7 +501,7 @@ export function renderizarPdfDesenhoProjeto(pdf: PdfDocument, quote: any, itemId
 /** Folhas de OS: desenho e descrição de fabricação de cada projeto com desenho. */
 function renderizarFolhasDesenho(pdf: PdfDocument, quote: any, deliveryLabel: string, { itemId, aproveitarFolhaAtual = false }: { itemId?: string; aproveitarFolhaAtual?: boolean } = {}) {
   // O número de cada projeto é o da OS completa, mesmo quando só um é impresso.
-  const drawnItems = quote.items.filter((item: any) => projetoTemDesenho(item.drawingData))
+  const drawnItems = quote.items.filter((item: any) => projetoTemDesenho(item.drawingData) && (!item.declinedAt || item.id === itemId))
     .map((item: any, itemIndex: number) => ({ item, itemIndex }))
     .filter(({ item }: { item: any }) => !itemId || item.id === itemId);
   if (!drawnItems.length) return;

@@ -17,10 +17,12 @@ import { desenhosTecnicosDosProjetos, desenhosTecnicosParaExportar } from '../de
 import { compararPorPrazo, montarFiltrosOrcamento, historySchema, ORDEM_ORCAMENTOS } from './quote.tracking.js';
 import { atualizarCliente } from '../clientes/customer.routes.js';
 import { montarHistorico } from './quote.historico.js';
+import { definirProjetosNaoAprovados } from './aprovacao-projetos.js';
+import { retrabalharProjeto } from '../fluxo/workflow.service.js';
 import { acompanhamentoSchema } from './quote.tracking.js';
 
 const asNumber = (value: unknown) => Number(value);
-type QuoteParaExportar = { id: string; number: string; customerId: string; customerNameSnapshot: string; deliveryDeadline: Date | null; dueDate: Date | null; items: { id: string; projectName: string | null; drawingData: unknown }[] };
+type QuoteParaExportar = { id: string; number: string; customerId: string; customerNameSnapshot: string; deliveryDeadline: Date | null; dueDate: Date | null; items: { id: string; projectName: string | null; drawingData: unknown; declinedAt: Date | null }[] };
 
 export async function registrarRotasOrcamentos(app: FastifyInstance) {
   const authenticated = { preHandler: [app.authenticate, exigirOrcamentoProprio] };
@@ -137,6 +139,7 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
       ...anterior,
       ...Object.fromEntries(Object.entries(input).filter(([, valor]) => valor !== undefined)),
     });
+    if (old.declinedAt) throw new AppError(409, 'Este projeto não foi aprovado pelo cliente; aprove-o antes de alterar.', 'ITEM_DECLINED');
     const replacement = await prisma.$transaction(async (tx) => { await tx.quoteItem.delete({ where: { id: old.id } }); const gross = calcularTotalOrcamento([Number(quote.grossTotal)]) - calcularTotalOrcamento([Number(old.total)]); await tx.quote.update({ where: { id: params.id }, data: { grossTotal: gross, netTotal: calcularTotalOrcamento([gross], Number(quote.discountAmount)) } }); return adicionarItemOrcamento(tx, params.id, merged, request.user); }); await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: replacement.id, action: merged.calculationMode === 'MANUAL_M2' ? 'MANUAL_M2_UPDATED' : 'MEASUREMENTS_UPDATED', previous: { itemId: old.id, components: old.components.length }, current: { components: merged.components.length, billedQuantity: merged.billedQuantity } } }); return serializarOrcamento({ items: [replacement] }).items[0];
   });
   app.post('/:id/calculate', authenticated, async (request) => serializarOrcamento(await prisma.$transaction((tx) => recalcularOrcamento(tx, idSchema.parse(request.params).id, request.user))));
@@ -144,7 +147,7 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     const { id } = idSchema.parse(request.params);
     const input = updateStatusSchema.parse(request.body);
     const normalized = 'workStatus' in input ? { ...input, ...WORK_STATUS_STORAGE[input.workStatus] } : input;
-    const quote = await prisma.quote.findUnique({ where: { id } });
+    const quote = await prisma.quote.findUnique({ where: { id }, include: { items: { select: { declinedAt: true } } } });
     if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
     if (quote.status !== normalized.status && !podeAlterarStatusOrcamento(quote.status, normalized.status)) throw new AppError(409, 'Esta alteração de status não é permitida.', 'INVALID_STATUS_TRANSITION');
     if (normalized.executionStatus && normalized.executionStatus !== 'NOT_STARTED' && normalized.status !== 'APPROVED') throw new AppError(409, 'A execução exige um orçamento aprovado.', 'INVALID_EXECUTION_STATUS');
@@ -163,12 +166,45 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
       ...(normalized.executionStatus === 'COMPLETED' ? { completedAt: quote.completedAt ?? now } : {}),
       ...(normalized.executionStatus === 'REWORK' ? { completedAt: null } : {}),
     };
+    // Aprovação: os projetos que o cliente não aprovou saem do valor, do fluxo e da entrega. De volta a
+    // "aguardando aprovação", todos os projetos voltam a valer.
+    const aprovando = normalized.status === 'APPROVED' && quote.status !== 'APPROVED';
+    const pendente = normalized.status === 'SENT' || normalized.status === 'DRAFT';
+    const pedidos = aprovando ? normalized.projetosNaoAprovados ?? [] : [];
+    const mudaAprovacao = (aprovando || pendente) && (pedidos.length > 0 || !!quote.items?.some((item) => item.declinedAt));
     const updated = await prisma.$transaction(async (tx) => {
+      const naoAprovados = mudaAprovacao ? await definirProjetosNaoAprovados(tx, id, pedidos) : [];
       const result = await tx.quote.update({ where: { id }, data, include: incluirOrcamento(request.user) });
-      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'STATUS_CHANGED', previous: { status: quote.status, executionStatus: quote.executionStatus, completedAt: quote.completedAt }, current: { status: result.status, executionStatus: result.executionStatus, reason: input.reason, approvedAt: result.approvedAt, completedAt: result.completedAt, startedAt: result.startedAt, dueDate: result.dueDate } } });
+      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'STATUS_CHANGED', previous: { status: quote.status, executionStatus: quote.executionStatus, completedAt: quote.completedAt }, current: { status: result.status, executionStatus: result.executionStatus, reason: input.reason, ...(naoAprovados.length ? { projetosNaoAprovados: result.items.filter((item) => naoAprovados.includes(item.id)).map((item) => nomeProjeto(item)) } : {}), approvedAt: result.approvedAt, completedAt: result.completedAt, startedAt: result.startedAt, dueDate: result.dueDate } } });
       return result;
     });
     return serializarOrcamento(updated);
+  });
+  // Depois da aprovação: aprovar ou tirar a aprovação de um projeto (o valor do orçamento acompanha).
+  app.patch('/:id/items/:itemId/aprovacao', authenticated, async (request) => {
+    const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const { aprovado } = z.object({ aprovado: z.boolean() }).strict().parse(request.body);
+    const quote = await prisma.quote.findUnique({ where: { id: params.id }, select: { status: true, executionStatus: true, items: { select: { id: true, declinedAt: true } } } });
+    const item = quote?.items.find((entrada) => entrada.id === params.itemId);
+    if (!quote || !item) throw new AppError(404, 'Projeto não encontrado neste orçamento.', 'NOT_FOUND');
+    if (quote.status !== 'APPROVED' || quote.executionStatus === 'COMPLETED') throw new AppError(409, 'A aprovação dos projetos só muda em um orçamento aprovado e ainda não entregue.', 'QUOTE_NOT_APPROVED');
+    const naoAprovados = quote.items.filter((entrada) => entrada.id === item.id ? !aprovado : !!entrada.declinedAt).map((entrada) => entrada.id);
+    const result = await prisma.$transaction(async (tx) => {
+      await definirProjetosNaoAprovados(tx, params.id, naoAprovados);
+      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: item.id, action: 'APPROVAL_CHANGED', previous: { aprovado: !item.declinedAt }, current: { quoteId: params.id, aprovado } } });
+      return tx.quote.findUniqueOrThrow({ where: { id: params.id }, include: incluirOrcamento(request.user) });
+    });
+    return serializarOrcamento(result);
+  });
+  // Retrabalho de um projeto (erro de produção ou de entrega): as peças voltam no fluxo e o orçamento fica "Em retrabalho".
+  app.post('/:id/items/:itemId/retrabalho', authenticated, async (request) => {
+    const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const { destino, motivo } = z.object({ destino: z.enum(['IN_PROGRESS', 'DONE']), motivo: z.string().trim().max(500).optional() }).strict().parse(request.body);
+    const result = await prisma.$transaction(async (tx) => {
+      await retrabalharProjeto(tx, params.id, params.itemId, destino, motivo || undefined, request.user);
+      return tx.quote.findUniqueOrThrow({ where: { id: params.id }, include: incluirOrcamento(request.user) });
+    });
+    return serializarOrcamento(result);
   });
   app.post('/:id/duplicate', authenticated, async (request, reply) => {
     const { id } = idSchema.parse(request.params); const quote = await prisma.quote.findUnique({ where: { id }, include: { items: { include: { services: true, components: { include: { edges: true }, orderBy: { sortOrder: 'asc' } }, cutouts: { orderBy: { sortOrder: 'asc' } } } } } }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
@@ -177,7 +213,7 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
   });
   // Exportar: as partes marcadas (orçamento, OS e desenho técnico) no mesmo PDF, do orçamento todo ou de um projeto.
   async function exportarPdf(reply: FastifyReply, quote: QuoteParaExportar, options: QuotePdfOptions, arquivo: string, projetoId?: string) {
-    const projetos = projetoId ? quote.items.filter((item) => item.id === projetoId) : quote.items;
+    const projetos = projetoId ? quote.items.filter((item) => item.id === projetoId) : quote.items.filter((item) => !item.declinedAt);
     const tecnicos = options.technical ? await desenhosTecnicosParaExportar(quote, projetos) : [];
     const partes = { orcamento: options.commercial, valoresIndividuais: options.individualPrices, desenhos: options.drawings && projetos.some((item) => projetoTemDesenho(item.drawingData)), tecnicos };
     if (!partes.orcamento && !partes.desenhos && !partes.tecnicos.length) throw new AppError(404, 'Não há desenhos para exportar com as opções escolhidas.', 'NOTHING_TO_EXPORT');

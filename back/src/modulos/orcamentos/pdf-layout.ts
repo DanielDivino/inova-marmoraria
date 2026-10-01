@@ -11,7 +11,8 @@ export const normalizarNomeMaterial = (value: unknown) => String(value ?? '').re
 export const CNPJ_EMPRESA = '32.298.601/0001-19';
 export function cabecalhoEmpresaPdf(pdf: PDFKit.PDFDocument, title: string, quote: { number: string }) {
   pdf.fillColor('#b6811e').rect(36, 34, 523, 5).fill();
-  if (fs.existsSync(logoPath)) pdf.image(logoPath, 36, 42, { fit: [64, 49] });
+  // O quadrado do logo começa na mesma altura das letras de "INOVA MARMORARIA".
+  if (fs.existsSync(logoPath)) pdf.image(logoPath, 36, 44.2, { fit: [64, 49] });
   pdf.fillColor('#17251f').font('Helvetica-Bold').fontSize(14).text('INOVA MARMORARIA', 112, 47);
   pdf.font('Helvetica').fontSize(8).fillColor('#5f5a52')
     .text('Av. Visconde de Utinga, Nº 224 - Flores - Manaus AM', 112, 65, { width: 280 })
