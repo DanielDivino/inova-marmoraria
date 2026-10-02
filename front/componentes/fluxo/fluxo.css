@@ -1,8 +1,5 @@
 /* Fluxo de trabalho: Kanban de projetos e resumo por orçamento. */
 .application-content .list-page.fluxo-page { max-width: none; padding-left: 24px; padding-right: 24px; container: fluxo / inline-size; }
-/* No computador o título fica na barra de cima do app, ao lado do sino. */
-.fluxo-titulo { margin: 0; color: #303a31; font: 400 clamp(28px, 2.4vw, 36px)/1.2 Georgia, 'Times New Roman', serif; letter-spacing: -.7px; white-space: nowrap; }
-.application-header-tabs > .fluxo-titulo { margin-right: auto; }
 
 /* Uma linha: visualização (Quadro / Resumo), filtros num bloco só e o botão que recolhe os filtros.
    Sem espaço para os três, os filtros descem para a linha de baixo, inteiros. */
@@ -53,9 +50,6 @@
 .fluxo-lista { display: grid; align-content: start; gap: 12px; flex: 1; min-height: 90px; margin: 0; padding: 0; list-style: none; }
 .fluxo-vazio { display: grid; place-items: center; min-height: 118px; border: 1px dashed var(--line); border-radius: 12px; background: color-mix(in srgb, var(--surface, #fff) 55%, transparent); color: var(--muted); font-size: 14px; }
 /* "+ Adicionar projeto": no pé de cada coluna, abre o Novo orçamento. */
-.fluxo-adicionar { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); color: var(--ink); font-size: 15px; text-decoration: none; }
-.fluxo-adicionar:hover { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); color: var(--green); }
-.fluxo-adicionar:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
 .fluxo-cartao { display: grid; gap: 5px; padding: 14px 14px 14px 16px; border: 1px solid var(--line); border-left: 5px solid var(--cor-orcamento); border-radius: 12px; background: var(--surface, #fff); color: var(--ink); cursor: grab; touch-action: manipulation; user-select: none; -webkit-user-select: none; box-shadow: 0 1px 3px #00000012; }
 /* Cartão do orçamento de onde se voltou: pisca um contorno para achar rápido. */
@@ -116,8 +110,7 @@
   .fluxo-pecas { font-size: 12px; }
   .fluxo-material-botao { right: 9px; bottom: 9px; width: 30px; height: 30px; }
   .fluxo-cartao-caixa .fluxo-prazo { padding-right: 36px; }
-  .fluxo-adicionar { min-height: 42px; font-size: 14px; }
-}
+  }
 
 /* No celular as colunas ficam lado a lado com rolagem, uma por vez na tela. */
 .fluxo-atalhos { display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px; }
@@ -131,7 +124,6 @@
 
 /* Celular: o título fica só no cabeçalho do app, filtros recolhidos, barra fixa de etapas e uma etapa por vez. */
 @media (max-width: 760px) {
-  .fluxo-page > .list-header { display: none; }
   .application-content .list-page.fluxo-page { padding-left: 16px; padding-right: 16px; }
   .fluxo-barra { gap: 10px; margin-bottom: 12px; }
   .fluxo-page .fluxo-barra .abas-filtro { flex: 1 1 100%; overflow: visible; padding: 4px; }
@@ -166,7 +158,6 @@
   html.inova-dark .inova-theme .fluxo-fase.fase-awaiting_approval { background: #2c302d; color: var(--muted); }
   html.inova-dark .inova-theme .fluxo-fase.fase-awaiting_start { background: #1f2f3d; color: #a9c9e6; }
   html.inova-dark .inova-theme .fluxo-fase.fase-paused { background: #3a2e17; color: #e6c17a; }
-  html.inova-dark .inova-theme .fluxo-titulo { color: var(--ink); }
   html.inova-dark .inova-theme .fluxo-page .fluxo-barra .abas-filtro button[aria-pressed='true'] { background: var(--green); color: #1b1d1b; }
   html.inova-dark .inova-theme .fluxo-page .fluxo-barra .abas-filtro button[aria-pressed='true'] > svg { color: #1b1d1b; }
 }

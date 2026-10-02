@@ -121,13 +121,13 @@
   .inova-theme .text-button { color: #796545; font-weight: 600; text-underline-offset: 4px; }
   .inova-theme .text-button:hover { color: #454e3c; text-decoration: underline; }
   .inova-theme .search { padding: 13px 16px; min-height: 46px; border-radius: 10px; background: #fff; box-shadow: var(--shadow); }
-  .inova-theme :is(.material-filter-bar, .showcase-filters) { gap: 8px; }
+  .inova-theme :is(.material-filter-bar) { gap: 8px; }
   .inova-theme .material-filter-bar { padding: 14px; background: #eeeee6; border: 1px solid #e3e3d9; border-radius: 12px; margin-bottom: 18px; }
   .inova-theme .quote-filter-panel .material-filter-bar { margin-bottom: 0; }
   .inova-theme .material-filter-separator { width: 1px; height: 24px; margin: 0 3px; background: #d6d8ce; }
-  .inova-theme :is(.material-filter-bar, .showcase-filters) button { padding: 8px 14px; min-height: 34px; background: #fff; border: 1px solid #dfdfd5; color: #676b5f; font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1.4; border-radius: 999px; }
-  .inova-theme :is(.material-filter-bar, .showcase-filters) button.selected { background: #e6ebdf; border-color: #a6b298; color: #40563b; font-weight: 600; }
-  .inova-theme :is(.material-filter-bar, .showcase-filters) button:hover { border-color: #a6b298; }
+  .inova-theme :is(.material-filter-bar) button { padding: 8px 14px; min-height: 34px; background: #fff; border: 1px solid #dfdfd5; color: #676b5f; font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1.4; border-radius: 999px; }
+  .inova-theme :is(.material-filter-bar) button.selected { background: #e6ebdf; border-color: #a6b298; color: #40563b; font-weight: 600; }
+  .inova-theme :is(.material-filter-bar) button:hover { border-color: #a6b298; }
   .inova-theme .admin-tabs { display: flex; width: fit-content; max-width: 100%; padding: 5px; margin-bottom: 22px; gap: 5px; border-radius: 11px; background: #eaece3; }
   .inova-theme .admin-tabs button { border-color: transparent; background: transparent; padding: 10px 18px; color: #6b7064; font-size: 13px; border-radius: 8px; }
   .inova-theme .admin-tabs button.selected { background: #fff; color: #354d3d; box-shadow: 0 2px 5px #303a3110; }
@@ -164,7 +164,7 @@
   .inova-theme .detail-card > span { color: #7a785f; letter-spacing: .08em; font-size: 10px; }
   .inova-theme .detail-total { padding: 24px; margin-top: 22px; background: #e9ede3; border: 1px solid #dce3d3; border-radius: 14px; }
   .inova-theme .detail-total b { color: #3e5549; font-size: 22px; margin-top: 8px; }
-  .inova-theme :is(.empty, .catalog-empty, .showcase-empty) { background: #fafaf6; border: 1px dashed #d6d9cd; border-radius: 14px; padding: 42px 20px; }
+  .inova-theme :is(.empty, .catalog-empty) { background: #fafaf6; border: 1px dashed #d6d9cd; border-radius: 14px; padding: 42px 20px; }
 
   /* Orçamento: hierarquia clara sem perder a densidade dos campos de medidas. */
   .inova-theme .project-builder { --ink: #30342f; --muted: #74766e; --line: #e4e5de; --green: #7c6341; }
@@ -193,7 +193,7 @@
   .inova-theme .project-builder .quote-summary-card .summary-grand-total { background: #edf1e7; color: #3c523b; padding: 16px 12px; border-radius: 9px; margin: 6px 0; align-items: center; }
   .inova-theme .summary-grand-total b { font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .inova-theme .project-builder .save-quote-button { background: #3e5549; border-color: #3e5549; border-radius: 9px; min-height: 44px; font-size: 13px; }
-  .inova-theme .project-builder .quote-visual-card { margin: -20px -20px 0; border-radius: 14px 14px 0 0; background: linear-gradient(90deg, #273525aa, #27352500), url('/ambientes/cozinha.png') center / cover; }
+  .inova-theme .project-builder .quote-visual-card { margin: -20px -20px 0; border-radius: 14px 14px 0 0; background: linear-gradient(90deg, #273525aa, #27352500), url('/ambientes/cozinha.webp') center / cover; }
   .inova-theme .quick-heading h2 { font: 400 21px/1.2 Georgia, serif; color: #303a31; }
   .inova-theme .quick-table-scroll { border: 1px solid #e3e5da; border-radius: 11px; }
   .inova-theme .quick-table th { background: #eff1e8; color: #666e5c; padding: 9px 7px; font-weight: 600; }
@@ -217,38 +217,9 @@
   .inova-theme .catalog-archive-list .secondary-button { padding: 8px 10px; font-size: 11px; }
   .inova-theme .quick-modal-simple-list, .inova-theme .quick-modal-service-list fieldset { border-color: var(--line); border-radius: 10px; background: #fafbf6; }
 
-  /* Vitrine com fotografia existente, amostras e o mesmo tom mineral. */
-  .inova-theme .showcase-page { background: var(--canvas); color: var(--ink); }
-  .inova-theme .showcase-hero { margin: 24px 32px 0; border-radius: 18px; min-height: 650px; padding: 56px 40px 220px; }
-  .inova-theme .showcase-hero h1 { font-size: clamp(38px, 4.3vw, 64px); line-height: 1.02; }
-  .inova-theme .showcase-hero-copy p { font-family: inherit; font-size: 13px; line-height: 1.7; }
-  .inova-theme .showcase-eyebrow { letter-spacing: .2em; }
-  .inova-theme .showcase-featured { background: #fafaf2ed; border-color: #ffffffa6; top: 36px; right: 28px; width: 43%; grid-template-columns: 90px minmax(0, 1fr); padding: 18px; gap: 16px; box-shadow: 0 12px 40px #25351f26; }
-  .inova-theme .showcase-featured > img { width: 90px; height: 120px; }
-  .inova-theme .showcase-featured h2 { font-size: 27px; color: #333c30; }
-  .inova-theme .showcase-featured-facts { gap: 12px; flex-wrap: wrap; }
-  .inova-theme .showcase-featured-actions { flex-wrap: wrap; }
-  .inova-theme .showcase-collection-strip { background: #fafaf2ed; box-shadow: 0 8px 24px #25351f1a; border-radius: 13px; }
-  .inova-theme .showcase-catalog { padding: 44px 32px; max-width: 1440px; }
-  .inova-theme .showcase-catalog h2 { color: #303a31; font-size: 36px; }
-  .inova-theme .showcase-catalog-heading p { font-family: inherit; font-size: 13px; line-height: 1.7; }
-  .inova-theme .showcase-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 18px; }
-  .inova-theme .showcase-material-card { background: #fff; border-color: var(--line); border-radius: 13px; padding: 10px; gap: 8px; box-shadow: var(--shadow); }
-  .inova-theme .showcase-material-card img { aspect-ratio: 4 / 3; }
-  .inova-theme .showcase-material-card strong { font-size: 13px; }
-  .inova-theme .showcase-material-card.selected { border-color: #9aa987; box-shadow: 0 0 0 1px #9aa987; }
-  .inova-theme .showcase-search { background: #fff; border-color: #dcded5; border-radius: 10px; padding: 0 12px; }
-  .inova-theme .showcase-search input { border: 0; min-height: 42px; }
-  .inova-theme .showcase-dark-button { background: #3e5549; border-color: #3e5549; }
-  .inova-theme .ambientes-showcase { margin: 0 32px 40px; padding: 28px; background: #eeefe7; border: 1px solid var(--line); border-radius: 18px; max-width: none; }
-  .inova-theme .ambientes-heading h2 { color: #303a31; }
-  .inova-theme .ambientes-figure { border-radius: 12px; }
-  .inova-theme .ambientes-tabs button[aria-pressed=true] { color: #526746; border-color: #839174; }
-  .inova-theme .ambientes-swatches button[aria-pressed=true] img { outline-color: #839174; }
-
   /* Login com imagem da marca e tipografia disponível localmente. */
   .inova-theme .login-screen { padding: 48px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr); gap: 7vw; background: var(--canvas); min-height: 100dvh; }
-  .inova-theme .login-atmosphere { position: relative; display: flex; align-items: flex-end; align-self: stretch; width: 100%; min-height: 560px; border-radius: 22px; padding: 48px; overflow: hidden; color: #fff; background: linear-gradient(0deg, #223023cc, #22302300 75%), url('/ambientes/cozinha.png') center / cover; }
+  .inova-theme .login-atmosphere { position: relative; display: flex; align-items: flex-end; align-self: stretch; width: 100%; min-height: 560px; border-radius: 22px; padding: 48px; overflow: hidden; color: #fff; background: linear-gradient(0deg, #223023cc, #22302300 75%), url('/ambientes/cozinha.webp') center / cover; }
   .inova-theme .login-atmosphere h2 { font: 400 clamp(36px, 4vw, 60px)/1.08 Georgia, serif; margin: 16px 0; letter-spacing: -1px; }
   .inova-theme .login-atmosphere p { color: #eff0e5; max-width: 350px; line-height: 1.7; font-size: 13px; }
   .inova-theme .login-atmosphere small { font-size: 10px; letter-spacing: .2em; color: #e9e6d5; }
@@ -269,10 +240,6 @@
   .inova-theme .application-frame { grid-template-columns: 206px minmax(0, 1fr); }
   .inova-theme .application-sidebar { padding-inline: 12px; }
   .inova-theme .application-sidebar nav a { font-size: 12px; gap: 9px; }
-  .inova-theme .showcase-hero { padding-inline: 28px; }
-  .inova-theme .showcase-featured { position: relative; inset: auto; width: 100%; margin-top: 28px; grid-template-columns: 90px minmax(0, 1fr); }
-  .inova-theme .showcase-hero { padding-bottom: 210px; }
-  .inova-theme .showcase-featured-facts { margin-block: 10px; }
 }
 @media screen and (max-width: 760px) {
   .inova-theme .application-frame { display: block; }
@@ -316,20 +283,6 @@
   .inova-theme .catalog-archive-list article { grid-template-columns: 46px minmax(0, 1fr); gap: 9px; }
   .inova-theme .catalog-archive-list img { width: 46px; height: 46px; }
   .inova-theme .catalog-archive-list .secondary-button { grid-column: 2; justify-self: start; }
-  .inova-theme .showcase-hero { margin: 16px 16px 0; padding: 34px 24px 220px; border-radius: 14px; }
-  .inova-theme .showcase-hero h1 { font-size: 44px; }
-  .inova-theme .showcase-featured { grid-template-columns: 76px minmax(0, 1fr); padding: 12px; gap: 12px; }
-  .inova-theme .showcase-featured > img { width: 76px; height: 100px; }
-  .inova-theme .showcase-featured h2 { font-size: 23px; }
-  .inova-theme .showcase-collection-strip { padding: 14px; gap: 12px; }
-  .inova-theme .showcase-strip-heading { flex-basis: 90px; }
-  .inova-theme .showcase-catalog { padding: 32px 16px; }
-  .inova-theme .showcase-catalog h2 { font-size: 30px; }
-  .inova-theme .showcase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .inova-theme .showcase-toolbar { align-items: stretch; flex-direction: column; }
-  .inova-theme .showcase-search { width: 100%; }
-  .inova-theme .ambientes-showcase { margin: 0 16px 28px; padding: 18px; border-radius: 14px; }
-  .inova-theme .ambientes-heading h2 { font-size: 28px; }
   .inova-theme .login-screen { grid-template-columns: minmax(0, 1fr); padding: 28px 24px; gap: 32px; }
   .inova-theme .login-atmosphere { min-height: 220px; padding: 26px; border-radius: 16px; }
   .inova-theme .login-atmosphere h2 { font-size: 34px; margin-bottom: 0; }
@@ -338,5 +291,4 @@
 }
 @media screen and (prefers-reduced-motion: reduce) {
   .inova-theme :is(button, a, input, select, textarea, summary) { transition: none; }
-  .inova-theme .showcase-material-card:hover { transform: none; }
 }

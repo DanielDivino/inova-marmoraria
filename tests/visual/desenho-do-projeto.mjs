@@ -40,7 +40,7 @@ await page.route('**/api/**', async route => {
   if (path === '/api/catalog') return route.fulfill({ json: catalogo });
   if (path === '/api/catalog/materials/visual') return route.fulfill({ json: [{ id: catalogo.materials[0].id, name: 'Branco Dallas', category: 'Granitos', description: null, imageUrl: null }] });
   if (path === '/api/quotes') return route.fulfill({ json: { data: [], total: 0 } });
-  if (path === '/api/customers') return route.fulfill({ json: { data: [{ ...cliente, quotes: [] }], meta: { page: 1, limit: 100, total: 1, pages: 1 }, counts: { cadastrados: 1, semCadastro: 0 } } });
+  if (path === '/api/customers') return route.fulfill({ json: { data: [{ ...cliente, quotes: [] }], meta: { page: 1, limit: 100, total: 1, pages: 1 }, counts: { todos: 1, ativos: 1, incompletos: 0, inativos: 0 } } });
   if (path === `/api/customers/${cliente.id}/designs` && method === 'POST') {
     const body = route.request().postDataJSON();
     criados.push(body);

@@ -7,7 +7,7 @@ import { emptyTechnicalDocument, estimarDesenho, featureSchema, makePiece } from
 // API inteiramente simulada. Desenho técnico dentro do Novo orçamento (vendedor):
 // sem cliente pede o cliente; com cliente lista os rascunhos dele, começa um
 // desenho, mostra o valor (M² fechado ligado) e "Usar no orçamento" leva as
-// peças e o mesmo valor para o resumo. Clientes: abas cadastrados / sem cadastro.
+// peças e o mesmo valor para o resumo. Clientes: filtro por situação e arquivar/reativar.
 const output = resolve(import.meta.dirname, '../../.test-artifacts/desenho-no-orcamento');
 mkdirSync(output, { recursive: true });
 const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
@@ -62,10 +62,18 @@ await page.route('**/api/**', async route => {
     return route.fulfill({ status: 201, json: { designId: 'cm00000000000000000novo01', projectId: 'p', name: body.name } });
   }
   if (path === `/api/customers/${cliente.id}/designs`) return route.fulfill({ json: { designs: desenhos } });
+  if (/^\/api\/customers\/[^/]+\/arquivo$/.test(path) && method === 'PATCH') {
+    const alvo = [cliente, semCadastro].find(entrada => path.includes(entrada.id));
+    alvo.archivedAt = route.request().postDataJSON().arquivado ? new Date().toISOString() : null;
+    return route.fulfill({ json: alvo });
+  }
   if (path === '/api/customers') {
-    const tipo = url.searchParams.get('tipo');
-    const data = tipo === 'sem-cadastro' ? [semCadastro] : tipo === 'cadastrados' ? [cliente] : [cliente, semCadastro];
-    return route.fulfill({ json: { data: data.map(entrada => ({ ...entrada, quotes: [] })), meta: { page: 1, limit: 100, total: data.length, pages: 1 }, counts: { cadastrados: 1, semCadastro: 1 } } });
+    const todos = [cliente, semCadastro];
+    const situacaoDe = entrada => entrada.archivedAt ? 'inativos' : entrada.isQuick ? 'incompletos' : 'ativos';
+    const situacao = url.searchParams.get('situacao');
+    const data = situacao && situacao !== 'todos' ? todos.filter(entrada => situacaoDe(entrada) === situacao) : situacao ? todos : todos.filter(entrada => !entrada.archivedAt);
+    const contar = valor => todos.filter(entrada => situacaoDe(entrada) === valor).length;
+    return route.fulfill({ json: { data: data.map(entrada => ({ ...entrada, quotes: [] })), meta: { page: 1, limit: 100, total: data.length, pages: 1 }, counts: { todos: todos.length, ativos: contar('ativos'), incompletos: contar('incompletos'), inativos: contar('inativos') } } });
   }
   if (path === '/api/designs/cm00000000000000000novo01/draft' && method === 'PUT') {
     salvamentos += 1; versao += 1;
@@ -186,18 +194,31 @@ try {
   await shot('06-projeto-duplicado-com-desenho');
   await janela.getByRole('button', { name: 'Fechar' }).last().click();
 
-  // 7) Clientes: cadastrados e sem cadastro em abas separadas.
+  // 7) Clientes: filtro por situação (como em Funcionários) e arquivar/reativar.
   await page.goto(base + '/clientes');
-  await page.getByRole('tab', { name: /Cadastrados/ }).waitFor();
+  const filtro = page.getByRole('group', { name: 'Filtrar clientes' });
   const lista = page.locator('.admin-rows');
-  await lista.getByText('Maria Silva', { exact: true }).waitFor();
-  assert.equal(await lista.getByText('Sem cadastro 1', { exact: true }).count(), 0, 'sem cadastro fora da aba de cadastrados');
-  await page.getByRole('tab', { name: /Sem cadastro/ }).click();
-  await lista.getByText('Sem cadastro 1', { exact: true }).waitFor();
-  assert.equal(await lista.getByText('Maria Silva', { exact: true }).count(), 0);
-  await shot('04-clientes-sem-cadastro');
+  const linha = nome => lista.locator('article').filter({ has: page.getByText(nome, { exact: true }) });
+  await linha('Maria Silva').getByText('Ativo', { exact: true }).waitFor();
+  await linha('Sem cadastro 1').getByText('Cadastro incompleto', { exact: true }).waitFor();
+  await filtro.getByRole('button', { name: /Cadastro incompleto/ }).click();
+  await linha('Sem cadastro 1').waitFor();
+  await linha('Maria Silva').waitFor({ state: 'detached' });
+  await filtro.getByRole('button', { name: /Ativos/ }).click();
+  await linha('Maria Silva').getByRole('button', { name: 'Arquivar', exact: true }).click();
+  await page.locator('dialog[open]').getByRole('button', { name: 'Arquivar cliente', exact: true }).click();
+  await page.getByRole('status').filter({ hasText: 'Maria Silva foi arquivado.' }).waitFor();
+  await page.getByText('Nenhum cliente encontrado.', { exact: true }).waitFor();
+  assert.match(await filtro.getByRole('button', { name: /Inativos/ }).innerText(), /1/);
+  await filtro.getByRole('button', { name: /Inativos/ }).click();
+  await linha('Maria Silva').getByText('Inativo', { exact: true }).waitFor();
+  await shot('04-clientes-arquivado');
+  await linha('Maria Silva').getByRole('button', { name: 'Reativar', exact: true }).click();
+  await page.getByText('Nenhum cliente arquivado.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Limpar', exact: true }).click();
+  await linha('Maria Silva').getByText('Ativo', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
-  console.log('OK: desenho técnico dentro do Novo orçamento — pede cliente, lista rascunhos do cliente, valor com M² fechado igual ao do domínio, usar no orçamento leva o mesmo valor ao resumo; projeto duplicado (com o nome escolhido) ganha uma cópia do desenho técnico com o mesmo nome, só dele; clientes separados em cadastrados e sem cadastro.');
+  console.log('OK: desenho técnico dentro do Novo orçamento — pede cliente, lista rascunhos do cliente, valor com M² fechado igual ao do domínio, usar no orçamento leva o mesmo valor ao resumo; projeto duplicado (com o nome escolhido) ganha uma cópia do desenho técnico com o mesmo nome, só dele; clientes filtrados por situação (ativo, cadastro incompleto, inativo), arquivar com confirmação e reativar.');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

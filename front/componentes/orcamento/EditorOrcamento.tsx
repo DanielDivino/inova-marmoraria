@@ -282,7 +282,7 @@ export default function EditorOrcamento() {
   const areaManual = item.calculationMode === 'MANUAL_M2';
   const activeServices = servicesFor(item);
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
-  // M² fechado é da empresa (Materiais e serviços → Serviços e acabamentos), sempre marcado nos
+  // M² fechado é da empresa (Materiais e serviços → Serviços), sempre marcado nos
   // orçamentos novos. Orçamento salvo mantém como foi salvo: o valor dele nunca muda ao editar.
   const m2Fechado = catalog?.settings?.closedSquareMeter ?? true;
   const arredondaM2 = (draft: DraftItem) => quoteId ? !!draft.arredondarM2 : m2Fechado;

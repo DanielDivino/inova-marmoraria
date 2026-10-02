@@ -1,12 +1,15 @@
 # Fotografias do visualizador
 
+As fotos ficam em WebP (1448 × 1086, qualidade 82), convertidas das PNG originais geradas abaixo:
+cada uma tem 60 a 150 KB em vez de 2 MB.
+
 Geradas com a ferramenta integrada image_gen, sem API/CLI externa.
 Arquivos originais: cozinha.png, banheiro.png, escada.png, janela-peitoril.png e porta-soleira.png.
 Novos arquivos: escada-em-l.png, painel-tv.png, nicho-banheiro.png,
 area-gourmet.png, lavanderia.png, lareira.png e mesa-jantar.png.
 Resolucao: 1448 x 1086. Cenas ilustrativas, nao fotografias de obras da empresa.
 
-Os contornos e planos ficam em front/componentes/ambientes-cenas.ts. Ao substituir uma
+Os contornos e planos ficam em front/componentes/mostruario/cenas.ts. Ao substituir uma
 foto, atualizar seus contornos; nao reutilizar mascaras em outra fotografia.
 A mesma amostra do catalogo preenche todos os planos, preservando sombras da
 foto em escala de cinza. A perspectiva e a escala dos veios sao aproximadas.

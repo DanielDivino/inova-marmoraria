@@ -1,0 +1,18 @@
+/* Desenho das bordas e amostras dos acabamentos de superfície (Materiais e serviços e mostruário).
+   As aparências são simulações ilustrativas sobre a foto da pedra. */
+.perfil-borda { display: block; width: 100%; height: 150px; color: #2b251b; }
+html.inova-dark .inova-theme .perfil-borda { color: #e9ebe6; }
+.amostra-superficie { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 14px; background: #e7dfd2; }
+.amostra-superficie img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.amostra-superficie::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+.aparencia-polido img { filter: contrast(1.08) saturate(1.08); }
+.aparencia-polido::after { background: linear-gradient(118deg, transparent 32%, rgba(255, 255, 255, .55) 46%, rgba(255, 255, 255, .1) 54%, transparent 64%); mix-blend-mode: screen; transform: translateX(-30%); transition: transform 1.4s cubic-bezier(.2, .72, .2, 1); }
+:hover > .amostra-superficie.aparencia-polido::after { transform: translateX(30%); }
+.aparencia-levigado img { filter: contrast(.84) saturate(.82) brightness(1.04); }
+.aparencia-escovado img { filter: contrast(.88) saturate(.82) brightness(1.02); }
+.aparencia-escovado::after { background: repeating-linear-gradient(97deg, rgba(255, 255, 255, .09) 0 1px, rgba(0, 0, 0, .05) 1px 3px, transparent 3px 5px); mix-blend-mode: overlay; }
+.aparencia-flameado img { filter: saturate(.5) contrast(.74) brightness(1.12); }
+.aparencia-flameado::after { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.55' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1.6 -.45'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23r)'/%3E%3C/svg%3E"); mix-blend-mode: multiply; opacity: .55; }
+.aparencia-jateado img { filter: saturate(.66) contrast(.7) brightness(1.14) blur(.5px); }
+.aparencia-jateado::after { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='j'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.2 -.5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23j)'/%3E%3C/svg%3E"); opacity: .5; }
+

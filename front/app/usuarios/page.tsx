@@ -40,10 +40,7 @@ export default function UsersPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o usuário.'); }
     finally { setBusy(false); }
   }
-  return <main className="list-page"><CabecalhoEquipe />
-    <div className="barra-lista">
-      <button className="botao-destaque" type="button" onClick={() => { setForm(empty); setEditing(''); setError(''); setNotice(''); }}><Icone nome="mais" />Cadastrar vendedor</button>
-    </div>
+  return <main className="list-page"><CabecalhoEquipe acoes={<button className="botao-destaque" type="button" onClick={() => { setForm(empty); setEditing(''); setError(''); setNotice(''); }}><Icone nome="mais" />Cadastrar vendedor</button>} />
     {error && editing === null && <p className="form-error" role="alert">{error}</p>}{notice && <p className="catalog-notice" role="status">{notice}</p>}
     <div className="barra-filtros" role="search" aria-label="Buscar usuários">
       <label className="barra-filtros-busca"><Icone nome="buscar" tamanho={20} /><input type="search" aria-label="Buscar usuários" placeholder="Nome ou e-mail" value={busca} onChange={(event) => setBusca(event.target.value)} /></label>

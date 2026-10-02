@@ -8,7 +8,7 @@ import { SeloPrazo, SeloTrabalho, StatusLegend } from '../../componentes/QuoteSt
 import { DesenhosSalvos } from '../../componentes/orcamento/SavedDrawings';
 import { useSession } from '../../componentes/ApplicationShell';
 import { api } from '../../utilitarios/api';
-import { AbasFiltro, CampoFiltro, Icone, MenuSelecao, ModalFiltros, useCelular, type NomeIcone } from '../../componentes/filtros/Filtros';
+import { AbasFiltro, AtalhosCabecalho, CampoFiltro, Icone, MenuSelecao, ModalFiltros, useCelular, type NomeIcone } from '../../componentes/filtros/Filtros';
 import { intervaloDoPeriodo, OPCOES_PERIODO, periodoSelecionado, type OpcaoPeriodo } from '../../utilitarios/periodos';
 import { useFiltrosNaUrl } from '../../componentes/useFiltrosNaUrl';
 import { enderecoOrcamento, SEM_ORIGEM, type Origem } from '../../utilitarios/rotas';
@@ -234,13 +234,8 @@ function QuotesList() {
   // Contador do botão: filtros que ficam escondidos (no celular, tudo que está na janela).
   const filtrosOcultos = [abaStatus !== 'TODOS', sellerId, situacaoPrazoInterno, ...(celular ? [periodo !== 'TODOS', responsibleId] : [])].filter(Boolean).length;
   return <main className="list-page">
-    <header className="cabecalho-lista">
-      <div className="titulo-no-topo"><h1>{isHistory ? 'Histórico' : 'Orçamentos'}</h1><p>{isHistory ? 'Orçamentos entregues, recusados, cancelados ou expirados.' : 'Gerencie e acompanhe todos os orçamentos da sua marmoraria.'}</p></div>
-      <div className="cabecalho-lista-acoes">
-        <Link className="botao-contorno botao-contorno-destaque" href="/"><Icone nome="mais" />Novo Projeto</Link>
-        <Link className="botao-contorno" href={isHistory ? '/orcamentos' : '/historico'}><Icone nome={isHistory ? 'documento' : 'historico'} />{isHistory ? 'Orçamentos' : 'Histórico'}</Link>
-      </div>
-    </header>
+    {/* Título na barra de cima; Mostruário e Novo orçamento nos atalhos dela, como nas outras telas. */}
+    <header className="list-header"><h1 className="titulo-no-topo">{isHistory ? 'Histórico' : 'Orçamentos'}</h1><AtalhosCabecalho /></header>
     <form className="barra-filtros" role="search" aria-label="Filtros de orçamentos" onSubmit={(event) => { event.preventDefault(); setAttempt((value) => value + 1); }}>
       <label className="barra-filtros-busca"><Icone nome="buscar" tamanho={20} /><input type="search" aria-label="Buscar orçamentos" placeholder="Cliente, telefone ou nº do orçamento" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
       {!celular && <>

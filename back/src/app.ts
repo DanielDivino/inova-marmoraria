@@ -7,6 +7,8 @@ import { ZodError } from 'zod';
 import { registrarAutenticacao } from './modulos/autenticacao/auth.plugin.js';
 import { registrarRotasAutenticacao } from './modulos/autenticacao/auth.routes.js';
 import { registrarRotasCatalogo } from './modulos/catalogo/catalog.routes.js';
+import { registrarMiniaturas } from './modulos/catalogo/miniaturas.routes.js';
+import { registrarFamiliasEAcabamentos } from './modulos/catalogo/familias-acabamentos.routes.js';
 import { registrarRotasClientes } from './modulos/clientes/customer.routes.js';
 import { registrarRotasUsuarios } from './modulos/usuarios/user.routes.js';
 import { registrarRotasOrcamentos } from './modulos/orcamentos/quote.routes.js';
@@ -24,11 +26,13 @@ export async function criarAplicacao() {
   const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
   app.register(cors, { origin: process.env.WEB_ORIGIN ?? true, credentials: true });
   app.register(fastifyStatic, { root: join(process.cwd(), 'uploads'), prefix: '/uploads/', decorateReply: false });
+  app.register(registrarMiniaturas, { prefix: '/miniaturas' });
   await registrarAutenticacao(app);
 
   app.get('/health', async () => ({ status: 'ok' }));
   app.register(registrarRotasAutenticacao, { prefix: '/auth' });
   app.register(registrarRotasCatalogo, { prefix: '/catalog' });
+  app.register(registrarFamiliasEAcabamentos, { prefix: '/catalog' });
   app.register(registrarRotasClientes, { prefix: '/customers' });
   app.register(registrarRotasOrcamentos, { prefix: '/quotes' });
   app.register(registrarRotasRascunhoOrcamento, { prefix: '/quote-draft' });

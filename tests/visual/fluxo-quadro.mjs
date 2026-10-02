@@ -4,9 +4,9 @@ import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 
 // API inteiramente simulada. Layout do Fluxo de trabalho: título na barra de cima do app, abas
-// (Quadro / Resumo), filtros num bloco só e o botão "Filtros" que os recolhe (e lembra), colunas com
-// contagem e "+ Adicionar projeto" no pé (abre o Novo orçamento); as 5 colunas cabem em 1280 e 1440,
-// e no celular as abas cabem na largura.
+// (Quadro / Resumo), atalhos Mostruário e Novo orçamento na barra, filtros num bloco só e o botão
+// "Filtros" que os recolhe (e lembra), colunas com contagem (projeto novo nasce no Novo orçamento, não
+// na coluna); as 5 colunas cabem em 1280 e 1440, e no celular as abas cabem na largura.
 const output = resolve(import.meta.dirname, '../../.test-artifacts/fluxo-quadro');
 mkdirSync(output, { recursive: true });
 const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
@@ -50,17 +50,17 @@ try {
   await page.goto(base + '/fluxo');
   await page.locator('.fluxo-quadro [data-cartao]').first().waitFor();
   // Título na barra de cima (ao lado do sino), uma vez só.
-  await page.locator('.application-header-actions h1', { hasText: 'Fluxo de trabalho' }).waitFor();
+  await page.locator('.application-header-actions .titulo-da-tela', { hasText: 'Fluxo de trabalho' }).waitFor();
+  const atalhos = page.locator('#application-header-tabs .atalhos-cabecalho');
+  assert.deepEqual(await atalhos.getByRole('link').evaluateAll(links => links.map(link => [link.textContent, link.getAttribute('href')])), [['Mostruário', '/mostruario'], ['Novo orçamento', '/']]);
   assert.equal(await page.getByRole('heading', { level: 1 }).count(), 1);
   // Abas sem contagem, Quadro escolhido; filtros com "Todos" e "Todas as datas".
   assert.equal(await page.getByRole('button', { name: 'Quadro de projetos', exact: true }).getAttribute('aria-pressed'), 'true');
   for (const filtro of ['Funcionário: Todos', 'Cliente: Todos', 'Orçamento: Todos', 'Entrega: Todas as datas', 'Material: Todos']) await page.getByRole('button', { name: filtro, exact: true }).waitFor();
   assert.equal(await page.locator('.fluxo-legenda').count(), 0, 'sem a legenda de prazo: o cartão diz o prazo');
-  // Colunas com contagem e "+ Adicionar projeto" (Novo orçamento) no pé de cada uma.
+  // Colunas com contagem; sem "+ Adicionar projeto" nelas (o Novo orçamento fica na barra de cima).
   assert.deepEqual(await page.locator('.fluxo-coluna > header span').allInnerTexts(), ['1', '2', '2', '0', '1']);
-  const adicionar = page.getByRole('link', { name: 'Adicionar projeto' });
-  assert.equal(await adicionar.count(), 5);
-  for (const href of await adicionar.evaluateAll(links => links.map(link => link.getAttribute('href')))) assert.equal(href, '/');
+  assert.equal(await page.getByRole('link', { name: 'Adicionar projeto' }).count(), 0);
   assert(await quadroCabe(), 'as 5 colunas cabem em 1440');
   await shot('01-quadro-1440');
 
@@ -105,7 +105,7 @@ try {
   await page.getByRole('navigation', { name: 'Etapas do fluxo' }).waitFor();
   await shot('04-celular');
   assert.deepEqual(errors, []);
-  console.log('OK: Fluxo de trabalho no layout novo — título na barra de cima, abas e filtros numa linha, "Filtros" recolhe e lembra, Limpar com filtro ativo, contagem e "+ Adicionar projeto" em cada coluna, 5 colunas em 1440 e 1280, celular com as abas inteiras.');
+  console.log('OK: Fluxo de trabalho no layout novo — título na barra de cima, abas e filtros numa linha, "Filtros" recolhe e lembra, Limpar com filtro ativo, atalhos Mostruário e Novo orçamento na barra, contagem em cada coluna, 5 colunas em 1440 e 1280, celular com as abas inteiras.');
 } finally {
   await browser.close();
 }

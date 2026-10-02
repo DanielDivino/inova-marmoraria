@@ -37,7 +37,7 @@ describe('Sessão e permissões reais', () => {
   it.each(['/quotes', '/customers', '/catalog', '/users', '/audit', '/notifications/deadlines'])('protege %s sem sessão', async (path) => expect((await request('GET', path, undefined, {})).statusCode).toBe(401));
   it('recusa senha inválida sem expor dados do usuário', async () => { const result = await request('POST', '/auth/login', { email: 'admin@inovamarmoraria.local', password: 'SenhaIncorreta' }, {}); expect(result.statusCode).toBe(401); expect(result.json()).not.toHaveProperty('user'); });
   it.each(['/users', '/audit'])('não permite administração em %s para atendente', async (path) => expect((await request('GET', path, undefined, attendant)).statusCode).toBe(403));
-  it('recusa cadastro de material pelo atendente', async () => expect((await request('POST', '/catalog/materials', { name: 'Proibido', category: 'Granito', billingUnit: 'SQUARE_METER', unitPrice: 10 }, attendant)).statusCode).toBe(403));
+  it('recusa cadastro de material pelo atendente', async () => expect((await request('POST', '/catalog/materials', { name: 'Proibido', familyId: 'cfamiliagranito', billingUnit: 'SQUARE_METER', unitPrice: 10 }, attendant)).statusCode).toBe(403));
   it('não aceita refresh token como credencial de API', async () => {
     const login = await request('POST', '/auth/login', { email: 'admin@inovamarmoraria.local', password: process.env.SEED_PASSWORD }, {});
     const refresh = login.cookies.find((cookie) => cookie.name === 'inova_refresh')!;
@@ -106,7 +106,8 @@ describe('Ajustes da empresa', () => {
 
 describe('Orçamento, snapshots, edição e relacionamentos', () => {
   it('calcula materiais por componente e preserva seus preços ao editar e reabrir', async () => {
-    const otherResponse = await request('POST', '/catalog/materials', { name: `Pedra por componente ${++counter}`, category: 'Granito', billingUnit: 'SQUARE_METER', unitPrice: 1000 });
+    const granito = (await request('GET', '/catalog/families')).json().find((familia: any) => familia.name === 'Granito');
+    const otherResponse = await request('POST', '/catalog/materials', { name: `Pedra por componente ${++counter}`, familyId: granito.id, billingUnit: 'SQUARE_METER', unitPrice: 1000 });
     expect(otherResponse.statusCode, otherResponse.body).toBe(201);
     const secondMaterial = otherResponse.json();
     const vista = catalog.services.find((entry: any) => entry.name === 'Vista');

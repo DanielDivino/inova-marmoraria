@@ -189,7 +189,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
     <div className="quick-heading">
       <div><h2>{title}</h2><small><span className="quick-desktop-help">Medidas em metros · Enter avança e adiciona linhas · Tab e Shift + Tab navegam</span><span className="quick-mobile-help">Medidas em metros. Ex.: 1,20 × 0,60.</span></small></div>
       {((showRounding && m2Fechado) || onDuplicate) && <div className="quick-heading-acoes">
-        {showRounding && m2Fechado && <label className="quick-round-toggle travado" title="Opção sempre ativa: o valor da pedra é calculado com cada peça arredondada para cima, em múltiplos de 5 cm (medidas exibidas, desenho e PDF mantêm os valores exatos). A desativação é feita em Materiais e serviços → Serviços e acabamentos."><input type="checkbox" checked disabled readOnly /> M² fechado</label>}
+        {showRounding && m2Fechado && <label className="quick-round-toggle travado" title="Opção sempre ativa: o valor da pedra é calculado com cada peça arredondada para cima, em múltiplos de 5 cm (medidas exibidas, desenho e PDF mantêm os valores exatos). A desativação é feita em Materiais e serviços → Serviços."><input type="checkbox" checked disabled readOnly /> M² fechado</label>}
         {onDuplicate && <button type="button" className="quick-duplicar" onClick={onDuplicate} aria-haspopup="dialog" aria-label="Duplicar projeto" title="Cria outro projeto neste orçamento com a mesma pedra, peças, medidas, acabamentos e valores, para ajustar apenas o que for diferente."><Icone nome="copiar" tamanho={15} /><span className="quick-duplicar-texto">Duplicar projeto</span></button>}
       </div>}
     </div>

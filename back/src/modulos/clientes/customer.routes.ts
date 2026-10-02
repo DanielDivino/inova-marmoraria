@@ -6,8 +6,15 @@ import { customerSchema, customerUpdateSchema, digitsOnly, quickCustomerSchema }
 import { prisma } from '../../config/prisma.js';
 import { AppError, idSchema, schemaConsultaPaginada } from '../../compartilhado/http.js';
 
-/** `tipo` separa os clientes cadastrados dos sem cadastro (orçamento sem cadastro); sem ele, vêm todos. */
-const querySchema = schemaConsultaPaginada({ search: z.string().optional(), tipo: z.enum(['cadastrados', 'sem-cadastro']).optional() });
+/**
+ * `situacao` filtra a lista de Clientes: ativos (cadastro completo), incompletos (sem cadastro, do
+ * orçamento sem cadastro) e inativos (arquivados); `todos` traz tudo. Sem ela (a busca de cliente do
+ * Novo orçamento), vêm só os não arquivados.
+ */
+const querySchema = schemaConsultaPaginada({ search: z.string().optional(), situacao: z.enum(['todos', 'ativos', 'incompletos', 'inativos']).optional() });
+const SITUACAO = {
+  todos: {}, ativos: { archivedAt: null, isQuick: false }, incompletos: { archivedAt: null, isQuick: true }, inativos: { archivedAt: { not: null } },
+} satisfies Record<string, Prisma.CustomerWhereInput>;
 export async function registrarRotasClientes(app: FastifyInstance) {
   const authenticated = { preHandler: [app.authenticate, exigirClienteProprio] };
   app.get('/', authenticated, async (request, reply) => {
@@ -16,11 +23,12 @@ export async function registrarRotasClientes(app: FastifyInstance) {
     const matches = digits ? await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM "Customer" WHERE regexp_replace(phone, '[^0-9]', '', 'g') LIKE ${'%' + digits + '%'} OR regexp_replace(COALESCE(document, ''), '[^0-9]', '', 'g') LIKE ${'%' + digits + '%'}` : [];
     const searchWhere = query.search ? { OR: [{ id: { in: matches.map((entry) => entry.id) } }, { name: { contains: query.search, mode: 'insensitive' as const } }, { phone: { contains: query.search } }, { document: { contains: query.search } }] } : {};
     const base = { AND: [searchWhere, escopoClientes(request.user)] };
-    const where = query.tipo ? { AND: [...base.AND, { isQuick: query.tipo === 'sem-cadastro' }] } : base;
-    const [data, total, semCadastro, todos] = await prisma.$transaction([prisma.customer.findMany({ where, orderBy: { name: 'asc' }, skip: (query.page - 1) * query.limit, take: query.limit, include: { quotes: { where: escopoOrcamentos(request.user), orderBy: { createdAt: 'desc' }, take: 1, select: { number: true, createdAt: true, status: true, items: { take: 1, orderBy: { id: 'asc' }, select: { materialNameSnapshot: true, projectName: true, components: { orderBy: { sortOrder: 'asc' }, select: { label: true, componentType: true } } } } } } } }), prisma.customer.count({ where }),
-      prisma.customer.count({ where: { AND: [...base.AND, { isQuick: true }] } }), prisma.customer.count({ where: base })]);
-    // Contagem das duas abas (com a mesma busca), para achar rápido os sem cadastro.
-    return reply.send({ data, meta: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) }, counts: { cadastrados: todos - semCadastro, semCadastro } });
+    const where = { AND: [...base.AND, query.situacao ? SITUACAO[query.situacao] : { archivedAt: null }] };
+    const contar = (situacao: Prisma.CustomerWhereInput) => prisma.customer.count({ where: { AND: [...base.AND, situacao] } });
+    const [data, total, todos, ativos, incompletos, inativos] = await prisma.$transaction([prisma.customer.findMany({ where, orderBy: { name: 'asc' }, skip: (query.page - 1) * query.limit, take: query.limit, include: { quotes: { where: escopoOrcamentos(request.user), orderBy: { createdAt: 'desc' }, take: 1, select: { number: true, createdAt: true, status: true, items: { take: 1, orderBy: { id: 'asc' }, select: { materialNameSnapshot: true, projectName: true, components: { orderBy: { sortOrder: 'asc' }, select: { label: true, componentType: true } } } } } } } }), prisma.customer.count({ where }),
+      contar(SITUACAO.todos), contar(SITUACAO.ativos), contar(SITUACAO.incompletos), contar(SITUACAO.inativos)]);
+    // Contagem de cada situação (com a mesma busca), para o filtro da lista.
+    return reply.send({ data, meta: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) }, counts: { todos, ativos, incompletos, inativos } });
   });
   app.get('/:id/quotes', authenticated, async (request) => {
     const { id } = idSchema.parse(request.params);
@@ -41,6 +49,19 @@ export async function registrarRotasClientes(app: FastifyInstance) {
     return reply.status(201).send(await prisma.customer.create({ data: { ...input, ownerId: request.user.id } }).catch(tratarConflitoContato));
   });
   app.patch('/:id', authenticated, async (request) => atualizarCliente(idSchema.parse(request.params).id, request.body));
+  // Arquivar (inativo) ou reativar: o cliente sai (ou volta) da busca do Novo orçamento; os orçamentos dele continuam.
+  app.patch('/:id/arquivo', authenticated, async (request) => {
+    const { id } = idSchema.parse(request.params);
+    const { arquivado } = z.object({ arquivado: z.boolean() }).strict().parse(request.body);
+    const customer = await prisma.customer.findUnique({ where: { id }, select: { archivedAt: true } });
+    if (!customer) throw new AppError(404, 'Cliente não encontrado.', 'NOT_FOUND');
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.customer.update({ where: { id }, data: { archivedAt: arquivado ? customer.archivedAt ?? new Date() : null } });
+      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'CUSTOMER', entityId: id, action: arquivado ? 'ARCHIVED' : 'UNARCHIVED',
+        previous: { archivedAt: customer.archivedAt?.toISOString() ?? null }, current: { archivedAt: updated.archivedAt?.toISOString() ?? null } } });
+      return updated;
+    });
+  });
   app.patch('/:id/owner', { preHandler: [app.authenticate, exigirPermissao('administration')] }, async (request) => {
     const { id } = idSchema.parse(request.params);
     const { ownerId } = z.object({ ownerId: z.string().cuid().nullable() }).strict().parse(request.body);

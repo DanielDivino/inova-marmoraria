@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Janela } from '../Janela';
 import './filtros.css';
 
@@ -185,8 +186,14 @@ export function ModalFiltros({ aberto, aoFechar, titulo, children, rodape, rotul
 
 /** Atalhos no cabeçalho das páginas de cadastro. */
 export function AtalhosCabecalho() {
-  return <div className="atalhos-cabecalho">
+  // No computador ficam na barra de cima, ao lado do nome da tela (a página não perde uma faixa só
+  // para eles); no celular, no topo da página.
+  const celular = useCelular();
+  const [alvo, setAlvo] = useState<HTMLElement | null>(null);
+  useEffect(() => { setAlvo(document.getElementById('application-header-tabs')); }, []);
+  const atalhos = <div className="atalhos-cabecalho">
     <Link className="botao-contorno" href="/mostruario"><Icone nome="camadas" />Mostruário</Link>
     <Link className="botao-contorno botao-contorno-destaque" href="/"><Icone nome="mais" />Novo orçamento</Link>
   </div>;
+  return !celular && alvo ? createPortal(atalhos, alvo) : atalhos;
 }
