@@ -100,6 +100,8 @@ export function validateTechnicalDocument(doc:TechnicalDocument):Diagnostic[] {
   for(const f of doc.features) {
     const piece=doc.pieces.find(p=>p.id===f.pieceId),poly=shapes.get(f.pieceId);if(!piece||!poly){add('STRUCTURAL','MISSING_PARENT','Componente sem peça-pai.',f.id);continue;}
     if(f.cutoutId&&!doc.features.some(c=>c.id===f.cutoutId&&c.type==='CUTOUT'&&c.pieceId===f.pieceId))add('STRUCTURAL','CUTOUT_LINK','Vínculo de recorte inválido.',f.id);
+    // Emenda: num lado reto da peça, fora das pontas (o corte atravessa a peça).
+    if(f.type==='SEAM'){const lado=piece.contour.findIndex(p=>p.id===f.edgeId);if(lado<0)add('STRUCTURAL','MISSING_EDGE','Borda vinculada inexistente.',f.id);else if(Math.abs(piece.contour[lado].bulge)>EPS||f.startMm<=0||f.startMm>=edgeLength(piece,f.edgeId!))add('TECHNICAL','SEAM_POSITION','A emenda precisa começar num lado reto, fora das pontas.',f.id);continue;}
     if(['SKIRT','BACKSPLASH','EDGE_FINISH'].includes(f.type)) {if(!piece.contour.some(p=>p.id===f.edgeId))add('STRUCTURAL','MISSING_EDGE','Borda vinculada inexistente.',f.id);else if(f.extentMm<=0||f.startMm<0||f.startMm+f.extentMm>edgeLength(piece,f.edgeId!)+EPS)add('TECHNICAL','EDGE_EXTENT','Trecho ultrapassa a borda.',f.id);if(f.heightMm<=0||f.thicknessMm<=0)add('TECHNICAL','EDGE_SIZE','Altura e espessura devem ser positivas.',f.id);continue;}
     if(f.widthMm<=0||f.lengthMm<=0||f.diameterMm<=0||f.depthMm<=0){add('TECHNICAL','FEATURE_SIZE','Dimensões devem ser positivas.',f.id);continue;}
     const fp=sampleContour(featureContour(f),.5);

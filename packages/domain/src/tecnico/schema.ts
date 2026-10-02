@@ -42,7 +42,8 @@ export const pieceSchema = z.object({
     .refine((zona) => zona.endMm > zona.startMm, 'A área termina antes de começar.')).max(20).default([])),
 }).strict();
 export const featureSchema = z.object({
-  id, type: z.enum(['SINK', 'SCULPTED_SINK', 'CUTOUT', 'HOLE', 'SKIRT', 'BACKSPLASH', 'EDGE_FINISH']), pieceId: id,
+  /** SEAM: emenda, a divisão da peça em pedras para produção (ver divisao.ts). */
+  id, type: z.enum(['SINK', 'SCULPTED_SINK', 'CUTOUT', 'HOLE', 'SKIRT', 'BACKSPLASH', 'EDGE_FINISH', 'SEAM']), pieceId: id,
   name: z.string().max(160).default('Componente'), x: n, y: n, rotationDeg: n.default(0), widthMm: n.default(500), lengthMm: n.default(300),
   diameterMm: n.default(35), depthMm: n.default(180), heightMm: n.default(100), thicknessMm: n.default(20), radiusMm: n.default(0),
   shape: z.enum(['RECTANGLE', 'OVAL']).default('RECTANGLE'), installation: z.enum(['UNDERMOUNT', 'TOPMOUNT', 'SCULPTED']).default('UNDERMOUNT'),

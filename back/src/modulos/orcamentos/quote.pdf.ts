@@ -4,7 +4,7 @@ import { montarLinhasPdf, type QuotePdfLine } from './quote.pdf-lines.js';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
 import { renderizarPdfTecnico } from '../desenhos/technical.pdf.js';
 import type { DesenhoTecnicoDoProjeto } from '../desenhos/desenho-tecnico-do-orcamento.js';
-import { projetoTemDesenho, calcularTotalCartao, planoDeProducao, nomeProjeto, validadeOrcamento } from '@inova/domain';
+import { calcularTotalCartao, planoDeProducao, nomeProjeto, validadeOrcamento } from '@inova/domain';
 import { formatoRecorte, detalheDesenhoComponente, descricaoProducaoComponente, descricaoProducaoRecorte, tituloComponenteProducao, escalasDesenhoTecnico, isMiterFinish, miterJointPath, posicaoMarcadorMeiaEsquadria, acabamentoBordaPedra, faixasBordaPedra, rotuloMedidaDesenho, posicaoMedidaFaixa, type ManufacturingLine } from '@inova/domain';
 
 type PdfDocument = InstanceType<typeof PDFDocument>;
@@ -241,7 +241,7 @@ const technicalComponent = (pdf: PdfDocument, component: any, cutouts: any[], ma
 
 /**
  * A ordem de serviço mostra cada peça física de produção separadamente quando
- * o item foi detalhado (drawingData.productionPlan): a divisão de bancadas,
+ * o projeto é antigo e tem plano de produção (drawingData.productionPlan, do extinto "Com desenho"): a divisão de bancadas,
  * rodabancas seguindo a divisão etc. viram desenhos/descrições próprios, sem
  * nunca tocar em valores comerciais. Itens sem plano (a maioria, só passou
  * pelo Orçamento Rápido) continuam usando os componentes comerciais direto —
@@ -464,17 +464,22 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pi
   if (options.drawings) renderizarFolhasDesenho(pdf, quote, deliveryLabel, projeto ? { itemId: projeto.id } : {});
 }
 
-export type PartesExportacao = { orcamento: boolean; valoresIndividuais: boolean; desenhos: boolean; tecnicos: Pick<DesenhoTecnicoDoProjeto, 'documento' | 'dados'>[] };
+/** Ordem de serviço de cada projeto: o desenho técnico dele (pelo id do projeto), quando tem um. */
+export type PartesExportacao = { orcamento: boolean; valoresIndividuais: boolean; ordemServico: boolean; tecnicos: Map<string, Pick<DesenhoTecnicoDoProjeto, 'designId' | 'documento' | 'dados'>> };
+/** Projetos do PDF: o do botão do projeto ou os do orçamento (sem os não aprovados). */
+const projetosDaExportacao = (quote: any, projetoId?: string): any[] => quote.items.filter((item: any) => projetoId ? item.id === projetoId : !item.declinedAt);
 
-/** Folha inicial do PDF do Exportar: A4 quando ele começa pelo desenho técnico; senão, a do orçamento. */
-export function novoPdfExportacao(partes: PartesExportacao) {
-  const comecaPeloTecnico = !partes.orcamento && !partes.desenhos;
+/** Folha inicial do PDF do Exportar: A4 quando ele começa pela planta do desenho técnico; senão, a do orçamento. */
+export function novoPdfExportacao(quote: any, partes: PartesExportacao, projetoId?: string) {
+  const primeiro = projetosDaExportacao(quote, projetoId)[0];
+  const comecaPeloTecnico = !partes.orcamento && partes.ordemServico && !!primeiro && partes.tecnicos.has(primeiro.id);
   return new PDFDocument({ margin: 36, bufferPages: true, ...(comecaPeloTecnico ? { size: 'A4' } : {}) });
 }
 
 /**
- * Exportar (do orçamento todo ou, com `projetoId`, de um projeto): as partes marcadas no mesmo
- * PDF, nesta ordem — orçamento, desenhos em ordem de serviço e desenho técnico.
+ * Exportar (do orçamento todo ou, com `projetoId`, de um projeto): o orçamento e, se marcada, a
+ * ordem de serviço, projeto a projeto — a planta do desenho técnico (com as emendas e as pedras)
+ * quando o projeto tem um; senão, as folhas com as peças do orçamento.
  */
 export function renderizarExportacao(pdf: PdfDocument, quote: any, partes: PartesExportacao, projetoId?: string) {
   let folhaEmUso = false;
@@ -482,28 +487,34 @@ export function renderizarExportacao(pdf: PdfDocument, quote: any, partes: Parte
     renderizarPdfOrcamento(pdf, quote, { individualPrices: partes.valoresIndividuais, drawings: false }, projetoId);
     folhaEmUso = true;
   }
-  if (partes.desenhos) {
-    renderizarFolhasDesenho(pdf, quote, rotuloEntregaPdf(quote), { itemId: projetoId, aproveitarFolhaAtual: !folhaEmUso });
-    folhaEmUso = true;
-  }
-  for (const tecnico of partes.tecnicos) {
+  if (!partes.ordemServico) return;
+  // Projetos seguidos sem desenho técnico dividem as mesmas folhas; um desenho usado em dois projetos sai uma vez.
+  let folhas: string[] = [];
+  const impressos = new Set<string>();
+  const imprimirFolhas = () => {
+    if (!folhas.length) return;
+    renderizarFolhasDesenho(pdf, quote, rotuloEntregaPdf(quote), { itens: folhas, aproveitarFolhaAtual: !folhaEmUso });
+    folhaEmUso = true; folhas = [];
+  };
+  for (const projeto of projetosDaExportacao(quote, projetoId)) {
+    const tecnico = partes.tecnicos.get(projeto.id);
+    if (!tecnico) { folhas.push(projeto.id); continue; }
+    imprimirFolhas();
+    if (impressos.has(tecnico.designId)) continue;
+    impressos.add(tecnico.designId);
     if (folhaEmUso) pdf.addPage({ size: 'A4', margin: 36 });
     renderizarPdfTecnico(pdf, tecnico.documento, tecnico.dados);
     folhaEmUso = true;
   }
+  imprimirFolhas();
 }
 
-/** Só as folhas de OS de um projeto, para imprimir o desenho sem a folha comercial. */
-export function renderizarPdfDesenhoProjeto(pdf: PdfDocument, quote: any, itemId: string) {
-  renderizarFolhasDesenho(pdf, quote, rotuloEntregaPdf(quote), { itemId, aproveitarFolhaAtual: true });
-}
-
-/** Folhas de OS: desenho e descrição de fabricação de cada projeto com desenho. */
-function renderizarFolhasDesenho(pdf: PdfDocument, quote: any, deliveryLabel: string, { itemId, aproveitarFolhaAtual = false }: { itemId?: string; aproveitarFolhaAtual?: boolean } = {}) {
-  // O número de cada projeto é o da OS completa, mesmo quando só um é impresso.
-  const drawnItems = quote.items.filter((item: any) => projetoTemDesenho(item.drawingData) && (!item.declinedAt || item.id === itemId))
+/** Folhas de OS com as peças de cada projeto (o que não tem desenho técnico), com a descrição de fabricação. */
+function renderizarFolhasDesenho(pdf: PdfDocument, quote: any, deliveryLabel: string, { itemId, itens, aproveitarFolhaAtual = false }: { itemId?: string; itens?: string[]; aproveitarFolhaAtual?: boolean } = {}) {
+  // O número de cada projeto é o da OS completa, mesmo quando só uma parte é impressa.
+  const drawnItems = quote.items.filter((item: any) => !item.declinedAt || item.id === itemId)
     .map((item: any, itemIndex: number) => ({ item, itemIndex }))
-    .filter(({ item }: { item: any }) => !itemId || item.id === itemId);
+    .filter(({ item }: { item: any }) => (!itemId || item.id === itemId) && (!itens || itens.includes(item.id)));
   if (!drawnItems.length) return;
   let y = 0;
   let folhaVazia = aproveitarFolhaAtual;

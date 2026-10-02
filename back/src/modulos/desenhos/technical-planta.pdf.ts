@@ -1,4 +1,4 @@
-import { areasDaPeca, cotasDaPeca, distanciasAteBordas, faixaDentroDaPeca, NOME_AREA, edgeLength, edgePoint, featureContour, formatMeasure, rotate, sampleContour, type CotaLado, type Feature, type Piece, type Point, type TechnicalDocument } from '@inova/domain/technical';
+import { areasDaPeca, cotasDaPeca, linhaDaEmenda, distanciasAteBordas, faixaDentroDaPeca, NOME_AREA, edgeLength, edgePoint, featureContour, formatMeasure, rotate, sampleContour, type CotaLado, type Feature, type Piece, type Point, type TechnicalDocument } from '@inova/domain/technical';
 import { AREIA } from '../orcamentos/pdf-layout.js';
 
 type Pdf = PDFKit.PDFDocument;
@@ -8,12 +8,14 @@ export const COR = {
   tinta: '#17251f', rotulo: '#6f685e', apagado: '#9a9388', ouro: '#8a6320', dourado: '#b6811e', linha: '#dfd9cf', forte: '#8f887c',
   cabecalho: AREIA.claro, zebra: AREIA.zebra, creme: '#fbf5e6', borda: '#e6cf8f', pedra: '#fff7e5', cota: '#80776a', textoCota: '#4f4940', recorte: '#8b6b3a',
 };
-export const ROTULO_RECURSO: Record<Feature['type'], string> = { SINK: 'Cuba', SCULPTED_SINK: 'Cuba esculpida', CUTOUT: 'Recorte / cooktop', HOLE: 'Furo', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', EDGE_FINISH: 'Acabamento de borda' };
+export const ROTULO_RECURSO: Record<Feature['type'], string> = { SINK: 'Cuba', SCULPTED_SINK: 'Cuba esculpida', CUTOUT: 'Recorte / cooktop', HOLE: 'Furo', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', EDGE_FINISH: 'Acabamento de borda', SEAM: 'Emenda' };
 const BORDA = { SKIRT: { fundo: '#ead49b', traco: '#9b6817' }, BACKSPLASH: { fundo: '#dde3d4', traco: '#52654c' }, EDGE_FINISH: { fundo: COR.dourado, traco: COR.dourado } };
 export const ehRecursoDeBorda = (recurso: Feature): recurso is Feature & { type: keyof typeof BORDA } => recurso.type in BORDA;
 /** Espessuras e alturas em centímetros, com decimal quando houver ("2cm", "2,5cm"). */
 export const centimetros = (mm: number) => `${(mm / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}cm`;
 
+/** Linha da emenda (corte da peça em pedras). */
+const COR_EMENDA = '#b4493d';
 /** Área molhada do balcão (área seca e molhada). */
 const AREA_MOLHADA = { fundo: '#dbe8f4', traco: '#2f6fa8', texto: '#255a8a' };
 /** Área seca: tom de pedra um pouco mais forte, para aparecer marcada. */
@@ -184,7 +186,7 @@ export function desenharPlanta(pdf: Pdf, documento: TechnicalDocument, planta: P
 
   const cotas = new Map(documento.pieces.map((peca) => [peca.id, cotasDaPeca(peca)]));
   const pecas = documento.pieces.map((peca) => ({ peca, contorno: sampleContour(peca.contour, 2).map((vertice) => naPagina(vertice, peca)) }));
-  const recortes = documento.features.filter((recurso) => !ehRecursoDeBorda(recurso)).flatMap((recurso) => {
+  const recortes = documento.features.filter((recurso) => !ehRecursoDeBorda(recurso) && recurso.type !== 'SEAM').flatMap((recurso) => {
     const peca = documento.pieces.find((entrada) => entrada.id === recurso.pieceId);
     return peca ? [{ recurso, peca, contorno: sampleContour(featureContour(recurso), 1).map((vertice) => naPagina(vertice, peca)) }] : [];
   });
@@ -245,6 +247,16 @@ export function desenharPlanta(pdf: Pdf, documento: TechnicalDocument, planta: P
   }
 
   for (const { contorno } of recortes) { pdf.save().dash(3, { space: 2 }); caminho(contorno).lineWidth(.9).fillAndStroke('#ffffff', COR.recorte); pdf.undash().restore(); }
+
+  // Emendas: a linha de corte que divide a peça em pedras, de lado a lado.
+  for (const recurso of documento.features) {
+    if (recurso.type !== 'SEAM') continue;
+    const peca = documento.pieces.find((entrada) => entrada.id === recurso.pieceId);
+    const linha = peca && linhaDaEmenda(peca, recurso);
+    if (!peca || !linha) continue;
+    const [a, b] = [naPagina(linha.a, peca), naPagina(linha.b, peca)];
+    pdf.save().dash(5, { space: 2.5 }).lineWidth(1.4).moveTo(a.x, a.y).lineTo(b.x, b.y).stroke(COR_EMENDA).undash().restore();
+  }
 
   // Distância de cada cuba/recorte/furo até as bordas da pedra.
   for (const { de, ate, distancia } of distancias) {
@@ -353,7 +365,8 @@ function legenda(pdf: Pdf, documento: TechnicalDocument, planta: Planta, topo: n
   for (const tipo of ['SKIRT', 'BACKSPLASH'] as const) if (tipos.has(tipo))
     itens.push([ROTULO_RECURSO[tipo], (x) => pdf.lineWidth(.6).rect(x, y + 1, 12, 4).fillAndStroke(BORDA[tipo].fundo, BORDA[tipo].traco)]);
   if (tipos.has('EDGE_FINISH')) itens.push([ROTULO_RECURSO.EDGE_FINISH, (x) => pdf.lineWidth(2.2).moveTo(x, y + 3).lineTo(x + 12, y + 3).stroke(COR.dourado)]);
-  if (documento.features.some((recurso) => !ehRecursoDeBorda(recurso)))
+  if (tipos.has('SEAM')) itens.push(['Emenda (divisão em pedras)', (x) => { pdf.save().dash(3, { space: 1.5 }).lineWidth(1.4).moveTo(x, y + 3).lineTo(x + 12, y + 3).stroke(COR_EMENDA).undash().restore(); }]);
+  if (documento.features.some((recurso) => !ehRecursoDeBorda(recurso) && recurso.type !== 'SEAM'))
     itens.push(['Cuba / recorte (tracejado)', (x) => { pdf.save().dash(2, { space: 1.5 }).lineWidth(.8).rect(x, y, 12, 6).stroke(COR.recorte).undash().restore(); }]);
   // A escala fica à direita; a legenda usa o resto da linha (letra menor se não couber).
   const escala = planta.proporcao ? `Escala 1:${planta.proporcao} em A4` : 'Sem escala';

@@ -366,66 +366,26 @@ describe('Orçamento, snapshots, edição e relacionamentos', () => {
   });
 });
 
-describe('Plano de produção (drawingData) nunca altera o comercial', () => {
+// Plano de produção dos projetos antigos (do extinto "Com desenho"): hoje a divisão em pedras é a
+// emenda do desenho técnico, mas os planos salvos continuam valendo e nunca mudam o valor.
+describe('Plano de produção dos projetos antigos', () => {
   const plano = (componentId: string, pieces: any[]) => ({ entryMode: 'DETAILED', detailingStatus: 'COMPLETED', productionPlan: {
     version: 1,
     sources: [{ componentId, splitAxis: 'LENGTH', snapshotLengthMm: 2000, snapshotWidthMm: 600, snapshotQuantity: 1, snapshotComponentType: 'TOP' }],
     pieces, cutouts: [],
   } });
-  it('o id do componente enviado pelo cliente vira definitivo já na criação, e o plano referencia esse mesmo id', async () => {
+  it('é aceito quando aponta para as peças do orçamento (o id da peça fica o mesmo) e recusado quando não aponta', async () => {
     const componentId = 'cliente-comp-criacao';
     const drawingData = plano(componentId, [{ id: 'peca-1', sourceComponentId: componentId, label: 'Peça 1', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 2000, widthMm: 600, quantity: 1, edges: [] }]);
     const q = await quote({ items: [item({ components: [{ ...item().components[0], id: componentId }], drawingData })] });
     expect(q.items[0].components[0].id).toBe(componentId);
     expect(q.items[0].drawingData.productionPlan.pieces[0].sourceComponentId).toBe(componentId);
-  });
-  it('editar só o plano de produção preserva grossTotal, netTotal, total do item, id do componente e valor aplicado (usa o mesmo atalho que já preserva drawingData)', async () => {
-    const componentId = 'comp-financeiro-invariavel';
-    let q = await quote({ items: [item({ components: [{ ...item().components[0], id: componentId, appliedTotal: 900 }] })], discountAmount: 30 });
-    const before = { grossTotal: q.grossTotal, netTotal: q.netTotal, itemTotal: q.items[0].total, componentId: q.items[0].components[0].id, appliedTotal: q.items[0].components[0].appliedTotal, updatedAt: q.updatedAt };
-    const payload = editInput(q);
-    payload.items[0].drawingData = plano(componentId, [
-      { id: 'p1', sourceComponentId: componentId, label: 'Bancada 1', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 1200, widthMm: 600, quantity: 1, edges: [] },
-      { id: 'p2', sourceComponentId: componentId, label: 'Bancada 2', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 800, widthMm: 600, quantity: 1, edges: [] },
-    ]);
-    const updated = await request('PUT', `/quotes/${q.id}`, payload);
-    expect(updated.statusCode, updated.body).toBe(200);
-    q = updated.json();
-    expect(q.grossTotal).toBe(before.grossTotal);
-    expect(q.netTotal).toBe(before.netTotal);
-    expect(q.items[0].total).toBe(before.itemTotal);
-    expect(q.items[0].components[0].id).toBe(before.componentId);
-    expect(q.items[0].components[0].appliedTotal).toBe(before.appliedTotal);
-    expect(q.updatedAt).not.toBe(before.updatedAt); // a linha foi tocada (drawingData mudou), só o financeiro que não recalcula
-    expect(q.items[0].drawingData.productionPlan.pieces).toHaveLength(2);
-    expect(q.items[0].drawingData.productionPlan.pieces.map((piece: any) => piece.lengthMm)).toEqual([1200, 800]);
-  });
-  it('gerar PDF comercial depois de anexar o plano de produção continua mostrando os valores antigos', async () => {
-    const componentId = 'comp-pdf-invariavel';
-    let q = await quote({ items: [item({ components: [{ ...item().components[0], id: componentId, appliedTotal: 987.65 }] })], discountAmount: 12.34 });
-    const payload = editInput(q);
-    payload.items[0].drawingData = plano(componentId, [{ id: 'p1', sourceComponentId: componentId, label: 'Peça 1', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 2000, widthMm: 600, quantity: 1, edges: [] }]);
-    q = (await request('PUT', `/quotes/${q.id}`, payload)).json();
-    const response = await request('GET', `/quotes/${q.id}/pdf`);
-    expect(response.statusCode).toBe(200);
-    const text = execFileSync('pdftotext', ['-', '-'], { input: response.rawPayload, encoding: 'utf8' });
-    expect(text).toContain('975,31'); expect(text).toContain('987,65');
-  });
-  it('rejeita plano de produção cuja peça não referencia nenhum componente comercial do item', async () => {
-    const drawingData = plano('componente-inexistente', [{ id: 'p1', sourceComponentId: 'componente-inexistente', label: 'Peça 1', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 2000, widthMm: 600, quantity: 1, edges: [] }]);
+    const orfao = plano('componente-inexistente', [{ id: 'p1', sourceComponentId: 'componente-inexistente', label: 'Peça 1', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 2000, widthMm: 600, quantity: 1, edges: [] }]);
     const client = await customer();
-    const response = await request('POST', '/quotes', { customerId: client.id, items: [item({ drawingData })] });
+    const response = await request('POST', '/quotes', { customerId: client.id, items: [item({ drawingData: orfao })] });
     expect(response.statusCode).toBe(422);
   });
-  it('orçamento legado sem productionPlan continua sendo lido e editado normalmente', async () => {
-    const q = await quote();
-    expect(q.items[0].drawingData ?? null).toBeNull();
-    const payload = editInput(q);
-    const updated = await request('PUT', `/quotes/${q.id}`, { ...payload, notes: 'Sem plano de produção' });
-    expect(updated.statusCode, updated.body).toBe(200);
-    expect(updated.json().items[0].drawingData ?? null).toBeNull();
-  });
-  it('editar só o plano de produção preserva valores aplicados de bordas, recortes e serviços do item, mesmo com desconto global', async () => {
+  it('editar o orçamento com plano não recalcula nada: pedra, bordas, recortes, serviços e desconto', async () => {
     const componentId = 'comp-financeiro-detalhado';
     const edge = catalog.services.find((entry: any) => entry.name.includes('Meia Cana'));
     const cut = catalog.services.find((entry: any) => entry.name === 'Furo de Cuba');
@@ -457,41 +417,7 @@ describe('Plano de produção (drawingData) nunca altera o comercial', () => {
     expect(q.items[0].services[0].appliedSubtotal).toBe(before.serviceAppliedSubtotal);
     expect(q.items[0].drawingData.productionPlan.pieces).toHaveLength(2);
   });
-  it('dividir peça, adicionar 45° e anexar rodabanca no desenho — via endpoint real — nunca dispara recálculo financeiro', async () => {
-    const componentId = 'comp-fluxo-completo';
-    const miter = catalog.services.find((entry: any) => entry.name.includes('45°') && entry.name.includes('Granito'));
-    let q = await quote({ items: [item({ components: [{ ...item().components[0], id: componentId, lengthMm: 3600, appliedTotal: 2222 }] })] });
-    const before = { netTotal: q.netTotal, grossTotal: q.grossTotal, componentId: q.items[0].components[0].id, appliedTotal: q.items[0].components[0].appliedTotal };
-    // Simula exatamente o que o editor de detalhamento faz: dividir em 3, dar
-    // 45° numa peça e anexar uma rodabanca seguindo a divisão — tudo dentro de
-    // drawingData, sem tocar em item.components.
-    const payload = editInput(q);
-    payload.items[0].drawingData = {
-      entryMode: 'DETAILED', detailingStatus: 'COMPLETED',
-      productionPlan: {
-        version: 1,
-        sources: [{ componentId, splitAxis: 'LENGTH', snapshotLengthMm: 3600, snapshotWidthMm: 600, snapshotQuantity: 1, snapshotComponentType: 'TOP' }],
-        pieces: [
-          { id: 'p1', sourceComponentId: componentId, label: 'Bancada 1', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 1400, widthMm: 600, quantity: 1, edges: [{ side: 'FRONT', serviceId: miter.id, serviceName: miter.name, quantity: 1 }] },
-          { id: 'p2', sourceComponentId: componentId, label: 'Bancada 2', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 900, widthMm: 600, quantity: 1, edges: [] },
-          { id: 'p3', sourceComponentId: componentId, label: 'Bancada 3', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 1300, widthMm: 600, quantity: 1, edges: [] },
-          { id: 'rb1', sourceComponentId: componentId, label: '', componentType: 'BACKSPLASH', orientation: 'VERTICAL', lengthMm: 1400, widthMm: 100, quantity: 1, edges: [], parentPieceId: 'p1', parentSide: 'FRONT' },
-        ],
-        cutouts: [],
-      },
-    };
-    const updated = await request('PUT', `/quotes/${q.id}`, payload);
-    expect(updated.statusCode, updated.body).toBe(200);
-    const refetched = await request('GET', `/quotes/${q.id}`);
-    q = refetched.json();
-    expect(q.netTotal).toBe(before.netTotal);
-    expect(q.grossTotal).toBe(before.grossTotal);
-    expect(q.items[0].components).toHaveLength(1);
-    expect(q.items[0].components[0].id).toBe(before.componentId);
-    expect(q.items[0].components[0].appliedTotal).toBe(before.appliedTotal);
-    expect(q.items[0].drawingData.productionPlan.pieces).toHaveLength(4);
-  });
-  it('a ordem de serviço mostra cada peça de produção separadamente, mesmo vindo de um único componente comercial', async () => {
+  it('a ordem de serviço mostra cada peça do plano; o prazo acordado acompanha', async () => {
     const componentId = 'comp-os-dividida';
     let q = await quote({ items: [item({ components: [{ ...item().components[0], id: componentId, lengthMm: 3600 }] })] });
     const payload = editInput(q);

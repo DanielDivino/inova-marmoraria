@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { contornoDosParametros, emptyTechnicalDocument, featureSchema, makePiece } from '../tecnico/index.js';
 import { alocarEntrega, CHAVE_PROJETO_INTEIRO, conferirSelecaoPecas, distribuirPecas, numeroNotaEntrega, pecasDoProjeto, situacaoDasPecas, somarPecas, subtrairPecas, totalPecas } from './pecas-fluxo';
 
 const componentes = [
@@ -13,7 +14,19 @@ describe('peças do projeto', () => {
       { chave: 'soleira', nome: 'Soleira porta', material: 'Verde Ubatuba', lengthMm: 900, widthMm: 150, quantidade: 3 },
     ]);
   });
-  it('com plano de produção, usa as peças físicas da OS', () => {
+  it('com desenho técnico ligado, usa as pedras do desenho (emendas, rodabanca), a quantidade da linha e as linhas que ainda não estão no desenho', () => {
+    const doc = emptyTechnicalDocument();
+    const parameters = { ...makePiece('b').parameters!, shape: 'RECTANGLE' as const, width: 4000, length: 600 };
+    doc.pieces.push({ ...makePiece('b'), name: 'Bancada', geometryMode: 'PARAMETRIC', parameters, contour: contornoDosParametros('b', parameters), material: { id: 'm', name: 'Preto São Gabriel', textureScaleMm: 600, veinRotationDeg: 0, roughness: .25 } });
+    doc.features.push(featureSchema.parse({ id: 'e', type: 'SEAM', pieceId: 'b', x: 0, y: 0, edgeId: 'b-v0', startMm: 2400 }), featureSchema.parse({ id: 'r', type: 'BACKSPLASH', pieceId: 'b', x: 0, y: 0, edgeId: 'b-v2', startMm: 0, extentMm: 4000, heightMm: 100 }));
+    const drawingData = { desenhoTecnico: { designId: 'd', sincronia: { pecas: { bancada: { pecaId: 'b' } } } } };
+    const pecas = pecasDoProjeto({ quantity: 1, drawingData, components: [{ ...componentes[0], quantity: 2 }, componentes[1]] }, doc);
+    expect(pecas.map((peca) => [peca.chave, peca.nome, peca.lengthMm, peca.widthMm, peca.quantidade, peca.material])).toEqual([
+      ['b:1', 'Bancada · parte 1', 2400, 600, 2, 'Preto São Gabriel'], ['b:2', 'Bancada · parte 2', 1600, 600, 2, 'Preto São Gabriel'],
+      ['r', 'Rodabanca · Bancada', 4000, 100, 1, 'Preto São Gabriel'], ['soleira', 'Soleira porta', 900, 150, 3, null],
+    ]);
+  });
+  it('com plano de produção (projetos antigos), usa as peças físicas da OS', () => {
     const drawingData = { productionPlan: { version: 1, sources: [], cutouts: [], pieces: [
       { id: 'p1', sourceComponentId: 'bancada', label: 'Bancada A', componentType: 'COUNTER', orientation: 'HORIZONTAL', lengthMm: 1000, widthMm: 600, quantity: 1, edges: [] },
       { id: 'p2', sourceComponentId: 'bancada', label: 'Bancada B', componentType: 'COUNTER', orientation: 'HORIZONTAL', lengthMm: 1000, widthMm: 600, quantity: 1, edges: [] },

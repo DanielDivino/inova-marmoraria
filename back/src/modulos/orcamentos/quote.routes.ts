@@ -1,7 +1,6 @@
 import { escopoOrcamentos, exigirOrcamentoProprio, exigirPermissao } from '../../compartilhado/acesso.js';
 import { serializarOrcamento } from './serializacao.js';
-import { nomeArquivoPdf, disposicaoArquivoPdf, itemSalvoParaCopia, projetoTemDesenho, nomeProjeto } from '@inova/domain';
-import PDFDocument from 'pdfkit';
+import { nomeArquivoPdf, disposicaoArquivoPdf, itemSalvoParaCopia, nomeProjeto } from '@inova/domain';
 import { Prisma } from '@prisma/client';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
@@ -11,9 +10,9 @@ import { AppError, idSchema } from '../../compartilhado/http.js';
 import { createQuoteSchema, quoteItemSchema, updateQuoteItemSchema, updateQuoteSchema, updateStatusSchema, calculateQuoteSchema } from './quote.schema.js';
 import { adicionarItemOrcamento, criarOrcamento, editarOrcamento, incluirOrcamento, recalcularOrcamento, validarDesconto } from './quote.service.js';
 import { editQuoteSchema } from './quote.schema.js';
-import { renderizarPdfDesenhoProjeto, novoPdfExportacao, renderizarExportacao } from './quote.pdf.js';
+import { novoPdfExportacao, renderizarExportacao } from './quote.pdf.js';
 import { quotePdfOptionsSchema, type QuotePdfOptions } from './quote.pdf-options.js';
-import { desenhosTecnicosDosProjetos, desenhosTecnicosParaExportar } from '../desenhos/desenho-tecnico-do-orcamento.js';
+import { desenhosTecnicosDosProjetos, desenhosTecnicosParaOrdemServico } from '../desenhos/desenho-tecnico-do-orcamento.js';
 import { compararPorPrazo, montarFiltrosOrcamento, historySchema, ORDEM_ORCAMENTOS } from './quote.tracking.js';
 import { atualizarCliente } from '../clientes/customer.routes.js';
 import { montarHistorico } from './quote.historico.js';
@@ -211,13 +210,12 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     const input = { customerId: quote.customerId, validUntil: quote.validUntil, deliveryDeadline: quote.deliveryDeadline ? quote.deliveryDeadline.toISOString().slice(0, 10) : null, installationDeadline: quote.installationDeadline ? quote.installationDeadline.toISOString().slice(0, 10) : null, deadlineConfirmed: quote.deadlineConfirmed, deadlineNote: quote.deadlineNote, discountAmount: Number(quote.discountAmount), notes: quote.notes, items: quote.items.map(itemSalvoParaCopia) };
     const copy = await prisma.$transaction((tx) => criarOrcamento(tx, input, request.user)); await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: copy.id, action: 'DUPLICATED', current: { sourceId: id, number: copy.number } } }); return reply.status(201).send(serializarOrcamento(copy));
   });
-  // Exportar: as partes marcadas (orçamento, OS e desenho técnico) no mesmo PDF, do orçamento todo ou de um projeto.
+  // Exportar: o orçamento e a ordem de serviço (planta do desenho técnico ou folhas com as peças) no mesmo PDF, do orçamento todo ou de um projeto.
   async function exportarPdf(reply: FastifyReply, quote: QuoteParaExportar, options: QuotePdfOptions, arquivo: string, projetoId?: string) {
     const projetos = projetoId ? quote.items.filter((item) => item.id === projetoId) : quote.items.filter((item) => !item.declinedAt);
-    const tecnicos = options.technical ? await desenhosTecnicosParaExportar(quote, projetos) : [];
-    const partes = { orcamento: options.commercial, valoresIndividuais: options.individualPrices, desenhos: options.drawings && projetos.some((item) => projetoTemDesenho(item.drawingData)), tecnicos };
-    if (!partes.orcamento && !partes.desenhos && !partes.tecnicos.length) throw new AppError(404, 'Não há desenhos para exportar com as opções escolhidas.', 'NOTHING_TO_EXPORT');
-    const pdf = novoPdfExportacao(partes); renderizarExportacao(pdf, quote, partes, projetoId); pdf.end();
+    const partes = { orcamento: options.commercial, valoresIndividuais: options.individualPrices, ordemServico: options.drawings, tecnicos: options.drawings ? await desenhosTecnicosParaOrdemServico(quote, projetos) : new Map() };
+    if (!partes.orcamento && !partes.ordemServico) throw new AppError(422, 'Marque o orçamento ou a ordem de serviço.', 'NOTHING_TO_EXPORT');
+    const pdf = novoPdfExportacao(quote, partes, projetoId); renderizarExportacao(pdf, quote, partes, projetoId); pdf.end();
     return reply.type('application/pdf').header('Content-Disposition', disposicaoArquivoPdf(arquivo)).send(pdf);
   }
   app.get('/:id/pdf', authenticated, async (request, reply) => {
@@ -240,14 +238,5 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
     const desenhos = await desenhosTecnicosDosProjetos(quote, quote.items);
     return { projetos: desenhos.flatMap((desenho) => 'designId' in desenho ? [desenho.itemId] : []) };
-  });
-  // Desenho de um único projeto: só as folhas de OS, sem a folha comercial.
-  app.get('/:id/items/:itemId/drawing-pdf', authenticated, async (request, reply) => {
-    const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
-    const quote = await prisma.quote.findUnique({ where: { id: params.id }, include: incluirOrcamento(request.user) }); if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
-    const item = quote.items.find((entry) => entry.id === params.itemId);
-    if (!item || !projetoTemDesenho(item.drawingData)) throw new AppError(404, 'Projeto sem desenho.', 'NOT_FOUND');
-    const filename = nomeArquivoPdf(quote.customerNameSnapshot, `${quote.number} - ${nomeProjeto(item)}`);
-    const pdf = new PDFDocument({ margin: 36 }); renderizarPdfDesenhoProjeto(pdf, quote, params.itemId); pdf.end(); return reply.type('application/pdf').header('Content-Disposition', disposicaoArquivoPdf(filename)).send(pdf);
   });
 }

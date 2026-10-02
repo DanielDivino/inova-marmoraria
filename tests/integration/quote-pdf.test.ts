@@ -173,16 +173,17 @@ describe('Desenho e observações do PDF', () => {
   it('deixa bordas sem acabamento sem marcações', async () => {
     expect((await render(quote())).redMarkers).toBe(0);
   });
-  it('mostra os dados da empresa, pedra acima de cada desenho, saias e observações', async () => {
+  it('mostra os dados da empresa no orçamento, o cabeçalho da OS, a pedra acima de cada desenho, saias e observações', async () => {
     const pieces = sides.map((side, index) => ({ ...component([edge(side, 'Saia'), edge(sides[(index + 1) % 4])]), id: `piece-${index}`, label: `Tampo ${index + 1}` }));
     const result = await render(quote(pieces), 'orcamento-revisado');
     expect(result.redMarkers).toBe(4);
     expect(result.pages.length).toBeGreaterThanOrEqual(2);
-    for (const page of result.pages.slice(0, 2)) {
-      expect(page).toContain('Av. Visconde de Utinga, Nº 224 - Flores - Manaus AM');
-      expect(page).toContain('Contatos: (92) 98181-7980 / 93994-1402');
-      expect(page).toContain('CNPJ: 32.298.601/0001-19');
-    }
+    // Dados da empresa na folha do orçamento; a folha de OS tem o cabeçalho dela (entrega, cliente e número).
+    expect(result.pages[0]).toContain('Av. Visconde de Utinga, Nº 224 - Flores - Manaus AM');
+    expect(result.pages[0]).toContain('Contatos: (92) 98181-7980 / 93994-1402');
+    expect(result.pages[0]).toContain('CNPJ: 32.298.601/0001-19');
+    expect(result.pages[1]).toContain('DATA DE ENTREGA');
+    expect(result.pages[1]).toContain('INO-2026-TESTE');
     const serviceOrder = result.pages.slice(1).join('\n');
     expect(serviceOrder.match(/Verde Ubatuba/g)).toHaveLength(4);
     expect(serviceOrder).toContain('comprimento 200 cm · altura 10 cm');

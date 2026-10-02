@@ -20,6 +20,21 @@ export function desenhoDoProjeto(drawingData: unknown): string | undefined {
 }
 
 /**
+ * Desenho técnico de cada projeto que tem um ligado, como está agora: dele saem as peças físicas do
+ * projeto (as pedras entre emendas, rodabancas e saias) no fluxo de trabalho e nas entregas.
+ */
+export async function desenhosParaPecas(db: Pick<Prisma.TransactionClient, 'design'>, projetos: { id: string; drawingData: unknown }[]): Promise<Map<string, TechnicalDocument>> {
+  const ligados = projetos.flatMap((projeto) => { const designId = desenhoDoProjeto(projeto.drawingData); return designId ? [[projeto.id, designId] as const] : []; });
+  if (!ligados.length) return new Map();
+  const desenhos = await db.design.findMany({ where: { id: { in: [...new Set(ligados.map(([, designId]) => designId))] } }, select: { id: true, activeDraft: { select: { document: true } } } });
+  const documentos = new Map(desenhos.flatMap((desenho) => {
+    const lido = desenho.activeDraft ? technicalDocumentSchema.safeParse(desenho.activeDraft.document) : undefined;
+    return lido?.success ? [[desenho.id, lido.data] as const] : [];
+  }));
+  return new Map(ligados.flatMap(([projetoId, designId]) => { const documento = documentos.get(designId); return documento ? [[projetoId, documento] as const] : []; }));
+}
+
+/**
  * Desenho antigo do orçamento (feito antes de cada projeto ter o seu, pelo ⋯ → Desenho técnico)
  * que ainda não foi ligado a nenhum projeto deste orçamento.
  */
@@ -55,14 +70,14 @@ export async function desenhosTecnicosDosProjetos(quote: Orcamento, projetos: Pr
 }
 
 /**
- * Desenhos técnicos para a exportação: um por desenho, na ordem dos projetos (um desenho usado em
- * mais de um projeto sai uma vez só, com o nome de todos eles).
+ * Ordem de serviço: o desenho técnico de cada projeto que tem um, pelo id do projeto (os outros saem
+ * nas folhas com as peças). Um desenho usado em mais de um projeto leva o nome de todos eles.
  */
-export async function desenhosTecnicosParaExportar(quote: Orcamento, projetos: Projeto[]): Promise<DesenhoTecnicoDoProjeto[]> {
+export async function desenhosTecnicosParaOrdemServico(quote: Orcamento, projetos: Projeto[]): Promise<Map<string, DesenhoTecnicoDoProjeto>> {
   const encontrados = (await desenhosTecnicosDosProjetos(quote, projetos)).filter((entrada): entrada is DesenhoTecnicoDoProjeto => 'designId' in entrada);
-  const porDesenho = new Map<string, DesenhoTecnicoDoProjeto[]>();
-  for (const entrada of encontrados) porDesenho.set(entrada.designId, [...(porDesenho.get(entrada.designId) ?? []), entrada]);
-  return [...porDesenho.values()].map((mesmos) => mesmos.length === 1 ? mesmos[0] : { ...mesmos[0], dados: { ...mesmos[0].dados, project: mesmos.map((entrada) => entrada.dados.project).join(', ') } });
+  const nomes = new Map<string, string[]>();
+  for (const entrada of encontrados) nomes.set(entrada.designId, [...(nomes.get(entrada.designId) ?? []), entrada.dados.project]);
+  return new Map(encontrados.map((entrada) => [entrada.itemId, { ...entrada, dados: { ...entrada.dados, project: nomes.get(entrada.designId)!.join(', ') } }]));
 }
 
 type ProjetoSalvo = {
