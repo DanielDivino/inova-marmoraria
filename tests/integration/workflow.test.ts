@@ -337,3 +337,63 @@ describe('Produção e entrega por peças', () => {
     expect((await request('POST', `/quotes/${naoIniciado.id}/items/${naoIniciado.items[0].id}/retrabalho`, admin, { destino: 'IN_PROGRESS' })).json()).toMatchObject({ error: 'REWORK_UNAVAILABLE' });
   });
 });
+
+describe('Não aprovado / alterar', () => {
+  it('tira só as peças que o cliente não aprovou, sem mexer nas entregues, e o projeto inteiro quando são todas', async () => {
+    const customer = (await request('POST', '/customers', admin, { name: 'Cliente peças não aprovadas', phone: '92987118888' })).json();
+    const base = item('Cozinha', [{ label: 'Bancada', componentType: 'COUNTER', quantity: 2 }, { label: 'Rodabanca', componentType: 'BACKSPLASH', quantity: 2 }, { label: 'Soleira', componentType: 'THRESHOLD', quantity: 3 }]);
+    const cozinha = { ...base, components: base.components.map((peca: any) => peca.label === 'Soleira' ? { ...peca, appliedTotal: 300 } : peca),
+      drawingData: { componentDetails: [{}, { parentComponentIndex: 0, parentSide: 'BACK' }] }, cutouts: [{ cutoutType: 'SINK', componentIndex: 0, quantity: 2, label: 'Cuba' }] };
+    const criado = await request('POST', '/quotes', admin, { customerId: customer.id, items: [cozinha, item('Lavabo')] });
+    expect(criado.statusCode, criado.body).toBe(201);
+    const quoteId = criado.json().id;
+    expect((await request('PATCH', `/quotes/${quoteId}/status`, admin, { status: 'APPROVED' })).statusCode).toBe(200);
+    const iniciado = await request('PATCH', `/quotes/${quoteId}/status`, admin, { status: 'APPROVED', executionStatus: 'IN_PROGRESS' });
+    expect(iniciado.statusCode, iniciado.body).toBe(200);
+    const antes = iniciado.json();
+    const projeto = antes.items.find((entrada: any) => entrada.projectName === 'Cozinha'), lavabo = antes.items.find((entrada: any) => entrada.projectName === 'Lavabo');
+    const id = Object.fromEntries(projeto.components.map((peca: any) => [peca.label, peca.id]));
+    // Uma bancada já produzida e uma soleira entregue.
+    await move(admin, projeto.id, { status: 'DONE', pieces: { [id.Bancada]: 1 } });
+    expect((await request('POST', `/quotes/${quoteId}/items/${projeto.id}/entregas`, admin, { pieces: { [id.Soleira]: 1 } })).statusCode).toBe(201);
+
+    const naoAprovar = (itemId: string, corpo: object) => request('POST', `/quotes/${quoteId}/items/${itemId}/nao-aprovar`, admin, corpo);
+    expect((await naoAprovar(projeto.id, { pieces: { [id.Soleira]: 3 } })).statusCode).toBe(422);
+    expect((await naoAprovar(projeto.id, { pieces: { [id.Soleira]: 1 }, todas: true })).statusCode).toBe(422);
+    const parcial = await naoAprovar(projeto.id, { pieces: { [id.Bancada]: 1, [id.Rodabanca]: 1, [id.Soleira]: 2 } });
+    expect(parcial.statusCode, parcial.body).toBe(200);
+    const depois = parcial.json(), alterado = depois.items.find((entrada: any) => entrada.id === projeto.id);
+    expect(alterado.declinedAt).toBeNull();
+    expect(alterado.components.map((peca: any) => [peca.id, peca.label, peca.quantity])).toEqual([[id.Bancada, 'Bancada', 1], [id.Rodabanca, 'Rodabanca', 1], [id.Soleira, 'Soleira', 1]]);
+    expect(Number(alterado.components[2].appliedTotal)).toBe(100);
+    expect(alterado.cutouts).toEqual([expect.objectContaining({ componentId: id.Bancada, quantity: 1 })]);
+    expect(alterado.drawingData.componentDetails[1]).toEqual({ parentComponentIndex: 0, parentSide: 'BACK' });
+    expect(alterado.drawingData.pecasNaoAprovadas.map((peca: any) => [peca.nome, peca.quantidade])).toEqual([['Bancada', 1], ['Rodabanca', 1], ['Soleira', 2]]);
+    expect(Number(alterado.total)).toBeLessThan(Number(projeto.total));
+    expect(Number(depois.grossTotal)).toBeCloseTo(Number(antes.grossTotal) - (Number(projeto.total) - Number(alterado.total)), 2);
+    // A bancada que saiu era a que ainda não tinha começado; a produzida e a soleira entregue ficam.
+    expect(pecasPorEtapa((await board(admin, quoteId)).filter((card: any) => card.projectId === projeto.id))).toEqual({ TODO: { Rodabanca: 1 }, DONE: { Bancada: 1 }, DELIVERED: { Soleira: 1 } });
+    const historico = (await request('GET', `/quotes/${quoteId}/historico`, admin)).json();
+    expect(historico.eventos).toEqual(expect.arrayContaining([expect.objectContaining({ titulo: 'Cozinha: peças não aprovadas', detalhe: expect.stringContaining('Bancada, Rodabanca, 2× Soleira') })]));
+
+    // Todas as que faltam: com uma entregue, o projeto continua só com ela; o lavabo inteiro sai e o orçamento fica entregue.
+    const resto = await naoAprovar(projeto.id, { todas: true });
+    expect(resto.statusCode, resto.body).toBe(200);
+    expect(resto.json().items.find((entrada: any) => entrada.id === projeto.id).components.map((peca: any) => [peca.label, peca.quantity])).toEqual([['Soleira', 1]]);
+    const inteiro = await naoAprovar(lavabo.id, { todas: true });
+    expect(inteiro.statusCode, inteiro.body).toBe(200);
+    expect(inteiro.json()).toMatchObject({ executionStatus: 'COMPLETED' });
+    expect(inteiro.json().items.find((entrada: any) => entrada.id === lavabo.id).declinedAt).not.toBeNull();
+    expect((await naoAprovar(projeto.id, { todas: true })).statusCode).toBe(409);
+  });
+
+  it('não deixa o orçamento sem nenhum projeto aprovado', async () => {
+    const quote = await approvedQuote(admin, [['Só um', [{ label: 'Tampo', componentType: 'TOP', quantity: 2 }]]], 'NOT_STARTED');
+    const unico = quote.items[0];
+    expect((await request('POST', `/quotes/${quote.id}/items/${unico.id}/nao-aprovar`, admin, { todas: true })).statusCode).toBe(422);
+    const metade = await request('POST', `/quotes/${quote.id}/items/${unico.id}/nao-aprovar`, admin, { pieces: { [unico.components[0].id]: 1 } });
+    expect(metade.statusCode, metade.body).toBe(200);
+    expect(metade.json().items[0].components[0].quantity).toBe(1);
+    expect(Number(metade.json().netTotal)).toBeCloseTo(Number(quote.netTotal) / 2, 1);
+  });
+});

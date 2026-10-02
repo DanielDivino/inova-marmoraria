@@ -17,6 +17,7 @@ import { compararPorPrazo, montarFiltrosOrcamento, historySchema, ORDEM_ORCAMENT
 import { atualizarCliente } from '../clientes/customer.routes.js';
 import { montarHistorico } from './quote.historico.js';
 import { definirProjetosNaoAprovados } from './aprovacao-projetos.js';
+import { naoAprovarPecas, naoAprovarPecasSchema } from './pecas-nao-aprovadas.js';
 import { retrabalharProjeto } from '../fluxo/workflow.service.js';
 import { acompanhamentoSchema } from './quote.tracking.js';
 
@@ -179,6 +180,26 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     });
     return serializarOrcamento(updated);
   });
+  // Corrigir nomes (projeto e descrição das peças) em qualquer situação, até entregue: nada mais muda —
+  // nem medidas, nem valores, nem o fluxo; o que foi entregue continua entregue (só o retrabalho volta).
+  app.patch('/:id/items/:itemId/nomes', authenticated, async (request) => {
+    const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const input = z.object({ projectName: z.string().trim().max(120).nullable(), components: z.array(z.object({ id: z.string(), label: z.string().trim().max(120) })).max(500).default([]) }).strict().parse(request.body);
+    const item = await prisma.quoteItem.findFirst({ where: { id: params.itemId, quoteId: params.id }, select: { id: true, projectName: true, components: { select: { id: true, label: true } } } });
+    if (!item) throw new AppError(404, 'Projeto não encontrado neste orçamento.', 'NOT_FOUND');
+    const pecas = new Map(item.components.map((peca) => [peca.id, peca.label]));
+    if (input.components.some((peca) => !pecas.has(peca.id))) throw new AppError(422, 'Peça não encontrada neste projeto.', 'INVALID_PIECES');
+    const mudadas = input.components.filter((peca) => pecas.get(peca.id) !== peca.label);
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.quoteItem.update({ where: { id: item.id }, data: { projectName: input.projectName || null } });
+      for (const peca of mudadas) await tx.quoteItemComponent.update({ where: { id: peca.id }, data: { label: peca.label } });
+      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: item.id, action: 'NAMES_UPDATED',
+        previous: { projectName: item.projectName, components: mudadas.map((peca) => ({ id: peca.id, label: pecas.get(peca.id) })) },
+        current: { quoteId: params.id, projectName: input.projectName || null, components: mudadas } } });
+      return tx.quote.findUniqueOrThrow({ where: { id: params.id }, include: incluirOrcamento(request.user) });
+    });
+    return serializarOrcamento(result);
+  });
   // Depois da aprovação: aprovar ou tirar a aprovação de um projeto (o valor do orçamento acompanha).
   app.patch('/:id/items/:itemId/aprovacao', authenticated, async (request) => {
     const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
@@ -193,6 +214,16 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
       await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: item.id, action: 'APPROVAL_CHANGED', previous: { aprovado: !item.declinedAt }, current: { quoteId: params.id, aprovado } } });
       return tx.quote.findUniqueOrThrow({ where: { id: params.id }, include: incluirOrcamento(request.user) });
     });
+    return serializarOrcamento(result);
+  });
+  // "Não aprovado / alterar": o cliente não aprovou parte das peças do projeto (ou todas).
+  app.post('/:id/items/:itemId/nao-aprovar', authenticated, async (request) => {
+    const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const corpo = naoAprovarPecasSchema.parse(request.body);
+    const result = await prisma.$transaction(async (tx) => {
+      await naoAprovarPecas(tx, params.id, params.itemId, corpo, request.user);
+      return tx.quote.findUniqueOrThrow({ where: { id: params.id }, include: incluirOrcamento(request.user) });
+    }, { timeout: 20000 });
     return serializarOrcamento(result);
   });
   // Retrabalho de um projeto (erro de produção ou de entrega): as peças voltam no fluxo e o orçamento fica "Em retrabalho".

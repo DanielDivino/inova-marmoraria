@@ -83,6 +83,15 @@ export function montarHistorico(orcamento: Orcamento, registros: Registro[]): { 
       case 'QUOTE_ITEM:APPROVAL_CHANGED':
         eventos.push({ ...base(registro), titulo: atual.aprovado ? `${projeto} aprovado pelo cliente` : `${projeto} marcado como não aprovado`, tom: atual.aprovado ? 'verde' : 'amarelo', icone: 'situacao' });
         break;
+      case 'QUOTE_ITEM:PIECES_DECLINED': {
+        const pecas = Array.isArray(atual.pieces) ? atual.pieces.map(objeto) : [];
+        const quantas = pecas.reduce((soma: number, peca) => soma + (Number(peca.quantidade) || 0), 0);
+        const menos = (Number(anterior.netTotal) || 0) - (Number(atual.netTotal) || 0);
+        eventos.push({ ...base(registro), titulo: `${projeto}: ${quantas === 1 ? 'peça não aprovada' : 'peças não aprovadas'}`,
+          detalhe: [pecas.map((peca) => `${Number(peca.quantidade) > 1 ? `${peca.quantidade}× ` : ''}${texto(peca.nome)}`).join(', '),
+            menos > 0 ? `${menos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} a menos no orçamento` : ''].filter(Boolean).join(' · ') || undefined, tom: 'amarelo', icone: 'situacao' });
+        break;
+      }
       case 'QUOTE:DEADLINE_UPDATED': {
         const { partes, notas } = mudancasDeAcompanhamento(anterior, atual);
         if (partes.length) eventos.push({ ...base(registro), titulo: 'Prazos atualizados', detalhe: partes.join(' · '), tom: 'azul', icone: 'prazo' });
