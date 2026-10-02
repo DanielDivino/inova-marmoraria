@@ -14,6 +14,8 @@ export const CNPJ_EMPRESA = '32.298.601/0001-19';
  * faixa de título do projeto, cabeçalho das tabelas, linhas de total e zebra das tabelas.
  */
 export const AREIA = { escuro: '#d3bf98', claro: '#ece2cf', suave: '#f5eee1', zebra: '#faf6ee' };
+/** Verde no mesmo padrão da areia (nas notas, o que já foi entregue): cabeçalho mais escurinho, linhas alternadas clarinhas. */
+export const VERDE = { claro: '#d5e7d9', zebra: '#f0f7f1', forte: '#7d9f86' };
 export function cabecalhoEmpresaPdf(pdf: PDFKit.PDFDocument, title: string, quote: { number: string }) {
   pdf.fillColor('#b6811e').rect(36, 34, 523, 5).fill();
   // O quadrado do logo começa na mesma altura das letras de "INOVA MARMORARIA".

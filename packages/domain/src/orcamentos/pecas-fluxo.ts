@@ -101,14 +101,13 @@ export function conferirSelecaoPecas(disponivel: MapaPecas, selecao: MapaPecas):
 
 /** Na entrega, as peças saem primeiro das já produzidas, depois das em andamento e por último das que nem começaram. */
 const PRIORIDADE_ENTREGA: Partial<Record<ProjectWorkflowStatus, number>> = { DONE: 0, IN_PROGRESS: 1, TODO: 2 };
+/** Peças que o cliente não aprovou saem ao contrário: primeiro as que nem começaram; as entregues nunca. */
+const PRIORIDADE_CANCELAMENTO: Partial<Record<ProjectWorkflowStatus, number>> = { TODO: 0, IN_PROGRESS: 1, DONE: 2 };
 
-/**
- * Reparte as peças entregues entre os cartões do projeto (quanto sai de cada
- * um). Cartões já entregues não entram. Devolve null se faltar peça.
- */
-export function alocarEntrega(cartoes: { id: string; status: ProjectWorkflowStatus; position: number; mapa: MapaPecas }[], selecao: MapaPecas): Map<string, MapaPecas> | null {
-  const candidatos = cartoes.filter((cartao) => PRIORIDADE_ENTREGA[cartao.status] !== undefined)
-    .sort((a, b) => PRIORIDADE_ENTREGA[a.status]! - PRIORIDADE_ENTREGA[b.status]! || a.position - b.position);
+type CartaoAlocavel = { id: string; status: ProjectWorkflowStatus; position: number; mapa: MapaPecas };
+function alocar(cartoes: CartaoAlocavel[], selecao: MapaPecas, prioridade: Partial<Record<ProjectWorkflowStatus, number>>): Map<string, MapaPecas> | null {
+  const candidatos = cartoes.filter((cartao) => prioridade[cartao.status] !== undefined)
+    .sort((a, b) => prioridade[a.status]! - prioridade[b.status]! || a.position - b.position);
   const alocacao = new Map<string, MapaPecas>();
   for (const [chave, pedida] of Object.entries(semZeros(selecao))) {
     let falta = pedida;
@@ -123,6 +122,14 @@ export function alocarEntrega(cartoes: { id: string; status: ProjectWorkflowStat
   }
   return alocacao;
 }
+
+/**
+ * Reparte as peças entregues entre os cartões do projeto (quanto sai de cada
+ * um). Cartões já entregues não entram. Devolve null se faltar peça.
+ */
+export const alocarEntrega = (cartoes: CartaoAlocavel[], selecao: MapaPecas) => alocar(cartoes, selecao, PRIORIDADE_ENTREGA);
+/** De quais cartões saem as peças que o cliente não aprovou (nunca dos entregues). Devolve null se faltar peça. */
+export const alocarCancelamento = (cartoes: CartaoAlocavel[], selecao: MapaPecas) => alocar(cartoes, selecao, PRIORIDADE_CANCELAMENTO);
 
 /** Quantas unidades de cada peça estão entregues, prontas (produzidas) e ainda em produção. */
 export function situacaoDasPecas(pecas: PecaProjeto[], cartoes: { status: ProjectWorkflowStatus; mapa: MapaPecas }[]) {

@@ -8,7 +8,7 @@ import { orcamentoSalvo } from './apoio/orcamento-salvo.mjs';
 // outro projeto, cópia fiel do atual, logo depois dele; a cópia muda sem mexer no original e sai com
 // ids próprios ao salvar. Na tela do orçamento, o Exportar (do topo e de cada projeto) tem caixinhas
 // independentes — orçamento, valores individuais, desenhos em OS e desenho técnico — num PDF só. Cada
-// projeto tem o seu desenho técnico (⋯ → Desenho técnico · projeto, ou "Adicionar desenho técnico").
+// projeto tem o seu desenho técnico (no ⋯ do projeto, ou "Adicionar desenho técnico"); o ⋯ geral não tem.
 const output = resolve(import.meta.dirname, '../../.test-artifacts/duplicar-e-pdf-projeto');
 mkdirSync(output, { recursive: true });
 const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
@@ -211,13 +211,15 @@ try {
   await expect(page.getByRole('button', { name: 'Exportar Cozinha' })).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Adicionar desenho técnico' })).toHaveCount(1);
 
-  // 9) Cada projeto tem o seu desenho técnico: no menu ⋯, um item por projeto.
+  // 9) Cada projeto tem o seu desenho técnico, no ⋯ do próprio projeto; o ⋯ geral do orçamento não tem.
   await page.goto(base + '/orcamentos/q1');
   await page.getByRole('heading', { name: /ORC-2026-99/ }).waitFor();
   await page.getByRole('button', { name: 'Mais ações do orçamento' }).click();
-  const itens = (await page.getByRole('menu').getByRole('menuitem').allInnerTexts()).map(texto => texto.trim());
-  assert(itens.includes('Desenho técnico · Cozinha') && itens.includes('Desenho técnico · Banheiro social'), JSON.stringify(itens));
-  await page.getByRole('menuitem', { name: 'Desenho técnico · Cozinha' }).click();
+  const gerais = (await page.getByRole('menu').getByRole('menuitem').allInnerTexts()).map(texto => texto.trim());
+  assert(gerais.length && !gerais.some(texto => /desenho técnico/i.test(texto)), JSON.stringify(gerais));
+  await page.keyboard.press('Escape');
+  await cartao('Cozinha').getByRole('button', { name: 'Ações de Cozinha' }).click();
+  await page.getByRole('menu', { name: 'Ações de Cozinha' }).getByRole('menuitem', { name: /desenho técnico/i }).click();
   // O desenho antigo do orçamento (um só para todos): a pessoa decide se é deste projeto.
   const escolha = page.getByRole('alertdialog', { name: 'Usar o desenho técnico já feito neste orçamento?' });
   await escolha.waitFor();

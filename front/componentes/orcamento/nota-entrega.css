@@ -12,3 +12,86 @@ html.inova-dark .inova-theme .entrega-situacao.completa { background: #1f3d2c; c
 .nota-entrega-historico li > span { display: grid; gap: 2px; }
 .nota-entrega-historico b { font-size: 13px; }
 .nota-entrega-historico small { color: var(--muted); font-size: 11px; }
+
+/* Entrega geral ("Marcar como entregue"): todos os projetos numa janela. */
+.modal-entrega-geral .janela-corpo { display: grid; gap: 14px; }
+.entrega-geral-resumo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.entrega-geral-resumo li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); color: var(--muted); font-size: 12px; }
+.entrega-geral-resumo b { color: var(--ink); font-size: 20px; line-height: 1.1; }
+.entrega-geral-resumo .entregue b { color: #1d6d48; }
+.entrega-geral-resumo .pronta b { color: #8a6320; }
+html.inova-dark .inova-theme .entrega-geral-resumo .entregue b { color: #9fd8b4; }
+html.inova-dark .inova-theme .entrega-geral-resumo .pronta b { color: #f1d58a; }
+.entrega-geral-atalhos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.entrega-geral-atalhos > span { color: var(--muted); font-size: 13px; font-weight: 600; }
+.entrega-geral-atalhos .botao-contorno { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px; }
+.entrega-geral-projetos { display: grid; gap: 12px; }
+.entrega-geral-projetos > section { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); }
+.entrega-geral-projetos > section.completo { background: var(--soft); }
+.entrega-geral-projetos header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.entrega-geral-projetos h3 { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 15px; }
+.entrega-geral-projetos h3 span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.entrega-geral-projetos header small { color: var(--muted); font-size: 12px; }
+.entrega-geral-projetos section.completo header small { color: #1d6d48; font-weight: 700; }
+html.inova-dark .inova-theme .entrega-geral-projetos section.completo header small { color: #9fd8b4; }
+.entrega-geral-entregues summary { color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.entrega-geral-entregues ul { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; }
+.entrega-geral-entregues li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 13px; }
+.entrega-geral-entregues li svg { color: #1d6d48; }
+.entrega-geral-entregues li small { color: var(--muted); font-size: 12px; }
+@media (max-width: 760px) {
+  .entrega-geral-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .entrega-geral-entregues li { grid-template-columns: auto minmax(0, 1fr); }
+  .entrega-geral-entregues li small { grid-column: 2; }
+}
+
+/* Entregas no cabeçalho do projeto: ícone, "3/6" e a barrinha; tocando, a lista do que foi
+   entregue e do que falta abre por cima (o bloco não cresce). */
+.projeto-bloco-entrega { flex-shrink: 0; }
+.indicador-entrega { position: relative; }
+.indicador-entrega-botao { display: inline-grid; grid-template-columns: auto auto; align-items: center; column-gap: 4px; row-gap: 3px; min-height: 30px; padding: 4px 9px; border: 1px solid transparent; border-radius: 999px; background: rgba(255, 255, 255, .55); color: var(--muted); font-size: 11.5px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.indicador-entrega-botao span { grid-column: 2; }
+.indicador-entrega-botao svg { grid-column: 1; }
+.indicador-entrega-botao i { grid-column: 1 / -1; display: block; height: 3px; overflow: hidden; border-radius: 3px; background: rgba(0, 0, 0, .1); }
+.indicador-entrega-botao i b { display: block; height: 100%; border-radius: inherit; background: currentColor; }
+.indicador-entrega-botao:hover, .indicador-entrega-botao[aria-expanded='true'] { border-color: var(--tom-borda, var(--line)); background: rgba(255, 255, 255, .85); }
+.indicador-entrega-botao.parcial { color: #8a5a10; }
+.indicador-entrega-botao.completa { color: #1d6d48; }
+.indicador-entrega-botao:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+html.inova-dark .inova-theme .indicador-entrega-botao { background: rgba(0, 0, 0, .18); }
+html.inova-dark .inova-theme .indicador-entrega-botao.parcial { color: #f1d58a; }
+html.inova-dark .inova-theme .indicador-entrega-botao.completa { color: #9fd8b4; }
+.indicador-entrega-painel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; display: grid; gap: 10px; width: min(360px, calc(100vw - 32px)); max-height: 380px; padding: 14px; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .35); cursor: default; }
+.indicador-entrega-painel header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.indicador-entrega-painel header strong { font-size: 13.5px; }
+.indicador-entrega-painel header small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.indicador-entrega-painel h4 { margin: 0 0 4px; color: var(--muted); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; }
+.indicador-entrega-painel ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.indicador-entrega-painel li { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 8px; font-size: 13px; font-weight: 600; }
+.indicador-entrega-painel li span { display: grid; gap: 1px; }
+.indicador-entrega-painel li small { color: var(--muted); font-size: 11.5px; font-weight: 500; }
+.indicador-entrega-painel li.entregue svg { margin-top: 2px; color: #1d6d48; }
+.indicador-entrega-painel li > i { width: 10px; height: 10px; margin: 4px 0 0 2px; border: 1.5px solid var(--muted); border-radius: 50%; }
+.indicador-entrega-painel .botao-contorno { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; }
+html.inova-dark .inova-theme .indicador-entrega-painel li.entregue svg { color: #9fd8b4; }
+@media (max-width: 560px) {
+  .projeto-bloco-entrega { padding: 0 0 8px 14px; }
+  .indicador-entrega-painel { right: auto; left: 0; }
+}
+
+/* Editar nomes do projeto e das peças. */
+.janela-nomes-campos { display: grid; gap: 14px; }
+.janela-nomes-campos label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.janela-nomes-campos input { width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 14px; }
+.janela-nomes-campos fieldset { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+.janela-nomes-campos legend { margin-bottom: 8px; padding: 0; color: var(--ink); font-size: 13px; font-weight: 700; }
+.janela-nomes-campos fieldset label span { font-weight: 500; }
+/* Na janela da entrega geral, a conferência fica à esquerda, longe de "Gerar nota". */
+.modal-entrega-geral .entrega-geral-conferencia { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; }
+/* "Não aprovado / alterar": peças do projeto para tirar as que o cliente não aprovou. */
+.janela-nao-aprovado-corpo { display: grid; gap: 12px; }
+.janela-nao-aprovado-nota { margin: 0; color: var(--muted); font-size: 13px; }
+.janela-nao-aprovado-resumo { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--soft); font-size: 13px; }
+.janela-nao-aprovado-resumo strong { color: #b4493d; font-size: 15px; white-space: nowrap; }
+.projeto-pecas-nao-aprovadas { color: var(--muted); }
+.projeto-pecas-nao-aprovadas b { color: var(--ink); font-weight: 600; }

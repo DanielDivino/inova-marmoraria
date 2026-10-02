@@ -19,6 +19,11 @@ page.on('pageerror', error => errors.push('pageerror: ' + error.message));
 const projeto = (id, projectName, total) => ({ id, projectName, declinedAt: null, materialNameSnapshot: 'Preto São Gabriel', unitPriceSnapshot: 600, billedQuantity: 1.2, materialSubtotal: total, total, calculationMode: 'DIMENSIONS', productType: { name: 'Bancada' }, services: [], cutouts: [], drawingData: null,
   components: [{ id: `${id}-k1`, label: 'Bancada', orientation: 'HORIZONTAL', lengthMm: 2000, widthMm: 600, quantity: 1, billableArea: 1.2, subtotal: total, calculatedTotal: total, appliedTotal: total, hasManualPriceOverride: false, edges: [] }] });
 const orcamento = orcamentoSalvo('q1', { grossTotal: 2000, discountAmount: 100, netTotal: 1900, items: [projeto('i1', 'Cozinha', 1000), projeto('i2', 'Banheiro', 600), projeto('i3', 'Lavabo', 400)] });
+// O lavabo tem a bancada (R$ 300) e duas rodabancas presas a ela (R$ 50 cada).
+const lavabo = orcamento.items[2];
+lavabo.components = [{ ...lavabo.components[0], componentType: 'COUNTER', appliedTotal: 300, calculatedTotal: 300 },
+  { ...lavabo.components[0], id: 'i3-k2', label: 'Rodabanca', componentType: 'BACKSPLASH', widthMm: 100, quantity: 2, appliedTotal: 100, calculatedTotal: 100 }];
+lavabo.drawingData = { componentDetails: [{}, { parentComponentIndex: 0, parentSide: 'BACK' }] };
 // O servidor, simplificado: não aprovados fora do valor, desconto na mesma proporção.
 const recalcular = naoAprovados => {
   const completo = orcamento.fullDiscountAmount ?? orcamento.discountAmount;
@@ -30,6 +35,7 @@ const recalcular = naoAprovados => {
 const situacoes = [];
 const aprovacoes = [];
 const retrabalhos = [];
+const naoAprovadas = [];
 await page.route('**/api/**', async route => {
   const url = new URL(route.request().url());
   const path = url.pathname, method = route.request().method();
@@ -48,6 +54,17 @@ await page.route('**/api/**', async route => {
     const { aprovado } = route.request().postDataJSON();
     aprovacoes.push({ id: aprovacao[1], aprovado });
     recalcular(orcamento.items.filter(item => item.id === aprovacao[1] ? !aprovado : item.declinedAt).map(item => item.id));
+    return route.fulfill({ json: orcamento });
+  }
+  const naoAprovar = path.match(/^\/api\/quotes\/q1\/items\/([^/]+)\/nao-aprovar$/);
+  if (naoAprovar && method === 'POST') {
+    const corpo = route.request().postDataJSON();
+    naoAprovadas.push({ id: naoAprovar[1], ...corpo });
+    // Simplificado: a bancada sai e fica uma rodabanca.
+    const atual = orcamento.items.find(item => item.id === 'i3');
+    Object.assign(atual, { total: 50, components: [{ ...atual.components[1], quantity: 1, appliedTotal: 50 }], drawingData: { componentDetails: [{}],
+      pecasNaoAprovadas: [{ nome: 'Bancada', lengthMm: 2000, widthMm: 600, quantidade: 1, valor: 300 }, { nome: 'Rodabanca', lengthMm: 2000, widthMm: 100, quantidade: 1, valor: 50 }] } });
+    recalcular(orcamento.items.filter(item => item.declinedAt).map(item => item.id));
     return route.fulfill({ json: orcamento });
   }
   const retrabalho = path.match(/^\/api\/quotes\/q1\/items\/([^/]+)\/retrabalho$/);
@@ -88,7 +105,7 @@ try {
   assert(Math.abs(primeiro - segundo) < 2 && terceiro > segundo + 20, 'dois por linha: ' + JSON.stringify([primeiro, segundo, terceiro]));
   // "⋯" no bloco fechado: as ações do projeto; "Exportar PDF" abre o bloco com as opções à mostra.
   await bloco('Lavabo').getByRole('button', { name: 'Ações de Lavabo' }).click();
-  assert.deepEqual((await page.getByRole('menu', { name: 'Ações de Lavabo' }).getByRole('menuitem').allInnerTexts()).map(texto => texto.trim()), ['Exportar PDF', 'Adicionar desenho técnico']);
+  assert.deepEqual((await page.getByRole('menu', { name: 'Ações de Lavabo' }).getByRole('menuitem').allInnerTexts()).map(texto => texto.trim()), ['Exportar PDF', 'Editar nomes', 'Adicionar desenho técnico']);
   await page.screenshot({ path: resolve(output, '01b-menu-do-projeto.png') });
   await page.getByRole('menuitem', { name: 'Exportar PDF' }).click();
   await expect(cabeca('Lavabo')).toHaveAttribute('aria-expanded', 'true');
@@ -131,6 +148,32 @@ try {
   await expect(page.getByRole('group', { name: 'Mostrar projetos' })).toHaveCount(0);
   assert.deepEqual(aprovacoes, [{ id: 'i2', aprovado: true }]);
 
+  // 4b) "Não aprovado / alterar": o cliente não quis a bancada do lavabo nem uma das rodabancas.
+  await bloco('Lavabo').getByRole('button', { name: 'Ações de Lavabo' }).click();
+  await page.getByRole('menu', { name: 'Ações de Lavabo' }).getByRole('menuitem', { name: 'Não aprovado / alterar' }).click();
+  const janelaPecas = page.getByRole('dialog', { name: 'Não aprovado / alterar · Lavabo' });
+  const pecas = janelaPecas.getByRole('list', { name: 'Peças não aprovadas de Lavabo' });
+  await pecas.waitFor();
+  await expect(janelaPecas.getByRole('button', { name: 'Cancelar' })).toBeEnabled();
+  await expect(janelaPecas.locator('.botao-perigo')).toBeDisabled();
+  // Marcando a bancada, as rodabancas presas a ela vêm junto: é o projeto inteiro.
+  await pecas.getByRole('checkbox', { name: /Bancada/ }).check();
+  await expect(pecas.getByRole('group', { name: 'Quantidade de Rodabanca' }).locator('output')).toHaveText('2');
+  await expect(janelaPecas.locator('.botao-perigo')).toHaveText('Projeto inteiro não aprovado');
+  await expect(janelaPecas.locator('.janela-nao-aprovado-resumo')).toContainText('O projeto inteiro fica como não aprovado');
+  // Uma rodabanca fica: só as peças marcadas saem.
+  await pecas.getByRole('button', { name: 'Uma a menos de Rodabanca' }).click();
+  await expect(janelaPecas.locator('.botao-perigo')).toHaveText('Tirar 2 peças');
+  await expect(janelaPecas.locator('.janela-nao-aprovado-resumo strong')).toHaveText('− R$ 350,00');
+  await page.screenshot({ path: resolve(output, '04b-nao-aprovado-alterar.png') });
+  await janelaPecas.locator('.botao-perigo').click();
+  await janelaPecas.waitFor({ state: 'detached' });
+  assert.deepEqual(naoAprovadas, [{ id: 'i3', pieces: { 'i3-k1': 1, 'i3-k2': 1 } }]);
+  await expect(bloco('Lavabo').locator('.projeto-bloco-valor')).toHaveText('R$ 50,00');
+  await cabeca('Lavabo').click();
+  await expect(bloco('Lavabo').locator('.projeto-pecas-nao-aprovadas')).toHaveText('Não aprovadas pelo cliente: Bancada (200 × 60 cm) · Rodabanca (200 × 10 cm)');
+  await cabeca('Lavabo').click();
+
   // 5) Retrabalho: com o serviço iniciado, cada projeto tem o botão ao lado da situação.
   assert.equal(await page.locator('.projeto-bloco-retrabalho').count(), 0, 'antes de iniciar o serviço, sem retrabalho');
   await page.getByRole('button', { name: 'Iniciar serviço' }).click();
@@ -155,7 +198,7 @@ try {
   await page.locator('.projetos-orcamento').screenshot({ path: resolve(output, '04-celular.png') });
 
   assert.deepEqual(errors, []);
-  console.log('OK: projetos em blocos compactos em tons pastel; "Confirmar aprovação" pergunta se todos foram aprovados e marca os não aprovados; filtro de aprovados e não aprovados; aprovar de novo um projeto.');
+  console.log('OK: projetos em blocos compactos em tons pastel; "Confirmar aprovação" pergunta se todos foram aprovados e marca os não aprovados; filtro de aprovados e não aprovados; aprovar de novo um projeto; "Não aprovado / alterar" tira só as peças escolhidas (as presas acompanham).');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

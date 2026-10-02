@@ -11,6 +11,7 @@
     "prisma:migrate": "node ../scripts/prisma.mjs migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
     "catalog:import-images": "tsx scripts/import-material-images.ts",
+    "importar:davis": "tsx scripts/importar-orcamento-davis.ts",
     "prisma:deploy": "node ../scripts/prisma.mjs migrate deploy"
   },
   "dependencies": {

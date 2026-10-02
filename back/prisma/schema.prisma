@@ -621,13 +621,13 @@ model WorkflowCard {
   @@index([quoteItemId])
 }
 
-/// Nota de entrega de um projeto. Guarda as linhas impressas (peças entregues e
-/// as que faltavam) para reimprimir igual, mesmo que o orçamento mude depois.
-/// Sem chave estrangeira para o projeto: ele é recriado quando o orçamento é editado.
+/// Nota de entrega de um projeto (ou geral, de todos os projetos: `quoteItemId` vazio). Guarda as
+/// linhas impressas (peças entregues e as que faltavam) para reimprimir igual, mesmo que o orçamento
+/// mude depois. Sem chave estrangeira para o projeto: ele é recriado quando o orçamento é editado.
 model ProjectDelivery {
   id          String   @id @default(cuid())
   quoteId     String
-  quoteItemId String
+  quoteItemId String?
   sequence    Int
   document    Json
   createdById String

@@ -16,3 +16,7 @@
 /* No cartão do projeto o botão fica à esquerda: a janela abre a partir dele, para a direita. */
 .doProjeto { justify-self: start; }
 .doProjeto .panel { left: 0; right: auto; }
+/* Nota de conferência: à parte do PDF do orçamento, separada por uma linha. */
+.conferencia { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 2px; padding-top: 0; border-top: 0; position: relative; }
+.conferencia::before { content: ''; position: absolute; top: -9px; right: 0; left: 0; border-top: 1px solid #e5dfd6; }
+@media screen { :global(html.inova-dark) .conferencia::before { border-color: var(--line); } }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contornoDosParametros, emptyTechnicalDocument, featureSchema, makePiece } from '../tecnico/index.js';
-import { alocarEntrega, CHAVE_PROJETO_INTEIRO, conferirSelecaoPecas, distribuirPecas, numeroNotaEntrega, pecasDoProjeto, situacaoDasPecas, somarPecas, subtrairPecas, totalPecas } from './pecas-fluxo';
+import { alocarCancelamento, alocarEntrega, CHAVE_PROJETO_INTEIRO, conferirSelecaoPecas, distribuirPecas, numeroNotaEntrega, pecasDoProjeto, situacaoDasPecas, somarPecas, subtrairPecas, totalPecas } from './pecas-fluxo';
 
 const componentes = [
   { id: 'bancada', label: '', componentType: 'COUNTER', lengthMm: 2000, widthMm: 600, quantity: 1, materialNameSnapshot: 'Branco Itaúnas' },
@@ -76,6 +76,10 @@ describe('entrega por peças', () => {
   it('tira primeiro das peças produzidas e nunca das já entregues', () => {
     expect(alocarEntrega(cartoes, { soleira: 3 })).toEqual(new Map([['pronto', { soleira: 2 }], ['andamento', { soleira: 1 }]]));
     expect(alocarEntrega(cartoes, { soleira: 4 })).toBeNull();
+  });
+  it('peças não aprovadas saem primeiro das que estão em produção e nunca das entregues', () => {
+    expect(alocarCancelamento(cartoes, { soleira: 2, bancada: 1 })).toEqual(new Map([['andamento', { soleira: 1, bancada: 1 }], ['pronto', { soleira: 1 }]]));
+    expect(alocarCancelamento(cartoes, { soleira: 4 })).toBeNull();
   });
   it('mostra entregues, prontas e em produção de cada peça', () => {
     const pecas = pecasDoProjeto({ quantity: 1, components: [...componentes, { ...componentes[1], quantity: 1, id: 'extra' }] });
