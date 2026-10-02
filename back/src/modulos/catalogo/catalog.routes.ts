@@ -7,14 +7,22 @@ import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
 import { AppError, idSchema } from '../../compartilhado/http.js';
 import { exigirPerfil } from '../autenticacao/auth.plugin.js';
+import { conferirAcabamentoDoServico } from './familias-acabamentos.routes.js';
 
 const billingUnit = z.enum(['SQUARE_METER', 'LINEAR_METER', 'UNIT', 'FIXED']);
-const materialSchema = z.object({ name: z.string().min(2), category: z.string().min(2), description: z.string().max(2000).optional().nullable(), billingUnit, unitPrice: z.number().nonnegative(), isActive: z.boolean().default(true) });
+// A categoria do material é a família (marcada, não escrita); o servidor guarda o nome dela em `category`.
+const materialSchema = z.object({ name: z.string().min(2), familyId: z.string().cuid('Marque a família do material.'), description: z.string().max(2000).optional().nullable(), billingUnit, unitPrice: z.number().nonnegative(), isActive: z.boolean().default(true) });
 const productTypeSchema = z.object({ name: z.string().min(2), description: z.string().max(2000).optional().nullable(), imageUrl: z.string().url().optional().nullable(), isActive: z.boolean().default(true) });
-const serviceSchema = z.object({ name: z.string().min(2), category: z.string().min(2).default('Geral'), billingUnit, currentPrice: z.number().nonnegative(), isActive: z.boolean().default(true) });
+const serviceSchema = z.object({ name: z.string().min(2), category: z.string().min(2).default('Geral'), billingUnit, currentPrice: z.number().nonnegative(), isActive: z.boolean().default(true), finishId: z.string().cuid().nullable().optional() });
 const materialInclude = { images: { orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }] }, prices: { orderBy: { validFrom: 'desc' as const }, take: 1 } };
 const toMaterial = (material: any) => ({ ...material, currentPrice: material.prices[0] ? Number(material.prices[0].amount) : null, prices: undefined });
 const toService = (service: any) => ({ ...service, currentPrice: Number(service.currentPrice) });
+/** Família marcada no material: precisa existir; a categoria do material passa a ser o nome dela. */
+async function categoriaDaFamilia(familyId: string) {
+  const familia = await prisma.materialFamily.findUnique({ where: { id: familyId } });
+  if (!familia) throw new AppError(422, 'Família não encontrada.', 'FAMILY_NOT_FOUND');
+  return familia.name;
+}
 /** Ajustes da empresa; sem a linha no banco valem os padrões (M² fechado ligado). */
 const ajustesEmpresa = async () => {
   const ajustes = await prisma.companySetting.findUnique({ where: { id: 'empresa' } });
@@ -38,7 +46,7 @@ export async function registrarRotasCatalogo(app: FastifyInstance) {
     return { productTypes, materials: materials.map(toMaterial), services: services.map(toService), settings: await ajustesEmpresa() };
   });
   app.get('/settings', authenticated, ajustesEmpresa);
-  // M² fechado fica sempre marcado nos orçamentos; só o administrador desliga, aqui (Materiais e serviços → Serviços e acabamentos).
+  // M² fechado fica sempre marcado nos orçamentos; só o administrador desliga, aqui (Materiais e serviços → Serviços).
   app.patch('/settings', superOnly, async (request) => {
     const input = z.object({ closedSquareMeter: z.boolean() }).strict().parse(request.body);
     const previous = await ajustesEmpresa();
@@ -54,14 +62,14 @@ export async function registrarRotasCatalogo(app: FastifyInstance) {
   app.post('/materials', superOnly, async (request, reply) => {
     const input = materialSchema.parse(request.body); const { unitPrice, ...data } = input;
     if (await prisma.material.findFirst({ where: { name: { equals: input.name, mode: 'insensitive' } } })) throw new AppError(409, 'Já existe um material com este nome.', 'MATERIAL_ALREADY_EXISTS');
-    const material = await prisma.material.create({ data: { ...data, prices: { create: { amount: unitPrice } } }, include: materialInclude });
+    const material = await prisma.material.create({ data: { ...data, category: await categoriaDaFamilia(data.familyId), prices: { create: { amount: unitPrice } } }, include: materialInclude });
     await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'MATERIAL', entityId: material.id, action: 'CREATED', current: toMaterial(material) } });
     return reply.status(201).send(toMaterial(material));
   });
   app.patch('/materials/:id', superOnly, async (request) => {
     const { id } = idSchema.parse(request.params); const input = materialSchema.omit({ unitPrice: true }).partial().parse(request.body);
     const before = await prisma.material.findUnique({ where: { id }, include: materialInclude }); if (!before) throw new AppError(404, 'Material não encontrado.', 'NOT_FOUND');
-    const material = await prisma.material.update({ where: { id }, data: input, include: materialInclude });
+    const material = await prisma.material.update({ where: { id }, data: { ...input, ...(input.familyId ? { category: await categoriaDaFamilia(input.familyId) } : {}) }, include: materialInclude });
     await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'MATERIAL', entityId: id, action: 'UPDATED', previous: toMaterial(before), current: toMaterial(material) } });
     return toMaterial(material);
   });
@@ -96,6 +104,11 @@ export async function registrarRotasCatalogo(app: FastifyInstance) {
     if (!rebaixo) await prisma.service.create({ data: { name: 'Acabamento Rebaixo Italiano', category: 'Outros serviços', billingUnit: 'SQUARE_METER', currentPrice: 600, isActive: true } });
     return (await prisma.service.findMany({ orderBy: { name: 'asc' } })).map(toService);
   });
-  app.post('/services', superOnly, async (request, reply) => { const input = serviceSchema.parse(request.body); if (await prisma.service.findFirst({ where: { name: { equals: input.name, mode: 'insensitive' } } })) throw new AppError(409, 'Já existe um serviço com este nome.', 'SERVICE_ALREADY_EXISTS'); return reply.status(201).send(toService(await prisma.service.create({ data: input }))); });
-  app.patch('/services/:id', superOnly, async (request) => toService(await prisma.service.update({ where: idSchema.parse(request.params), data: serviceSchema.partial().parse(request.body) })));
+  app.post('/services', superOnly, async (request, reply) => { const input = serviceSchema.parse(request.body); await conferirAcabamentoDoServico(input.finishId, input.billingUnit); if (await prisma.service.findFirst({ where: { name: { equals: input.name, mode: 'insensitive' } } })) throw new AppError(409, 'Já existe um serviço com este nome.', 'SERVICE_ALREADY_EXISTS'); return reply.status(201).send(toService(await prisma.service.create({ data: input }))); });
+  app.patch('/services/:id', superOnly, async (request) => {
+    const { id } = idSchema.parse(request.params); const input = serviceSchema.partial().parse(request.body);
+    const antes = await prisma.service.findUnique({ where: { id } }); if (!antes) throw new AppError(404, 'Serviço não encontrado.', 'NOT_FOUND');
+    await conferirAcabamentoDoServico(input.finishId === undefined ? antes.finishId : input.finishId, input.billingUnit ?? antes.billingUnit);
+    return toService(await prisma.service.update({ where: { id }, data: input }));
+  });
 }

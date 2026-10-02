@@ -107,83 +107,118 @@ enum DesignRevisionStatus {
 }
 
 model User {
-  id                   String     @id @default(cuid())
-  name                 String
-  email                String     @unique
-  passwordHash         String
-  role                 Role       @default(ADMIN)
-  isActive             Boolean    @default(true)
-  commercialAccess     Boolean    @default(true)
-  designEdit           Boolean    @default(false)
-  designReview         Boolean    @default(false)
-  designRelease        Boolean    @default(false)
-  maxDiscountPercent   Decimal    @default(0) @db.Decimal(5, 2)
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
-  ownedCustomers       Customer[]
-  createdQuotes        Quote[]    @relation("QuoteCreator")
-  auditLogs            AuditLog[]
-  editedDesignDrafts   DesignDraft[]       @relation("DesignDraftEditor")
-  createdDesignRevisions DesignRevision[]  @relation("DesignRevisionCreator")
-  revisionDecisions    RevisionDecision[]  @relation("RevisionDecisionMaker")
-  productionReleases   ProductionRelease[] @relation("ProductionReleaseMaker")
-  projectDeliveries    ProjectDelivery[]   @relation("ProjectDeliveryCreator")
-  quoteEditorDraft     QuoteEditorDraft?
+  id                     String              @id @default(cuid())
+  name                   String
+  email                  String              @unique
+  passwordHash           String
+  role                   Role                @default(ADMIN)
+  isActive               Boolean             @default(true)
+  commercialAccess       Boolean             @default(true)
+  designEdit             Boolean             @default(false)
+  designReview           Boolean             @default(false)
+  designRelease          Boolean             @default(false)
+  maxDiscountPercent     Decimal             @default(0) @db.Decimal(5, 2)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  ownedCustomers         Customer[]
+  createdQuotes          Quote[]             @relation("QuoteCreator")
+  auditLogs              AuditLog[]
+  editedDesignDrafts     DesignDraft[]       @relation("DesignDraftEditor")
+  createdDesignRevisions DesignRevision[]    @relation("DesignRevisionCreator")
+  revisionDecisions      RevisionDecision[]  @relation("RevisionDecisionMaker")
+  productionReleases     ProductionRelease[] @relation("ProductionReleaseMaker")
+  projectDeliveries      ProjectDelivery[]   @relation("ProjectDeliveryCreator")
+  quoteEditorDraft       QuoteEditorDraft?
 }
 
-/** Funcionário da oficina — pessoa atribuída a uma OS para acompanhar o
+/**
+ * Funcionário da oficina — pessoa atribuída a uma OS para acompanhar o
  * trabalho. Sem relação com login: não acessa o sistema, só aparece nas
  * telas de atribuição e no histórico da OS. Nenhum campo é obrigatório além
- * do id; a equipe pode ser cadastrada aos poucos. */
+ * do id; a equipe pode ser cadastrada aos poucos.
+ */
 model Worker {
-  id                String   @id @default(cuid())
+  id                String                  @id @default(cuid())
   name              String?
   cpf               String?
   phone             String?
-  workColor         String   @default("#607453")
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  workColor         String                  @default("#607453")
+  isActive          Boolean                 @default(true)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
   workerAssignments QuoteWorkerAssignment[]
 }
 
 model Customer {
-  ownerId     String?
-  owner       User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-  @@index([ownerId, name])
-  id          String   @id @default(cuid())
-  name        String
+  ownerId      String?
+  owner        User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  id           String    @id @default(cuid())
+  name         String
   /// Opcional só no cliente rápido (cadastro sem dados para já fazer projetos).
-  phone       String?  @unique
-  isQuick     Boolean  @default(false)
-  email       String?
-  document    String?
-  address     String?
+  phone        String?   @unique
+  isQuick      Boolean   @default(false)
+  email        String?
+  document     String?
+  address      String?
   neighborhood String?
-  city        String?
-  postalCode  String?
-  complement  String?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  quotes      Quote[]
-  jobs        Job[]
+  city         String?
+  postalCode   String?
+  complement   String?
+  notes        String?
+  /// Cliente arquivado (inativo): sai das buscas do Novo orçamento; os orçamentos dele continuam.
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  quotes       Quote[]
+  jobs         Job[]
+
+  @@index([ownerId, name])
   @@index([name])
 }
 
+/// Família da pedra (granito, mármore, ultracompacto…): agrupa os materiais e guarda as informações
+/// do mostruário (resumo, estilo, vantagens, cuidados, onde usar e desempenho).
+model MaterialFamily {
+  id                String     @id @default(cuid())
+  name              String     @unique
+  plural            String
+  summary           String
+  style             String
+  advantages        String[]   @default([])
+  care              String[]   @default([])
+  /// Onde indicar: cozinha | banheiro | gourmet | lavanderia | piso | painel.
+  uses              String[]   @default([])
+  /// Desempenho de 1 a 5 (comparativo do guia). Sem notas: depende da ficha de cada produto.
+  scratchResistance Int?
+  stainResistance   Int?
+  heatResistance    Int?
+  aesthetics        Int?
+  /// Muito baixa | Baixa | Média | Alta.
+  maintenance       String?
+  costLevel         Int?
+  sortOrder         Int        @default(0)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  materials         Material[]
+}
+
 model Material {
-  id          String          @id @default(cuid())
-  name        String          @unique
-  category    String
-  description String?
-  billingUnit BillingUnit
-  isActive    Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  images      MaterialImage[]
-  prices      MaterialPrice[]
-  quoteItems  QuoteItem[]
+  id              String               @id @default(cuid())
+  name            String               @unique
+  /// Nome da família, para leitura: o servidor mantém igual a `family.name`.
+  category        String
+  familyId        String?
+  family          MaterialFamily?      @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  description     String?
+  billingUnit     BillingUnit
+  isActive        Boolean              @default(true)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  images          MaterialImage[]
+  prices          MaterialPrice[]
+  quoteItems      QuoteItem[]
   quoteComponents QuoteItemComponent[]
+
   @@index([name, isActive])
 }
 
@@ -198,25 +233,26 @@ model MaterialImage {
 }
 
 model MaterialPrice {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   materialId String
-  amount     Decimal  @db.Decimal(12, 2)
-  validFrom  DateTime @default(now())
+  amount     Decimal   @db.Decimal(12, 2)
+  validFrom  DateTime  @default(now())
   validTo    DateTime?
-  createdAt  DateTime @default(now())
-  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  material   Material  @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
   @@index([materialId, validFrom])
 }
 
 model ProductType {
-  id         String   @id @default(cuid())
-  name       String   @unique
+  id          String      @id @default(cuid())
+  name        String      @unique
   description String?
-  imageUrl   String?
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  quoteItems QuoteItem[]
+  imageUrl    String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  quoteItems  QuoteItem[]
 }
 
 /// Ajustes da empresa usados nos orçamentos (uma única linha, id "empresa").
@@ -239,57 +275,86 @@ model QuoteEditorDraft {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+enum FinishKind {
+  EDGE
+  SURFACE
+}
+
+/// Borda (perfil) ou acabamento de superfície, com as informações do mostruário. Os serviços que o
+/// cobram apontam para ele: um perfil pode ter mais de um preço (ex.: 45° em granito e em importado).
+model Finish {
+  id             String     @id @default(cuid())
+  kind           FinishKind
+  name           String     @unique
+  /// Desenho do perfil (bordas) ou aparência (superfície), dos valores de @inova/domain.
+  appearance     String
+  description    String
+  /// Onde usar (bordas) ou para que é ideal (superfície).
+  uses           String
+  /// Baixo | Médio | Alto | Técnico (só bordas).
+  perceivedValue String?
+  sortOrder      Int        @default(0)
+  isActive       Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  services       Service[]
+}
+
 model Service {
-  id          String          @id @default(cuid())
-  name        String          @unique
-  category    String          @default("Geral")
-  billingUnit BillingUnit
-  currentPrice Decimal        @db.Decimal(12, 2)
-  isActive    Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  quoteItems  QuoteItemService[]
+  id           String             @id @default(cuid())
+  name         String             @unique
+  category     String             @default("Geral")
+  /// Borda ou acabamento de superfície que este serviço cobra.
+  finishId     String?
+  finish       Finish?            @relation(fields: [finishId], references: [id], onDelete: SetNull)
+  billingUnit  BillingUnit
+  currentPrice Decimal            @db.Decimal(12, 2)
+  isActive     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  quoteItems   QuoteItemService[]
 }
 
 model Quote {
-  id              String      @id @default(cuid())
-  parentQuoteId   String?
-  parentQuote     Quote? @relation("QuoteComplements", fields: [parentQuoteId], references: [id], onDelete: Restrict)
-  complements    Quote[] @relation("QuoteComplements")
-  number          String      @unique
-  customerId      String
-  jobId           String?
-  customerNameSnapshot String @default("")
-  customerPhoneSnapshot String? 
-  workAddressSnapshot String?
-  createdById     String
-  status          QuoteStatus @default(DRAFT)
-  executionStatus ExecutionStatus @default(NOT_STARTED)
-  approvedAt      DateTime?
-  completedAt     DateTime?
-  startedAt       DateTime?
+  id                    String                  @id @default(cuid())
+  parentQuoteId         String?
+  parentQuote           Quote?                  @relation("QuoteComplements", fields: [parentQuoteId], references: [id], onDelete: Restrict)
+  complements           Quote[]                 @relation("QuoteComplements")
+  number                String                  @unique
+  customerId            String
+  jobId                 String?
+  customerNameSnapshot  String                  @default("")
+  customerPhoneSnapshot String?
+  workAddressSnapshot   String?
+  createdById           String
+  status                QuoteStatus             @default(DRAFT)
+  executionStatus       ExecutionStatus         @default(NOT_STARTED)
+  approvedAt            DateTime?
+  completedAt           DateTime?
+  startedAt             DateTime?
   estimatedBusinessDays Int?
-  dueDate         DateTime?
-  deliveryDeadline DateTime? @db.Date
-  installationDeadline DateTime? @db.Date
-  deadlineConfirmed Boolean @default(false)
-  deadlineNote String?
-  validUntil      DateTime?
-  discountAmount  Decimal     @default(0) @db.Decimal(12, 2)
+  dueDate               DateTime?
+  deliveryDeadline      DateTime?               @db.Date
+  installationDeadline  DateTime?               @db.Date
+  deadlineConfirmed     Boolean                 @default(false)
+  deadlineNote          String?
+  validUntil            DateTime?
+  discountAmount        Decimal                 @default(0) @db.Decimal(12, 2)
   /// Desconto negociado para o orçamento completo, guardado enquanto há projetos não aprovados (o desconto em vigor é a parte proporcional dos aprovados).
-  fullDiscountAmount Decimal?  @db.Decimal(12, 2)
-  grossTotal      Decimal     @default(0) @db.Decimal(12, 2)
-  netTotal        Decimal     @default(0) @db.Decimal(12, 2)
-  notes           String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  customer        Customer    @relation(fields: [customerId], references: [id])
-  job             Job?        @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  createdBy       User        @relation("QuoteCreator", fields: [createdById], references: [id])
-  items           QuoteItem[]
-  workerAssignments QuoteWorkerAssignment[]
-  remount         Remount?
-  projectDeliveries ProjectDelivery[]
+  fullDiscountAmount    Decimal?                @db.Decimal(12, 2)
+  grossTotal            Decimal                 @default(0) @db.Decimal(12, 2)
+  netTotal              Decimal                 @default(0) @db.Decimal(12, 2)
+  notes                 String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  customer              Customer                @relation(fields: [customerId], references: [id])
+  job                   Job?                    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  createdBy             User                    @relation("QuoteCreator", fields: [createdById], references: [id])
+  items                 QuoteItem[]
+  workerAssignments     QuoteWorkerAssignment[]
+  remount               Remount?
+  projectDeliveries     ProjectDelivery[]
+
   @@index([customerId, status, createdAt])
   @@index([status, dueDate])
   @@index([status, executionStatus, deliveryDeadline])
@@ -300,14 +365,14 @@ model Quote {
 }
 
 model Job {
-  id          String    @id @default(cuid())
+  id          String      @id @default(cuid())
   customerId  String
   name        String
   createdById String?
   members     JobMember[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
   projects    Project[]
   quotes      Quote[]
 
@@ -329,18 +394,18 @@ model Project {
 }
 
 model Design {
-  id              String           @id @default(cuid())
-  projectId       String
-  name            String
-  legacySourceId  String?          @unique
-  nextRevision    Int              @default(1)
-  activeDraftId   String?          @unique
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  activeDraft     DesignDraft?     @relation("ActiveDesignDraft", fields: [activeDraftId], references: [id], onDelete: SetNull)
-  drafts          DesignDraft[]    @relation("DesignDrafts")
-  revisions       DesignRevision[]
+  id             String           @id @default(cuid())
+  projectId      String
+  name           String
+  legacySourceId String?          @unique
+  nextRevision   Int              @default(1)
+  activeDraftId  String?          @unique
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activeDraft    DesignDraft?     @relation("ActiveDesignDraft", fields: [activeDraftId], references: [id], onDelete: SetNull)
+  drafts         DesignDraft[]    @relation("DesignDrafts")
+  revisions      DesignRevision[]
 
   @@index([projectId, createdAt])
 }
@@ -363,20 +428,20 @@ model DesignDraft {
 }
 
 model DesignRevision {
-  id             String               @id @default(cuid())
-  designId       String
-  number         Int
-  schemaVersion  Int
-  document       Json
-  contentHash    String
-  status         DesignRevisionStatus @default(IN_REVIEW)
-  createdById    String
-  createdAt      DateTime             @default(now())
-  design         Design               @relation(fields: [designId], references: [id], onDelete: Cascade)
-  createdBy      User                 @relation("DesignRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  decisions      RevisionDecision[]
-  releases       ProductionRelease[]
-  exports        ExportArtifact[]
+  id              String                 @id @default(cuid())
+  designId        String
+  number          Int
+  schemaVersion   Int
+  document        Json
+  contentHash     String
+  status          DesignRevisionStatus   @default(IN_REVIEW)
+  createdById     String
+  createdAt       DateTime               @default(now())
+  design          Design                 @relation(fields: [designId], references: [id], onDelete: Cascade)
+  createdBy       User                   @relation("DesignRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  decisions       RevisionDecision[]
+  releases        ProductionRelease[]
+  exports         ExportArtifact[]
   commercialLinks CommercialDesignLink[]
 
   @@unique([designId, number])
@@ -397,137 +462,141 @@ model RevisionDecision {
 }
 
 model ProductionRelease {
-  id                 String         @id @default(cuid())
-  projectId          String
-  designRevisionId   String
-  replacesReleaseId  String?
-  releasedById       String
-  releasedAt         DateTime       @default(now())
-  note               String         @default("")
-  commercialVerified Boolean        @default(false)
-  productionReference String        @default("")
-  project            Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  designRevision     DesignRevision @relation(fields: [designRevisionId], references: [id], onDelete: Restrict)
-  releasedBy         User           @relation("ProductionReleaseMaker", fields: [releasedById], references: [id], onDelete: Restrict)
+  id                  String         @id @default(cuid())
+  projectId           String
+  designRevisionId    String
+  replacesReleaseId   String?
+  releasedById        String
+  releasedAt          DateTime       @default(now())
+  note                String         @default("")
+  commercialVerified  Boolean        @default(false)
+  productionReference String         @default("")
+  project             Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  designRevision      DesignRevision @relation(fields: [designRevisionId], references: [id], onDelete: Restrict)
+  releasedBy          User           @relation("ProductionReleaseMaker", fields: [releasedById], references: [id], onDelete: Restrict)
 
   @@index([projectId, releasedAt])
   @@index([designRevisionId])
 }
 
 model JobMember {
-  jobId String
+  jobId  String
   userId String
   access String @default("VIEWER")
-  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
   @@id([jobId, userId])
 }
 
 model CommercialDesignLink {
-  id String @id @default(cuid())
-  quoteId String
+  id                String         @id @default(cuid())
+  quoteId           String
   quoteRevisionHash String
-  designRevisionId String
-  checkedById String
-  checkedAt DateTime @default(now())
-  note String
-  designRevision DesignRevision @relation(fields: [designRevisionId], references: [id], onDelete: Restrict)
+  designRevisionId  String
+  checkedById       String
+  checkedAt         DateTime       @default(now())
+  note              String
+  designRevision    DesignRevision @relation(fields: [designRevisionId], references: [id], onDelete: Restrict)
+
   @@index([quoteId, checkedAt])
 }
 
 model ExportArtifact {
-  id String @id @default(cuid())
-  revisionId String
-  format String
-  options Json
-  idempotencyKey String @unique
-  status String @default("PENDING")
-  contentHash String?
-  storageKey String?
-  report Json?
-  error String?
-  createdAt DateTime @default(now())
-  revision DesignRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  id             String         @id @default(cuid())
+  revisionId     String
+  format         String
+  options        Json
+  idempotencyKey String         @unique
+  status         String         @default("PENDING")
+  contentHash    String?
+  storageKey     String?
+  report         Json?
+  error          String?
+  createdAt      DateTime       @default(now())
+  revision       DesignRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+
   @@index([revisionId, createdAt])
 }
 
 model QuoteWorkerAssignment {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   quoteId       String
   workerId      String
   colorSnapshot String
-  assignedAt    DateTime @default(now())
+  assignedAt    DateTime  @default(now())
   releasedAt    DateTime?
-  quote         Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  worker        Worker   @relation(fields: [workerId], references: [id], onDelete: Restrict)
+  quote         Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Restrict)
 
   @@index([quoteId, releasedAt])
   @@index([workerId, releasedAt])
 }
 
 model QuoteSequence {
-  year          Int
-  month         Int
-  lastNumber    Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  year       Int
+  month      Int
+  lastNumber Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
   @@id([year, month])
 }
 
 // Complemento independente: preços e itens não alteram o orçamento de origem.
 model Remount {
-  id String @id @default(cuid())
-  quoteId String @unique
-  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Restrict)
-  version Int @default(1)
-  input Json
-  items Json
-  assembly Decimal @db.Decimal(12, 2)
-  disassembly Decimal @db.Decimal(12, 2)
-  assemblyDiscount Decimal @db.Decimal(12, 2)
-  disassemblyDiscount Decimal @db.Decimal(12, 2)
-  itemsTotal Decimal @db.Decimal(12, 2)
-  subtotal Decimal @db.Decimal(12, 2)
-  cardOverride Decimal? @db.Decimal(12, 2)
-  cardTotal Decimal @db.Decimal(12, 2)
-  cashDiscount Decimal @db.Decimal(12, 2)
-  pixPercent Int @default(5)
-  pixTotal Decimal @db.Decimal(12, 2)
-  notes String @default("")
-  itemNotes Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  quoteId             String   @unique
+  quote               Quote    @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  version             Int      @default(1)
+  input               Json
+  items               Json
+  assembly            Decimal  @db.Decimal(12, 2)
+  disassembly         Decimal  @db.Decimal(12, 2)
+  assemblyDiscount    Decimal  @db.Decimal(12, 2)
+  disassemblyDiscount Decimal  @db.Decimal(12, 2)
+  itemsTotal          Decimal  @db.Decimal(12, 2)
+  subtotal            Decimal  @db.Decimal(12, 2)
+  cardOverride        Decimal? @db.Decimal(12, 2)
+  cardTotal           Decimal  @db.Decimal(12, 2)
+  cashDiscount        Decimal  @db.Decimal(12, 2)
+  pixPercent          Int      @default(5)
+  pixTotal            Decimal  @db.Decimal(12, 2)
+  notes               String   @default("")
+  itemNotes           Json
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model QuoteItem {
-  id                    String      @id @default(cuid())
-  quoteId               String
-  projectName           String?
-  environment           String?
-  productTypeId         String
-  materialId            String
-  materialNameSnapshot  String
-  billingUnitSnapshot   BillingUnit
-  unitPriceSnapshot     Decimal     @db.Decimal(12, 2)
-  lengthMm              Int?
-  widthMm               Int?
-  quantity              Int         @default(1)
-  calculationMode       CalculationMode @default(MANUAL_M2)
-  manualJustification   String?
-  drawingSchemaVersion  Int?
-  drawingData           Json?
-  billedQuantity        Decimal     @db.Decimal(12, 4)
-  materialSubtotal      Decimal     @db.Decimal(12, 2)
-  servicesSubtotal      Decimal     @default(0) @db.Decimal(12, 2)
-  total                 Decimal     @db.Decimal(12, 2)
+  id                   String               @id @default(cuid())
+  quoteId              String
+  projectName          String?
+  environment          String?
+  productTypeId        String
+  materialId           String
+  materialNameSnapshot String
+  billingUnitSnapshot  BillingUnit
+  unitPriceSnapshot    Decimal              @db.Decimal(12, 2)
+  lengthMm             Int?
+  widthMm              Int?
+  quantity             Int                  @default(1)
+  calculationMode      CalculationMode      @default(MANUAL_M2)
+  manualJustification  String?
+  drawingSchemaVersion Int?
+  drawingData          Json?
+  billedQuantity       Decimal              @db.Decimal(12, 4)
+  materialSubtotal     Decimal              @db.Decimal(12, 2)
+  servicesSubtotal     Decimal              @default(0) @db.Decimal(12, 2)
+  total                Decimal              @db.Decimal(12, 2)
   /// Projeto que o cliente não aprovou (aprovação parcial): fica no orçamento, mas fora do valor, do fluxo e da entrega.
-  declinedAt            DateTime?
-  quote                 Quote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  productType           ProductType @relation(fields: [productTypeId], references: [id])
-  material              Material    @relation(fields: [materialId], references: [id])
-  services              QuoteItemService[]
-  components            QuoteItemComponent[]
-  cutouts               QuoteItemCutout[]
-  workflowCards         WorkflowCard[]
+  declinedAt           DateTime?
+  quote                Quote                @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productType          ProductType          @relation(fields: [productTypeId], references: [id])
+  material             Material             @relation(fields: [materialId], references: [id])
+  services             QuoteItemService[]
+  components           QuoteItemComponent[]
+  cutouts              QuoteItemCutout[]
+  workflowCards        WorkflowCard[]
 }
 
 /// Cartão do fluxo de trabalho. O projeto começa com um só cartão, o principal
@@ -536,17 +605,17 @@ model QuoteItem {
 /// quantidades em `pieces` (chave da peça → quantidade); cartões do mesmo projeto
 /// que chegam à mesma coluna voltam a ser um só.
 model WorkflowCard {
-  id              String    @id @default(cuid())
+  id              String                @id @default(cuid())
   quoteItemId     String
   /// Coluna, ordem dentro da coluna e quando foi concluído.
   status          ProjectWorkflowStatus @default(TODO)
-  position        Float     @default(0)
+  position        Float                 @default(0)
   completedAt     DateTime?
   /// Parado por falta de material (marcado no fluxo de trabalho).
-  materialMissing Boolean   @default(false)
+  materialMissing Boolean               @default(false)
   pieces          Json?
-  createdAt       DateTime  @default(now())
-  quoteItem       QuoteItem @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+  createdAt       DateTime              @default(now())
+  quoteItem       QuoteItem             @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
 
   @@index([status, position])
   @@index([quoteItemId])
@@ -571,100 +640,103 @@ model ProjectDelivery {
 }
 
 model QuoteItemComponent {
-  id              String               @id @default(cuid())
-  quoteItemId     String
-  materialId      String?
-  materialNameSnapshot String?
-  billingUnitSnapshot BillingUnit?
-  unitPriceSnapshot Decimal? @db.Decimal(12, 2)
-  material        Material? @relation(fields: [materialId], references: [id])
-  label           String
-  componentType   ComponentType
-  orientation     ComponentOrientation
-  shape           ComponentShape       @default(RECTANGLE)
-  lengthMm        Int
-  widthMm         Int
-  quantity        Int                  @default(1)
-  billableArea    Decimal              @db.Decimal(12, 4)
-  subtotal        Decimal              @db.Decimal(12, 2)
-  calculatedTotal Decimal              @default(0) @db.Decimal(12, 2)
-  appliedTotal    Decimal              @default(0) @db.Decimal(12, 2)
-  hasManualPriceOverride Boolean        @default(false)
-  sortOrder       Int                  @default(0)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  quoteItem       QuoteItem            @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
-  edges           QuoteItemComponentEdge[]
-  cutouts         QuoteItemCutout[]
+  id                     String                   @id @default(cuid())
+  quoteItemId            String
+  materialId             String?
+  materialNameSnapshot   String?
+  billingUnitSnapshot    BillingUnit?
+  unitPriceSnapshot      Decimal?                 @db.Decimal(12, 2)
+  material               Material?                @relation(fields: [materialId], references: [id])
+  label                  String
+  componentType          ComponentType
+  orientation            ComponentOrientation
+  shape                  ComponentShape           @default(RECTANGLE)
+  lengthMm               Int
+  widthMm                Int
+  quantity               Int                      @default(1)
+  billableArea           Decimal                  @db.Decimal(12, 4)
+  subtotal               Decimal                  @db.Decimal(12, 2)
+  calculatedTotal        Decimal                  @default(0) @db.Decimal(12, 2)
+  appliedTotal           Decimal                  @default(0) @db.Decimal(12, 2)
+  hasManualPriceOverride Boolean                  @default(false)
+  sortOrder              Int                      @default(0)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  quoteItem              QuoteItem                @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+  edges                  QuoteItemComponentEdge[]
+  cutouts                QuoteItemCutout[]
+
   @@index([quoteItemId, sortOrder])
 }
 
 model QuoteItemComponentEdge {
-  id                    String               @id @default(cuid())
-  componentId           String
-  side                  EdgeSide
-  customLabel           String?
-  lengthMm              Int
-  heightMm              Int?
-  serviceId             String
-  serviceNameSnapshot   String
-  billingUnitSnapshot   BillingUnit          @default(LINEAR_METER)
-  unitPriceSnapshot     Decimal              @db.Decimal(12, 2)
-  billedQuantity        Decimal              @db.Decimal(12, 4)
-  subtotal              Decimal              @db.Decimal(12, 2)
-  calculatedSubtotal    Decimal              @default(0) @db.Decimal(12, 2)
-  appliedSubtotal       Decimal              @default(0) @db.Decimal(12, 2)
-  hasManualPriceOverride Boolean             @default(false)
-  sortOrder             Int                  @default(0)
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  component             QuoteItemComponent   @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  id                     String             @id @default(cuid())
+  componentId            String
+  side                   EdgeSide
+  customLabel            String?
+  lengthMm               Int
+  heightMm               Int?
+  serviceId              String
+  serviceNameSnapshot    String
+  billingUnitSnapshot    BillingUnit        @default(LINEAR_METER)
+  unitPriceSnapshot      Decimal            @db.Decimal(12, 2)
+  billedQuantity         Decimal            @db.Decimal(12, 4)
+  subtotal               Decimal            @db.Decimal(12, 2)
+  calculatedSubtotal     Decimal            @default(0) @db.Decimal(12, 2)
+  appliedSubtotal        Decimal            @default(0) @db.Decimal(12, 2)
+  hasManualPriceOverride Boolean            @default(false)
+  sortOrder              Int                @default(0)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  component              QuoteItemComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
   @@index([componentId, sortOrder])
 }
 
 model QuoteItemCutout {
-  id              String               @id @default(cuid())
-  quoteItemId     String
-  componentId     String?
-  cutoutType      CutoutType
-  sizePending     Boolean              @default(false)
-  label           String?
-  lengthMm        Int?
-  widthMm         Int?
-  diameterMm      Int?
-  positionX       Int?
-  positionY       Int?
-  quantity        Int                  @default(1)
-  serviceId       String?
-  serviceNameSnapshot String?
-  billingUnitSnapshot BillingUnit?
-  unitPriceSnapshot Decimal? @db.Decimal(12, 2)
-  billedQuantity Decimal? @db.Decimal(12, 4)
-  calculatedSubtotal Decimal  @default(0) @db.Decimal(12, 2)
-  appliedSubtotal   Decimal  @default(0) @db.Decimal(12, 2)
-  hasManualPriceOverride Boolean @default(false)
-  sortOrder       Int                  @default(0)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  quoteItem       QuoteItem            @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
-  component       QuoteItemComponent?  @relation(fields: [componentId], references: [id], onDelete: SetNull)
+  id                     String              @id @default(cuid())
+  quoteItemId            String
+  componentId            String?
+  cutoutType             CutoutType
+  sizePending            Boolean             @default(false)
+  label                  String?
+  lengthMm               Int?
+  widthMm                Int?
+  diameterMm             Int?
+  positionX              Int?
+  positionY              Int?
+  quantity               Int                 @default(1)
+  serviceId              String?
+  serviceNameSnapshot    String?
+  billingUnitSnapshot    BillingUnit?
+  unitPriceSnapshot      Decimal?            @db.Decimal(12, 2)
+  billedQuantity         Decimal?            @db.Decimal(12, 4)
+  calculatedSubtotal     Decimal             @default(0) @db.Decimal(12, 2)
+  appliedSubtotal        Decimal             @default(0) @db.Decimal(12, 2)
+  hasManualPriceOverride Boolean             @default(false)
+  sortOrder              Int                 @default(0)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  quoteItem              QuoteItem           @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+  component              QuoteItemComponent? @relation(fields: [componentId], references: [id], onDelete: SetNull)
+
   @@index([quoteItemId, sortOrder])
 }
 
 model QuoteItemService {
-  id                String    @id @default(cuid())
-  quoteItemId       String
-  serviceId         String
-  serviceNameSnapshot String
-  billingUnitSnapshot BillingUnit
-  unitPriceSnapshot Decimal   @db.Decimal(12, 2)
-  billedQuantity    Decimal   @db.Decimal(12, 4)
-  subtotal          Decimal   @db.Decimal(12, 2)
-  calculatedSubtotal Decimal  @default(0) @db.Decimal(12, 2)
-  appliedSubtotal    Decimal  @default(0) @db.Decimal(12, 2)
-  hasManualPriceOverride Boolean @default(false)
-  quoteItem         QuoteItem @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
-  service           Service   @relation(fields: [serviceId], references: [id])
+  id                     String      @id @default(cuid())
+  quoteItemId            String
+  serviceId              String
+  serviceNameSnapshot    String
+  billingUnitSnapshot    BillingUnit
+  unitPriceSnapshot      Decimal     @db.Decimal(12, 2)
+  billedQuantity         Decimal     @db.Decimal(12, 4)
+  subtotal               Decimal     @db.Decimal(12, 2)
+  calculatedSubtotal     Decimal     @default(0) @db.Decimal(12, 2)
+  appliedSubtotal        Decimal     @default(0) @db.Decimal(12, 2)
+  hasManualPriceOverride Boolean     @default(false)
+  quoteItem              QuoteItem   @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+  service                Service     @relation(fields: [serviceId], references: [id])
 }
 
 model AuditLog {
@@ -677,5 +749,6 @@ model AuditLog {
   current    Json?
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id])
+
   @@index([entityType, entityId, createdAt])
 }

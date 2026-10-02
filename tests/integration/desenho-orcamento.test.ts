@@ -105,7 +105,7 @@ describe('Desenho técnico dentro do Novo orçamento', () => {
     }
   });
 
-  it('lista em que orçamento o desenho foi usado e separa os clientes sem cadastro', async () => {
+  it('lista em que orçamento o desenho foi usado; clientes por situação (ativos, cadastro incompleto, arquivados)', async () => {
     const designId = (await request('POST', `/customers/${cliente.id}/designs`, vendedor, {})).json().designId;
     const projeto = projetoDoDesenho(estimarDesenho(cozinha(), catalogo).item, { id: 'p', projectName: 'Cozinha', productTypeId: produto, m2Fechado: false,
       vinculo: { designId, nome: 'Desenho 2', versao: 1, total: 1, aceitoEm: new Date().toISOString() } });
@@ -114,10 +114,27 @@ describe('Desenho técnico dentro do Novo orçamento', () => {
     expect(desenhos.find((desenho: any) => desenho.id === designId)).toMatchObject({ nome: 'Desenho 2', usadoEm: [{ quoteId: orcamento.id, number: orcamento.number }] });
 
     await request('POST', '/customers', vendedor, { name: 'Cliente cadastrado', phone: '92955550001' });
-    const sem = (await request('GET', '/customers?tipo=sem-cadastro', vendedor)).json();
+    const nomes = async (url: string) => (await request('GET', url, vendedor)).json().data.map((entrada: any) => entrada.name);
+    const sem = (await request('GET', '/customers?situacao=incompletos', vendedor)).json();
     expect(sem.data.map((entrada: any) => entrada.id)).toEqual([cliente.id]);
-    expect(sem.counts).toEqual({ cadastrados: 1, semCadastro: 1 });
-    expect((await request('GET', '/customers?tipo=cadastrados', vendedor)).json().data.map((entrada: any) => entrada.name)).toEqual(['Cliente cadastrado']);
+    expect(sem.counts).toEqual({ todos: 2, ativos: 1, incompletos: 1, inativos: 0 });
+    const [cadastrado] = (await request('GET', '/customers?situacao=ativos', vendedor)).json().data;
+    expect(cadastrado.name).toBe('Cliente cadastrado');
+
+    // Arquivado: sai da busca do Novo orçamento (sem situação) e fica em "Inativos"; reativar devolve.
+    const arquivar = async (arquivado: boolean) => {
+      const resposta = await request('PATCH', `/customers/${cadastrado.id}/arquivo`, vendedor, { arquivado });
+      expect(resposta.statusCode, resposta.body).toBe(200);
+    };
+    await arquivar(true);
+    const padrao = (await request('GET', '/customers', vendedor)).json();
+    expect(padrao.data.map((entrada: any) => entrada.name)).not.toContain('Cliente cadastrado');
+    expect(padrao.counts).toEqual({ todos: 2, ativos: 0, incompletos: 1, inativos: 1 });
+    expect(await nomes('/customers?situacao=inativos')).toEqual(['Cliente cadastrado']);
+    expect(await nomes('/customers?situacao=todos')).toHaveLength(2);
+    await arquivar(false);
+    expect(await nomes('/customers?situacao=ativos')).toEqual(['Cliente cadastrado']);
+    expect(await nomes('/customers?situacao=inativos')).toEqual([]);
   });
 
   it('imprime o desenho técnico de cada projeto: só o dele (o antigo do orçamento vale sozinho num orçamento de um projeto)', async () => {

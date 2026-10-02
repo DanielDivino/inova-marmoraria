@@ -19,3 +19,4 @@ export * from './orcamentos/fluxo.js';
 export * from './orcamentos/pecas-fluxo.js';
 export * from './acesso.js';
 export * from './dashboard.js';
+export * from './catalogo/familias-e-acabamentos.js';

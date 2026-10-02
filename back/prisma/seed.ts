@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { BillingUnit, PrismaClient, Role } from '@prisma/client';
+import { ACABAMENTOS_PADRAO, FAMILIAS_PADRAO, familiaDoMaterialAntigo } from '../src/modulos/catalogo/padroes.js';
 
 const prisma = new PrismaClient();
 const seedPassword = process.env.SEED_PASSWORD ?? 'Inova@123';
@@ -19,13 +20,29 @@ const services = [
   ['Cuba Tramontina 40 x 34', 'Cubas / Itens', BillingUnit.UNIT, 250], ['Cuba Média 47 x 30', 'Cubas / Itens', BillingUnit.UNIT, 300], ['Cuba Grande 56 x 34', 'Cubas / Itens', BillingUnit.UNIT, 350], ['Tanque', 'Cubas / Itens', BillingUnit.UNIT, 500], ['Cuba Oval Grande — Louça', 'Cubas / Itens', BillingUnit.UNIT, 150], ['Cuba Oval Pequena — Louça', 'Cubas / Itens', BillingUnit.UNIT, 120]
 ] as const;
 
-async function ensureMaterial(name: string, category: string, amount: number) {
+/** Famílias padrão (a migração já as cria; num banco novo, o seed garante). */
+async function ensureFamilies() {
+  for (const [sortOrder, { desempenho, ...familia }] of FAMILIAS_PADRAO.entries()) {
+    await prisma.materialFamily.upsert({ where: { name: familia.name }, update: {}, create: { ...familia, ...desempenho, sortOrder } });
+  }
+}
+/** Serviços que cobram cada borda ou acabamento (pelo nome). */
+async function linkFinishServices() {
+  for (const acabamento of ACABAMENTOS_PADRAO) {
+    const finish = await prisma.finish.findUnique({ where: { name: acabamento.name } });
+    if (finish && acabamento.servicos.length) await prisma.service.updateMany({ where: { finishId: null, name: { in: acabamento.servicos, mode: 'insensitive' } }, data: { finishId: finish.id } });
+  }
+}
+
+async function ensureMaterial(name: string, legacyCategory: string, amount: number) {
+  const family = await prisma.materialFamily.findUniqueOrThrow({ where: { name: familiaDoMaterialAntigo(name, legacyCategory) } });
+  const category = family.name, familyId = family.id;
   const legacy = legacyMaterials[name];
   let material = await prisma.material.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } });
   if (!material && legacy) material = await prisma.material.findFirst({ where: { name: { equals: legacy[0], mode: 'insensitive' } } });
   if (material) {
-    material = await prisma.material.update({ where: { id: material.id }, data: { name, category, billingUnit: BillingUnit.SQUARE_METER, isActive: true } });
-  } else material = await prisma.material.create({ data: { name, category, billingUnit: BillingUnit.SQUARE_METER, isActive: true } });
+    material = await prisma.material.update({ where: { id: material.id }, data: { name, category, familyId, billingUnit: BillingUnit.SQUARE_METER, isActive: true } });
+  } else material = await prisma.material.create({ data: { name, category, familyId, billingUnit: BillingUnit.SQUARE_METER, isActive: true } });
   const current = await prisma.materialPrice.findFirst({ where: { materialId: material.id, validTo: null }, orderBy: { validFrom: 'desc' } });
   if (!current) await prisma.materialPrice.create({ data: { materialId: material.id, amount } });
   else if (legacy && Number(current.amount) === legacy[1]) {
@@ -38,6 +55,7 @@ async function main() {
   await prisma.user.upsert({ where: { email: 'admin@inovamarmoraria.local' }, update: {}, create: { name: 'Administrador Inova', email: 'admin@inovamarmoraria.local', passwordHash, role: Role.SUPER_ADMIN, maxDiscountPercent: 100 } });
   await prisma.user.upsert({ where: { email: 'atendente@inovamarmoraria.local' }, update: {}, create: { name: 'Atendente Inova', email: 'atendente@inovamarmoraria.local', passwordHash, role: Role.ADMIN, maxDiscountPercent: 5 } });
   for (const name of ['Soleira', 'Peitoril', 'Bancada', 'Pia', 'Escada', 'Mesa', 'Ilha', 'Outro']) await prisma.productType.upsert({ where: { name }, update: {}, create: { name } });
+  await ensureFamilies();
   for (const [name, category, price] of materials) await ensureMaterial(name, category, price);
   for (const [name, category, billingUnit, currentPrice] of services) {
     const existing = await prisma.service.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } });
@@ -49,6 +67,7 @@ async function main() {
     const standardCut = await prisma.service.findFirstOrThrow({ where: { name: { equals: 'Recorte de cuba', mode: 'insensitive' } } });
     await prisma.service.create({ data: { name: 'Corte de cuba oval', category: 'Recortes / Furações', billingUnit: standardCut.billingUnit, currentPrice: standardCut.currentPrice, isActive: true } });
   }
+  await linkFinishServices();
   console.log(`Seed Inova concluído: ${materials.length} materiais e ${services.length + 1} serviços configurados.`);
 }
 main().then(() => prisma.$disconnect()).catch(async (error) => { console.error(error); await prisma.$disconnect(); process.exit(1); });
