@@ -3,8 +3,11 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 
-// Teste exclusivamente visual: todas as chamadas de API sao interceptadas.
-// Nao inicia backend nem grava dados no banco de uso real.
+// Teste exclusivamente visual: todas as chamadas de API são interceptadas (nenhum backend, nenhum dado
+// gravado). Mostruário: coleção com filtro de família (ultracompacto), sem favoritos nem frases
+// repetidas; a ficha que cresce do cartão (Esc fecha, setas trocam de pedra) com exemplos de
+// aplicação; o simulador aplicando a pedra só nos planos de pedra (pixels conferidos) e comparando
+// com o original; bordas, inspirações e guia; celular sem rolagem lateral.
 const raiz = resolve(import.meta.dirname, '../..');
 const saida = resolve(raiz, '.test-artifacts/mostruario');
 mkdirSync(saida, { recursive: true });
@@ -15,24 +18,48 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
 const erros = [];
 page.on('pageerror', erro => erros.push(erro.message));
+page.on('console', mensagem => { if (mensagem.type() === 'error') erros.push(mensagem.text()); });
+// Famílias, bordas e acabamentos como vêm do catálogo (Materiais e serviços).
+const notas = (scratchResistance, stainResistance, maintenance) => ({ scratchResistance, stainResistance, heatResistance: 4, aesthetics: 4, maintenance, costLevel: 3 });
+const familia = (id, name, plural, uses, desempenho = null) => ({ id, name, plural, summary: `Resumo da família ${name}, como no guia.`, style: 'Elegante', advantages: [`Vantagem do ${name}`], care: [`Cuidado com o ${name}`], uses, desempenho, sortOrder: 0, materialCount: 1 });
+const familias = [
+  familia('cfgranito', 'Granito', 'Granitos', ['cozinha', 'banheiro', 'gourmet', 'lavanderia', 'piso'], notas(5, 4, 'Baixa')),
+  familia('cfmarmore', 'Mármore', 'Mármores', ['banheiro', 'painel'], notas(3, 2, 'Alta')),
+  familia('cfquartzito', 'Quartzito', 'Quartzitos', ['cozinha', 'banheiro', 'gourmet', 'painel'], notas(5, 3, 'Média')),
+  familia('cfultra', 'Ultracompacto', 'Ultracompactos', ['cozinha', 'banheiro', 'gourmet', 'painel'], notas(5, 5, 'Muito baixa')),
+  familia('cfindus', 'Industrializado', 'Industrializados', ['banheiro', 'painel']),
+];
+const servico = (name, currentPrice, billingUnit = 'LINEAR_METER') => ({ id: name, name, billingUnit, currentPrice, isActive: true });
+const acabamentos = [
+  { id: 'cbreta', kind: 'EDGE', name: 'Reta', appearance: 'reta', description: 'Corte a 90°, limpa e econômica.', uses: 'Uso geral', perceivedValue: 'Baixo', isActive: true, services: [servico('Acabamento Simples', 50)] },
+  { id: 'cbmeia', kind: 'EDGE', name: 'Meia-esquadria', appearance: 'meia-esquadria', description: 'Duas peças unidas a 45°.', uses: 'Cozinha, ilha e balcão', perceivedValue: 'Alto', isActive: true, services: [servico('Acabamento 45° — Importado', 100), servico('Acabamento 45° — Granito', 70)] },
+  { id: 'cbsaia', kind: 'EDGE', name: 'Saia', appearance: 'saia', description: 'Faixa vertical na frente da bancada.', uses: 'Bancada, ilha e balcão', perceivedValue: 'Alto', isActive: true, services: [] },
+  { id: 'cbinativa', kind: 'EDGE', name: 'Borda inativa', appearance: 'reta', description: 'Não aparece no mostruário.', uses: 'Nenhum', perceivedValue: 'Baixo', isActive: false, services: [] },
+  { id: 'cspolido', kind: 'SURFACE', name: 'Polido', appearance: 'polido', description: 'Brilho intenso.', uses: 'Bancadas e painéis', perceivedValue: null, isActive: true, services: [servico('Acabamento Polimento', 100, 'SQUARE_METER')] },
+  { id: 'csflameado', kind: 'SURFACE', name: 'Flameado', appearance: 'flameado', description: 'Rústica e antiderrapante.', uses: 'Áreas externas', perceivedValue: null, isActive: true, services: [] },
+];
 const materiais = [
-  { id: 'branco-dallas', name: 'Branco Dallas', cor: '#ddd9d4' },
-  { id: 'preto-sao-gabriel', name: 'Preto São Gabriel', cor: '#27292b' },
-  { id: 'calacata', name: 'Calacata', cor: '#f3f0ec' },
-].map(item => ({ ...item, category: 'Granito', isActive: true, images: [{ url: '/uploads/materials/' + item.id + '.png', isPrimary: true }] }));
+  { id: 'branco-dallas', name: 'Branco Dallas', familyId: 'cfgranito', cor: '#ddd9d4', preco: 600 },
+  { id: 'preto-sao-gabriel', name: 'Preto São Gabriel', familyId: 'cfgranito', cor: '#27292b', preco: 700 },
+  { id: 'calacata', name: 'Calacata', familyId: 'cfindus', cor: '#f3f0ec', preco: 1800 },
+  { id: 'grey-claro', name: 'Grey Claro', familyId: 'cfultra', cor: '#b9bab6', preco: 2200 },
+  { id: 'grey-escuro', name: 'Grey Escuro', familyId: 'cfultra', cor: '#5b5f60', preco: 2200 },
+].map(({ preco, ...item }) => ({ ...item, category: familias.find(entrada => entrada.id === item.familyId).name, isActive: true, currentPrice: preco, billingUnit: 'SQUARE_METER', images: [{ url: '/uploads/materials/' + item.id + '.png', isPrimary: true }] }));
 await page.route('**/api/**', async route => {
   const caminho = new URL(route.request().url()).pathname;
-  if (caminho.startsWith('/api/uploads/materials/')) {
-    const material = materiais.find(item => '/api' + item.images[0].url === caminho);
-    assert(material, 'Somente amostras conhecidas');
-    const arquivo = resolve(raiz, 'back' + caminho.slice(4));
-    if (process.env.INOVA_VISUAL_MATERIAIS_REAIS === '1' && existsSync(arquivo)) return route.fulfill({ path: arquivo });
+  // Fotos das pedras (miniaturas da API): amostra lisa da cor da pedra, com um veio.
+  const foto = caminho.match(/^\/api\/miniaturas\/\d+\/materials\/(.+)\.png$/);
+  if (foto) {
+    const material = materiais.find(item => item.id === foto[1]);
+    assert(material, 'Somente amostras conhecidas: ' + caminho);
     return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="' + material.cor + '"/><path d="M0 160L290 220 600 530" fill="none" stroke="#999" stroke-width="4"/></svg>' });
   }
   if (caminho === '/api/auth/me') return route.fulfill({ json: { user: { id: 'visual', name: 'Teste visual', role: 'SUPER_ADMIN' } } });
   if (caminho === '/api/notifications/deadlines') return route.fulfill({ json: { alerts: [] } });
   if (caminho === '/api/catalog/materials') return route.fulfill({ json: materiais });
-  throw new Error('API nao prevista no teste visual: ' + caminho);
+  if (caminho === '/api/catalog/families') return route.fulfill({ json: familias });
+  if (caminho === '/api/catalog/finishes') return route.fulfill({ json: acabamentos });
+  throw new Error('API não prevista no teste visual: ' + caminho);
 });
 
 const cenas = [
@@ -43,7 +70,7 @@ const cenas = [
   { nome: 'Porta / Soleira', arquivo: 'porta', planos: 2, pedra: [[700,630],[700,735]], intactos: [[700,500],[1100,300],[1400,600],[700,900],[120,600]] },
 ];
 
-// Amostra pixels em pontos definidos sobre as fotos, independentemente das mascaras.
+// Amostra pixels em pontos definidos sobre as fotos, independentemente das máscaras.
 async function pixels(buffer, pontos) {
   return page.evaluate(async ({ base64, pontos }) => {
     const img = new Image();
@@ -56,28 +83,68 @@ async function pixels(buffer, pontos) {
     return pontos.map(([x, y]) => Array.from(ctx.getImageData(Math.floor(x / 1448 * img.width), Math.floor(y / 1086 * img.height), 1, 1).data).slice(0, 3));
   }, { base64: buffer.toString('base64'), pontos });
 }
+const semRolagemLateral = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/mostruario');
+  const colecao = page.locator('#colecao');
+  const cartao = nome => colecao.locator('.vitrine-cartao').filter({ has: page.locator(`strong:text-is("${nome}")`) });
+  await cartao('Branco Dallas').waitFor();
+
+  // 1) Coleção: famílias com contagem (inclui ultracompacto), sem favoritos nem frases repetidas.
+  const familias = colecao.getByRole('group', { name: 'Família da pedra' });
+  await familias.getByRole('button', { name: /Ultracompactos/ }).click();
+  assert.deepEqual(await colecao.locator('.vitrine-cartao strong').allInnerTexts(), ['Grey Claro', 'Grey Escuro']);
+  await familias.getByRole('button', { name: /Ultracompactos/ }).click();
+  assert.equal(await page.getByText(/favorit/i).count(), 0, 'sem pedras favoritas');
+  const texto = await page.locator('main').innerText();
+  for (const frase of ['Escolha sua pedra', 'Veja a pedra no ambiente', 'Simulação ilustrativa']) assert.equal(texto.split(frase).length - 1, 1, `"${frase}" aparece uma vez só`);
+  await colecao.getByLabel('Buscar pedra').fill('sao gab');
+  assert.deepEqual(await colecao.locator('.vitrine-cartao strong').allInnerTexts(), ['Preto São Gabriel']);
+  await colecao.getByRole('button', { name: 'Limpar', exact: true }).click();
+
+  // 2) Ficha: abre pelo cartão (a foto cresce até ela), mostra tudo sobre a pedra e os exemplos
+  //    aplicados; setas trocam de pedra e Esc fecha.
+  await cartao('Preto São Gabriel').click();
+  const ficha = page.getByRole('dialog', { name: 'Preto São Gabriel' });
+  await ficha.waitFor();
+  for (const trecho of ['Granito · Escura', 'R$ 700,00 / m²', 'Resistência a riscos', 'Onde usar', 'Exemplos de aplicação', 'Vantagens', 'Cuidados', 'Bordas para cozinha']) await ficha.getByText(trecho).first().waitFor();
+  assert.deepEqual(await ficha.locator('.vitrine-exemplo strong').allInnerTexts(), ['Cozinha', 'Área gourmet', 'Banheiro']);
+  await ficha.locator('.vitrine-exemplo svg[data-estavel="true"]').nth(2).waitFor();
+  await ficha.screenshot({ path: resolve(saida, 'ficha-1440.png') });
+  // Última da grade: só há a anterior (a amostra visual Nero Marquina, fora do catálogo).
+  assert.equal(await ficha.getByRole('button', { name: /Próxima pedra/ }).count(), 0);
+  await page.keyboard.press('ArrowLeft');
+  await page.getByRole('dialog', { name: 'Nero Marquina' }).getByText('Amostra visual · fora do catálogo').waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({ state: 'detached' });
+
+  // 3) Simulador (sem animações, para conferir pixels): a pedra muda só os planos de pedra; puxar a
+  //    comparação até o começo mostra o original.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const area = page.locator('#ambientes');
-  const foto = area.locator('.ambientes-photo');
-  const original = area.getByLabel('Ver original', { exact: true });
-  // Os cartões de pedra agora mostram nome + preço no mesmo botão, então o nome
-  // acessível deixou de ser exato; localizamos pelo texto do <span> do nome.
-  const escolher = nome => area.locator(`.ambientes-tabs button:text-is("${nome}"), .ambientes-swatches button:has(span:text-is("${nome}"))`).click();
-  const pedraSelecionada = nome => area.locator('.ambientes-swatches button').filter({ has: page.locator(`span:text-is("${nome}")`) });
-  await escolher('Preto São Gabriel');
-  await page.waitForFunction(() => document.querySelector('.ambientes-photo')?.getAttribute('aria-label')?.includes('Preto São Gabriel'));
+  const palco = area.locator('.vitrine-palco-area');
+  const foto = palco.locator('svg.cena-foto');
+  const comparar = area.getByLabel('Comparar com o ambiente original');
+  const escolherPedra = nome => area.locator('.vitrine-amostras button').filter({ has: page.locator(`span:text-is("${nome}")`) }).first().click();
+  const estavel = () => palco.locator('svg[data-estavel="true"]').waitFor();
+  await escolherPedra('Preto São Gabriel');
+  await page.waitForFunction(() => document.querySelector('#ambientes .cena-foto')?.getAttribute('aria-label')?.includes('Preto São Gabriel'));
   for (const largura of [1440, 768, 390]) {
     await page.setViewportSize({ width: largura, height: 1050 });
     for (const cena of cenas) {
-      await escolher(cena.nome);
-      await page.waitForFunction(() => document.querySelector('.ambientes-photo')?.getAttribute('aria-busy') === 'false');
-      await original.uncheck();
-      assert.equal(await foto.locator('[data-superficie]').count(), cena.planos);
+      await area.locator('.vitrine-cenas button').filter({ hasText: new RegExp(`^${cena.nome.replace('/', '\\/')}$`) }).click();
+      await page.waitForFunction(() => document.querySelector('#ambientes .cena-foto')?.getAttribute('aria-busy') === 'false');
+      // Usar a comparação some com o aviso "arraste…" (que cobre o pé da foto).
+      await comparar.focus();
+      await page.keyboard.press('Home');
+      await page.keyboard.press('End');
+      await estavel();
+      assert.equal(await foto.locator('[data-camada="atual"] [data-superficie]').count(), cena.planos);
       const aplicada = await foto.screenshot();
       await area.screenshot({ path: resolve(saida, cena.arquivo + '-' + largura + '.png') });
-      await original.check();
+      await page.keyboard.press('Home');
+      await page.waitForFunction(() => document.querySelector('#ambientes .cena-foto')?.getAttribute('aria-label')?.endsWith(' original'));
       const semTextura = await foto.screenshot();
       const pontos = [...cena.pedra, ...cena.intactos];
       const antes = await pixels(semTextura, pontos);
@@ -85,25 +152,55 @@ try {
       for (let i = 0; i < pontos.length; i++) {
         const diferenca = Math.max(...antes[i].map((valor, canal) => Math.abs(valor - depois[i][canal])));
         if (i < cena.pedra.length) assert(diferenca > 20, cena.nome + ': pedra deve mudar em ' + pontos[i]);
-        else assert(diferenca <= 3, cena.nome + ': elemento nao mineral deve permanecer em ' + pontos[i] + ', delta=' + diferenca);
+        else assert(diferenca <= 3, cena.nome + ': elemento não mineral deve permanecer em ' + pontos[i] + ', delta=' + diferenca);
       }
-      assert(await area.evaluate(el => el.scrollWidth <= el.clientWidth), 'Visualizador sem overflow');
-      await original.uncheck();
+      assert(await area.evaluate(el => el.scrollWidth <= el.clientWidth), 'Simulador sem overflow');
+      await page.keyboard.press('End');
     }
+    assert(await semRolagemLateral(), `sem rolagem lateral em ${largura}`);
   }
-  await escolher('Cozinha');
-  await escolher('Calacata');
-  await page.waitForFunction(() => document.querySelector('.ambientes-photo')?.getAttribute('aria-label')?.includes('Calacata'));
+  await area.locator('.vitrine-cenas button').filter({ hasText: /^Cozinha$/ }).click();
+  await escolherPedra('Calacata');
+  await page.waitForFunction(() => document.querySelector('#ambientes .cena-foto')?.getAttribute('aria-label')?.includes('Calacata'));
+  await estavel();
   await area.screenshot({ path: resolve(saida, 'cozinha-clara-mobile.png') });
-  await page.setViewportSize({ width: 1440, height: 1050 });
-  await area.screenshot({ path: resolve(saida, 'cozinha-clara-desktop.png') });
-  assert.equal(await pedraSelecionada('Calacata').getAttribute('aria-pressed'), 'true');
-  await area.getByLabel('Buscar pedra', { exact: true }).fill('sao');
-  assert.equal(await area.locator('.ambientes-swatches button').count(), 1);
-  await area.getByLabel('Buscar pedra', { exact: true }).fill('nao-existe');
-  assert.equal(await area.getByText('Nenhuma pedra encontrada.').count(), 1);
+  assert.equal(await area.locator('.vitrine-amostras button[aria-pressed="true"] span').first().evaluate(el => el.firstChild.textContent), 'Calacata');
+  await area.getByLabel('Buscar pedra no simulador').fill('sao');
+  assert.equal(await area.locator('.vitrine-amostras li').count(), 1);
+  await area.getByLabel('Buscar pedra no simulador').fill('nao-existe');
+  assert.equal(await area.getByText('Nenhuma pedra com esse nome.').count(), 1);
+
+  // 4) Celular: ficha em tela cheia; bordas, inspirações e guia sem rolagem lateral.
+  await cartao('Calacata').click();
+  await page.getByRole('dialog', { name: 'Calacata' }).getByText('Confirme na ficha antes de indicar para cozinha', { exact: false }).waitFor();
+  await page.screenshot({ path: resolve(saida, 'ficha-390.png') });
+  await page.keyboard.press('Escape');
+  // Bordas e acabamentos do catálogo (os ativos); tocar amplia a imagem com descrição e preço.
+  const bordas = page.locator('#bordas');
+  assert.deepEqual(await bordas.locator('.vitrine-acabamento-titulo strong').allInnerTexts(), ['Reta', 'Meia-esquadria', 'Saia']);
+  await bordas.getByRole('button', { name: 'Ampliar: Meia-esquadria' }).click();
+  const ampliada = page.getByRole('dialog', { name: /Meia-esquadria/ });
+  await ampliada.getByText('A partir de R$ 70,00 / m').waitFor();
+  assert.equal(await ampliada.locator('.perfil-borda.grande').count(), 1);
+  await page.screenshot({ path: resolve(saida, 'borda-ampliada-390.png') });
+  await page.keyboard.press('ArrowRight');
+  await page.getByRole('dialog', { name: /Saia/ }).waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({ state: 'detached' });
+  await bordas.getByRole('button', { name: /Acabamentos de superfície/ }).click();
+  assert.equal(await bordas.locator('.amostra-superficie').count(), 2);
+  await bordas.getByRole('button', { name: 'Ampliar: Flameado' }).click();
+  await page.getByRole('dialog', { name: /Flameado/ }).getByText('Áreas externas').waitFor();
+  assert.equal(await page.getByRole('dialog', { name: /Flameado/ }).getByText(/A partir de/).count(), 0, 'sem preço, não mostra preço');
+  await page.keyboard.press('Escape');
+  await page.locator('#inspiracoes').getByRole('button', { name: 'Ampliar: Lavanderia' }).click();
+  await page.getByRole('dialog', { name: 'Lavanderia' }).getByRole('button', { name: 'Pedras para lavanderia' }).click();
+  await page.getByText('pedras para lavanderia').waitFor();
+  await page.locator('#guia').getByRole('button', { name: /Comparar materiais/ }).click();
+  assert.deepEqual(await page.locator('#guia tbody th').allInnerTexts(), ['Granito', 'Mármore', 'Quartzito', 'Ultracompacto']);
+  assert(await semRolagemLateral(), 'sem rolagem lateral no celular');
   assert.deepEqual(erros, []);
-  console.log('OK: 5 cenas em 3 larguras; 27 pontos de pedra e 24 pontos preservados por largura; troca de material, comparacao e busca. Nenhuma API real chamada.');
+  console.log('OK: coleção com filtro de ultracompacto, sem favoritos nem frases repetidas; ficha da pedra com exemplos aplicados, setas e Esc; bordas e acabamentos do catálogo ampliando com preço; 5 cenas em 3 larguras com pedra só nos planos de pedra e comparação com o original; bordas, inspirações e guia; celular sem rolagem lateral. Nenhuma API real chamada.');
 } finally {
   await browser.close();
 }

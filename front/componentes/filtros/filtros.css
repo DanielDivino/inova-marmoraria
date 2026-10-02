@@ -78,6 +78,15 @@ a.etiqueta-destaque:hover { text-decoration: underline; }
 
 /* Barra de ações acima do painel (ex.: "Novo cliente"), alinhada à direita. */
 .barra-lista { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; margin: 0 0 14px; }
+/* Abas da página e as ações dela (Criar…) na mesma linha: abas à esquerda, ações à direita. */
+.faixa-abas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin: 0 0 18px; }
+.inova-theme .faixa-abas > .admin-tabs { margin: 0; }
+.faixa-abas > .barra-lista { margin: 0 0 0 auto; }
+@media (max-width: 760px) { .faixa-abas > .barra-lista { width: 100%; margin: 0; } }
+/* Atalhos (Mostruário, Novo orçamento) na barra de cima do computador, antes do sino. */
+.application-header-tabs > .atalhos-cabecalho { display: flex; flex: none; gap: 10px; margin-left: auto; }
+html .inova-theme .application-header-tabs > .atalhos-cabecalho a.botao-contorno { min-height: 40px; margin: 0; padding: 0 14px; color: var(--ink); font-size: 14px; font-weight: 700; }
+html .inova-theme .application-header-tabs > .atalhos-cabecalho a.botao-contorno-destaque { color: var(--green); }
 @media (max-width: 760px) { .barra-lista > .botao-destaque { flex: 1 1 auto; } }
 
 /* Atalhos do cabeçalho (Mostruário e Novo orçamento): com aparência de botão, não de link do cabeçalho. */
@@ -90,10 +99,6 @@ html .inova-theme .list-header .atalhos-cabecalho a.botao-contorno-destaque { co
 }
 
 /* Lista de orçamentos: cabeçalho com subtítulo, barra compacta e abas em grade. */
-.cabecalho-lista { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px 20px; margin: 0 0 20px; }
-.cabecalho-lista h1 { margin: 0; color: var(--ink); font-family: Georgia, 'Times New Roman', serif; font-size: 40px; font-weight: 700; line-height: 1.1; }
-.cabecalho-lista p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
-.cabecalho-lista-acoes { display: flex; flex-wrap: wrap; gap: 12px; }
 .botao-contorno.botao-contorno-destaque { border-color: var(--green); color: var(--green); }
 
 .barra-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--soft); }
@@ -188,10 +193,7 @@ html .inova-theme .list-header .atalhos-cabecalho a.botao-contorno-destaque { co
 .modal-filtros .campo-filtro-grupo { flex: none; }
 
 @media (max-width: 760px) {
-  .cabecalho-lista h1 { font-size: 30px; }
-  .cabecalho-lista-acoes { width: 100%; }
-  .cabecalho-lista-acoes > * { flex: 1 1 auto; }
-  .barra-filtros { gap: 10px; padding: 10px; }
+        .barra-filtros { gap: 10px; padding: 10px; }
   .barra-filtros-busca { flex-basis: 100%; }
   .barra-filtros:has(> .barra-filtros-abas) > .barra-filtros-busca { flex-basis: 100%; }
   .barra-filtros-abas { flex-basis: 100%; flex-wrap: wrap; }

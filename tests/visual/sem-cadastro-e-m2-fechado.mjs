@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 // API inteiramente simulada. Orçamento sem cadastro: na tela Clientes, no
 // cadastro de dentro do orçamento e no atalho do menu Cliente, nenhum dado é
 // exigido. M² fechado: sempre marcado (travado) no orçamento; só se desliga em
-// Materiais e serviços → Serviços e acabamentos.
+// Materiais e serviços → Serviços.
 const output = resolve(import.meta.dirname, '../../.test-artifacts/sem-cadastro-e-m2-fechado');
 mkdirSync(output, { recursive: true });
 const installed = '/home/daniel/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
@@ -33,6 +33,7 @@ await page.route('**/api/**', async route => {
   if (path === '/api/catalog') return route.fulfill({ json: { materials: [], productTypes: [{ id: 'counter', name: 'Bancada' }], services: [], settings: { ...ajustes } } });
   if (path === '/api/catalog/materials') return route.fulfill({ json: [] });
   if (path === '/api/catalog/services') return route.fulfill({ json: servicos });
+  if (path === '/api/catalog/families' || path === '/api/catalog/finishes') return route.fulfill({ json: [] });
   if (path === '/api/catalog/settings' && method === 'PATCH') {
     const body = route.request().postDataJSON();
     alteracoesAjuste.push(body);
@@ -111,9 +112,9 @@ try {
   await page.getByRole('menu').getByRole('menuitemradio', { name: /Seu João da obra/ }).click();
   assert.equal(await page.locator('#project-name').inputValue(), 'Cozinha do João', 'o projeto do primeiro cliente continua');
 
-  // 4) Materiais e serviços → Serviços e acabamentos: o único lugar para desligar o M² fechado.
+  // 4) Materiais e serviços → Serviços: o único lugar para desligar o M² fechado.
   await page.goto(base + '/administracao');
-  await page.getByRole('tab', { name: 'Serviços e acabamentos' }).click();
+  await page.getByRole('tab', { name: 'Serviços', exact: true }).click();
   const chave = page.getByRole('switch', { name: 'M² fechado nos orçamentos' });
   assert.equal(await chave.isChecked(), true);
   await shot('06-servicos-m2-ligado');
@@ -125,7 +126,7 @@ try {
   await page.locator('#project-name').waitFor();
   assert.equal(await page.locator('.quick-round-toggle').count(), 0, 'desligado na empresa, some do orçamento');
   assert.deepEqual(errors, []);
-  console.log('OK: orçamento sem cadastro (Clientes, cadastro do orçamento e atalho no menu Cliente) e M² fechado travado no orçamento, desligável só em Serviços e acabamentos.');
+  console.log('OK: orçamento sem cadastro (Clientes, cadastro do orçamento e atalho no menu Cliente) e M² fechado travado no orçamento, desligável só em Materiais e serviços → Serviços.');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

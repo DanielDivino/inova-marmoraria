@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { createPortal } from 'react-dom';
 import { PROJECT_WORKFLOW_LABELS, type ProjectWorkflowStatus } from '@inova/domain';
 import { QuadroProjetos, type ColunaId } from '../../componentes/fluxo/QuadroProjetos';
 import { useFiltrosNaUrl } from '../../componentes/useFiltrosNaUrl';
@@ -11,7 +10,7 @@ import { PerguntaPecas, type PedidoPecas } from '../../componentes/fluxo/Pergunt
 import { somaQuantidades, type QuantidadesPecas } from '../../componentes/fluxo/SeletorPecas';
 import { api } from '../../utilitarios/api';
 import { entregaFinalDoOrcamento, filtrarCartoes, moverCartaoLocal, nomeResponsavel, OPCOES_ENTREGA, OPCOES_MATERIAL, perguntarPecas, rotuloPecas, SEM_RESPONSAVEL, trocarCartoesDoProjeto, type CartaoFluxo, type CartaoMovido, type FiltroEntrega, type FiltroFluxo, type FiltroMaterial } from '../../utilitarios/fluxo';
-import { AbasFiltro, CampoFiltro, Icone, MenuSelecao, ModalFiltros, useCelular } from '../../componentes/filtros/Filtros';
+import { AbasFiltro, AtalhosCabecalho, CampoFiltro, Icone, MenuSelecao, ModalFiltros, useCelular } from '../../componentes/filtros/Filtros';
 import { confirmar } from '../../componentes/Confirmacao';
 import '../../componentes/fluxo/fluxo.css';
 
@@ -67,9 +66,7 @@ function FluxoTrabalho() {
   // Mesmo padrão de Orçamentos: menus na barra; no celular, janela de filtros.
   const celular = useCelular();
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
-  // No computador, o título vai para a barra de cima do app e os filtros podem ser recolhidos ("Filtros").
-  const [alvoCabecalho, setAlvoCabecalho] = useState<HTMLElement | null>(null);
-  useEffect(() => { setAlvoCabecalho(document.getElementById('application-header-tabs')); }, []);
+  // No computador, os filtros podem ser recolhidos ("Filtros").
   const [barraFiltros, setBarraFiltros] = useState(true);
   useEffect(() => { try { setBarraFiltros(window.localStorage.getItem('inova-fluxo-filtros') !== 'recolhidos'); } catch { /* Sem armazenamento local, os filtros ficam à mostra. */ } }, []);
   const alternarBarraFiltros = () => setBarraFiltros((atual) => {
@@ -161,9 +158,8 @@ function FluxoTrabalho() {
     } finally { setSalvandoPecas(false); }
   }
 
-  const titulo = <h1 className="fluxo-titulo">Fluxo de trabalho</h1>;
   return <main className="list-page fluxo-page">
-    {!celular && alvoCabecalho ? createPortal(titulo, alvoCabecalho) : <header className="list-header">{titulo}</header>}
+    <header className="list-header"><h1 className="titulo-no-topo">Fluxo de trabalho</h1><AtalhosCabecalho /></header>
     {/* Uma linha: visualização, filtros e o botão que recolhe os filtros. */}
     <div className="fluxo-barra">
       <AbasFiltro rotulo="Visualização do fluxo" valor={aba} aoEscolher={setAba} grupos={[{ opcoes: [

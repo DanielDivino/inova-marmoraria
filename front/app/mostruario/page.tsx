@@ -1,84 +1,102 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../utilitarios/api';
-import { exibirPrecoMaterial, type UnidadeMaterial } from '../../utilitarios/material-price';
-import { VisualizadorAmbientes } from '../../componentes/AmbientesVisualizer';
-import './ambientes.css';
+import { Abertura, NavegacaoSecoes } from '../../componentes/mostruario/Abertura';
+import { BordasEAcabamentos } from '../../componentes/mostruario/BordasEAcabamentos';
+import { ambientes } from '../../componentes/mostruario/cenas';
+import { Colecao } from '../../componentes/mostruario/Colecao';
+import { FILTRO_INICIAL, filtrarPedras, montarPedras, type FiltroColecao, type Material, type Pedra } from '../../componentes/mostruario/colecao';
+import type { UsoId } from '../../componentes/mostruario/conhecimento';
+import { DetalhePedra, TRANSICAO_FOTO } from '../../componentes/mostruario/DetalhePedra';
+import { comTransicao, rolarAte } from '../../componentes/mostruario/efeitos';
+import { Guia } from '../../componentes/mostruario/Guia';
+import { fotoPrincipal } from '../../componentes/mostruario/imagens';
+import { Inspiracoes } from '../../componentes/mostruario/Inspiracoes';
+import { Simulador } from '../../componentes/mostruario/Simulador';
+import type { Acabamento, Familia } from '../../componentes/catalogo/tipos';
+import './mostruario.css';
 
-type MaterialImage = { id: string; url: string; alt?: string | null; isPrimary: boolean };
-type Material = { id: string; name: string; category: string; description?: string | null; currentPrice: number | null; billingUnit?: UnidadeMaterial; isActive: boolean; images?: MaterialImage[] };
-type Filter = 'Todos' | 'Granitos' | 'Mármores' | 'Claros' | 'Escuros';
-
-const normalized = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
-const imageFor = (material: Material) => material.images?.find((image) => image.isPrimary)?.url ?? material.images?.[0]?.url;
-const imageSrc = (material: Material) => { const url = imageFor(material); return url ? url.startsWith('/uploads/') ? `/api${url}` : url : '/stone-placeholder.svg'; };
-const displayPrice = (material: Material) => material.isActive && Number(material.currentPrice) > 0 ? exibirPrecoMaterial(material.currentPrice, material.billingUnit) : 'Preço sob consulta';
-const filters: Filter[] = ['Todos', 'Granitos', 'Mármores', 'Claros', 'Escuros'];
-const stoneExamples: Material[] = [
-  ['Alaska', 'alaska'],
-  ['Bege Arabesco', 'bege-arabesco'],
-  ['Grey Claro', 'grey-claro'],
-  ['Grey Escuro', 'grey-escuro'],
-  ['Nero Marquina', 'nero-marquina'],
-].map(([name, file]) => ({
-  id: `exemplo-${file}`,
-  name,
-  category: 'Exemplo visual',
-  description: 'Amostra de referência. Consulte disponibilidade e preço antes de incluir no orçamento.',
-  currentPrice: null,
-  isActive: true,
-  images: [{ id: `foto-${file}`, url: `/mostruario-pedras/${file}.png`, isPrimary: true }],
-}));
-
-function belongsTo(material: Material, filter: Filter) {
-  if (filter === 'Todos') return true;
-  const value = normalized(`${material.name} ${material.category}`);
-  if (filter === 'Granitos') return value.includes('granit');
-  if (filter === 'Mármores') return value.includes('marmor');
-  if (filter === 'Claros') return /branco|bege|claro|alaska|calacat|itaun|prime|nanoglass|ultracompacto|onix|translucido|taj/.test(value);
-  return /preto|negro|nero|escuro|marrom|cafe|stellar|indiano|ocre/.test(value);
-}
+const fotoDoCartao = (id: string) => document.querySelector<HTMLElement>(`[data-pedra-foto="${CSS.escape(id)}"]`);
 
 export default function MostruarioPage() {
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [selectedId, setSelectedId] = useState('');
-  const [filter, setFilter] = useState<Filter>('Todos');
-  const [search, setSearch] = useState('');
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [pedras, setPedras] = useState<Pedra[]>([]);
+  const [familias, setFamilias] = useState<Familia[]>([]);
+  const [acabamentos, setAcabamentos] = useState<Acabamento[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState('');
+  const [filtro, setFiltro] = useState<FiltroColecao>(FILTRO_INICIAL);
+  /** Pedra do simulador e das bordas; a ficha aberta passa a ser ela. */
+  const [pedraId, setPedraId] = useState('');
+  const [abertaId, setAbertaId] = useState<string | null>(null);
+  const [cena, setCena] = useState(0);
+  /** A ficha aberta veio de um cartão da grade (ao fechar, a foto volta para ele). */
+  const doCartao = useRef(false);
 
   useEffect(() => {
-    const controller = new AbortController();
-    api<Material[]>('/catalog/materials', { signal: controller.signal }).then((data) => {
-      if (controller.signal.aborted) return;
-      const activeMaterials = data.filter((material) => material.isActive);
-      const catalogNames = new Set(activeMaterials.map((material) => normalized(material.name)));
-      const showcaseMaterials = [...activeMaterials, ...stoneExamples.filter((material) => !catalogNames.has(normalized(material.name)))];
-      setMaterials(showcaseMaterials);
-      const dallas = showcaseMaterials.find((material) => normalized(material.name) === 'branco dallas' && imageFor(material));
-      setSelectedId(dallas?.id ?? showcaseMaterials.find(imageFor)?.id ?? showcaseMaterials[0]?.id ?? '');
-    }).catch((cause) => {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o mostruário.');
-    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
+    const controle = new AbortController();
+    Promise.all([
+      api<Material[]>('/catalog/materials', { signal: controle.signal }), api<Familia[]>('/catalog/families', { signal: controle.signal }), api<Acabamento[]>('/catalog/finishes', { signal: controle.signal }),
+    ]).then(([catalogo, carregadas, bordasEAcabamentos]) => {
+      if (controle.signal.aborted) return;
+      const lista = montarPedras(catalogo, carregadas);
+      setFamilias(carregadas);
+      setAcabamentos(bordasEAcabamentos);
+      setPedras(lista);
+      setPedraId((lista.find((pedra) => pedra.name === 'Branco Dallas' && fotoPrincipal(pedra)) ?? lista.find((pedra) => fotoPrincipal(pedra)) ?? lista[0])?.id ?? '');
+    }).catch((causa) => {
+      if (!controle.signal.aborted) setErro(causa instanceof Error ? causa.message : 'Não foi possível carregar o mostruário.');
+    }).finally(() => { if (!controle.signal.aborted) setCarregando(false); });
+    return () => controle.abort();
   }, []);
 
-  const visibleMaterials = useMemo(() => {
-    const query = normalized(search.trim());
-    return materials.filter((material) => belongsTo(material, filter) && (!query || normalized(`${material.name} ${material.category}`).includes(query)));
-  }, [filter, materials, search]);
-  const selected = materials.find((material) => material.id === selectedId) ?? visibleMaterials[0];
-  const count = (current: Filter) => materials.filter((material) => belongsTo(material, current)).length;
+  const visiveis = useMemo(() => filtrarPedras(pedras, filtro), [pedras, filtro]);
+  const pedra = pedras.find((item) => item.id === pedraId);
+  const aberta = pedras.find((item) => item.id === abertaId);
+  // Anterior e próxima seguem a ordem da grade (com os filtros); fora dela, a coleção inteira.
+  const sequencia = aberta && visiveis.includes(aberta) ? visiveis : pedras;
+  const posicao = aberta ? sequencia.indexOf(aberta) : -1;
 
-  return <main className="showcase-page">
-    <section className="showcase-hero" style={{ backgroundImage: "linear-gradient(90deg, #241b12c9 0%, #241b125c 47%, #241b121c 100%), url('/ambientes/cozinha.png')" }}>
-      <div className="showcase-hero-copy"><span className="showcase-eyebrow">BELEZA NATURAL<br />EM CADA DETALHE</span><h1>Superfícies<br />que valorizam<br />seus espaços</h1><p>Granitos, mármores e superfícies especiais<br />para projetos únicos e duradouros.</p><a className="showcase-outline-button" href="#ambientes">Simular no ambiente <span>→</span></a></div>
-      {selected && <article className="showcase-featured"><img className="material-sample-image" src={imageSrc(selected)} alt={selected.name} /><div className="showcase-featured-copy"><span className="showcase-material-category">{selected.category}</span><h2>{selected.name}</h2><strong className="showcase-featured-price">{displayPrice(selected)}</strong><p>{selected.description || 'Uma superfície marcante para bancadas, ilhas e ambientes que pedem personalidade.'}</p><div className="showcase-featured-facts"><span>◇<small>Alta<br />durabilidade</small></span><span>✧<small>Fácil<br />manutenção</small></span><span>⌂<small>Ideal para<br />ambientes internos</small></span></div><div className="showcase-featured-actions"><a href="#colecao" className="showcase-dark-button">Ver mais detalhes <span>→</span></a><button type="button" className="showcase-light-button" onClick={() => setFavorites((current) => current.includes(selected.id) ? current.filter((id) => id !== selected.id) : [...current, selected.id])}>{favorites.includes(selected.id) ? '♡ Favorito' : '♡ Adicionar aos favoritos'}</button></div></div></article>}
-      <div className="showcase-collection-strip" aria-label="Materiais em destaque"><div className="showcase-strip-heading"><strong>Nossa Coleção</strong><small>{materials.length} PEDRAS E EXEMPLOS</small></div><div className="showcase-strip-items">{materials.map((material) => <button type="button" className={material.id === selected?.id ? 'selected' : ''} key={material.id} onClick={() => setSelectedId(material.id)}><img className="material-sample-image" src={imageSrc(material)} alt="" /><span>{material.name}</span><small>{imageFor(material) ? displayPrice(material) : 'Foto pendente'}</small></button>)}</div></div>
-    </section>
-    <section id="colecao" className="showcase-catalog"><div className="showcase-catalog-heading"><div><span className="showcase-eyebrow">NOSSA COLEÇÃO</span><h2>Escolha sua pedra</h2><p>Explore nossa seleção de granitos, mármores e superfícies especiais.<br />Clique em um material para visualizar os detalhes.</p></div><span className="showcase-side-note">BELEZA NATURAL<br />EM CADA DETALHE</span></div><div className="showcase-toolbar"><div className="showcase-filters">{filters.map((option) => <button type="button" className={filter === option ? 'selected' : ''} key={option} onClick={() => setFilter(option)}>{option} <small>({count(option)})</small></button>)}</div><label className="showcase-search"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar um material..." /></label></div>{error && <p className="form-error" role="alert">{error}</p>}{loading && <p className="showcase-empty">Carregando materiais…</p>}{!loading && !error && <div className="showcase-grid">{visibleMaterials.map((material) => <button type="button" className={`showcase-material-card ${material.id === selected?.id ? 'selected' : ''}`} key={material.id} onClick={() => setSelectedId(material.id)} aria-pressed={material.id === selected?.id}><img className="material-sample-image" src={imageSrc(material)} alt={imageFor(material) ? material.name : `Sem foto: ${material.name}`} /><span><strong>{material.name}</strong><b>♡</b></span><small>{material.category}</small><strong className="showcase-card-price">{displayPrice(material)}</strong>{!imageFor(material) && <em>Foto pendente</em>}</button>)}</div>}{!loading && !error && !visibleMaterials.length && <p className="showcase-empty">Nenhum material encontrado para esta busca.</p>}</section>
-    <VisualizadorAmbientes material={selected} materiais={materials} selecionarMaterial={setSelectedId} />
+  /** Abre a ficha: a foto do cartão (se está na tela) cresce até a ficha. */
+  const abrir = (id: string) => {
+    const foto = fotoDoCartao(id);
+    const caixa = foto?.getBoundingClientRect();
+    const naTela = !!caixa && caixa.bottom > 0 && caixa.top < window.innerHeight;
+    doCartao.current = naTela;
+    if (foto && naTela) foto.style.viewTransitionName = TRANSICAO_FOTO;
+    comTransicao(() => { if (foto) foto.style.viewTransitionName = ''; setAbertaId(id); setPedraId(id); });
+  };
+  /**
+   * Fecha a ficha. Aberta por um cartão, a foto volta para o cartão da pedra (trazido para a tela);
+   * `depois` roda quando a ficha já fechou (ir ao simulador, às bordas).
+   */
+  const fechar = (depois?: () => void) => {
+    const id = abertaId;
+    let foto: HTMLElement | null = null;
+    const transicao = comTransicao(() => {
+      setAbertaId(null);
+      foto = id && !depois && doCartao.current ? fotoDoCartao(id) : null;
+      if (foto) { foto.style.viewTransitionName = TRANSICAO_FOTO; foto.scrollIntoView({ block: 'nearest' }); }
+    });
+    const fim = () => { if (foto) foto.style.viewTransitionName = ''; depois?.(); };
+    if (transicao) transicao.finished.finally(fim); else fim();
+  };
+  const navegar = (id: string) => comTransicao(() => { setAbertaId(id); setPedraId(id); });
+  const simular = (titulo: string) => fechar(() => {
+    setCena(Math.max(0, ambientes.findIndex((ambiente) => ambiente.titulo === titulo)));
+    rolarAte('ambientes');
+  });
+  const verPedras = (uso: UsoId) => { setFiltro({ ...FILTRO_INICIAL, uso }); rolarAte('colecao'); };
+
+  return <main className="vitrine">
+    <Abertura pedras={pedras} aoAbrir={abrir} />
+    <NavegacaoSecoes />
+    <Colecao pedras={pedras} familias={familias} filtro={filtro} aoFiltrar={setFiltro} aoAbrir={abrir} carregando={carregando} erro={erro} />
+    <Simulador pedra={pedra} pedras={pedras} cena={cena} aoEscolherCena={setCena} aoEscolherPedra={setPedraId} aoAbrir={abrir} />
+    <BordasEAcabamentos pedra={pedra} acabamentos={acabamentos} />
+    <Inspiracoes aoVerPedras={verPedras} />
+    <Guia pedras={pedras} familias={familias} aoVerPedras={verPedras} aoAbrir={abrir} />
+    {aberta && <DetalhePedra pedra={aberta} acabamentos={acabamentos} anterior={sequencia[posicao - 1]} proxima={sequencia[posicao + 1]}
+      aoFechar={() => fechar()} aoNavegar={navegar} aoSimular={simular} aoVerBordas={() => fechar(() => rolarAte('bordas'))} />}
   </main>;
 }

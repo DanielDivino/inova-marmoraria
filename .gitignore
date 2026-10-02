@@ -29,3 +29,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Documentos de referência do mostruário (fonte dos textos e imagens; 168 MB, fora do repositório)
+GUIA DO MOSTRUARIO/

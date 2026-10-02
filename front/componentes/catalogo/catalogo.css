@@ -1,0 +1,120 @@
+/* Materiais e serviços: famílias, bordas e acabamentos (cartões e formulários). Cores do tema do
+   sistema (claro e escuro) pelas variáveis --ink, --muted, --line, --green, --soft e --surface. */
+
+/* Formulários */
+.catalogo-formulario { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+.catalogo-formulario .inteira { grid-column: 1 / -1; }
+.catalogo-formulario > label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.catalogo-formulario :is(input:not([type='checkbox']):not([type='radio']), textarea, select) { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 14px; }
+.catalogo-formulario textarea { min-height: 72px; resize: vertical; line-height: 1.5; }
+.catalogo-formulario fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.catalogo-formulario legend { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; margin-bottom: 8px; padding: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.catalogo-formulario .active-toggle { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; font-weight: 600; }
+.catalogo-formulario .form-error { margin: 0; }
+.catalogo-lista { display: grid; gap: 8px; align-content: start; }
+.catalogo-lista > div { display: flex; gap: 6px; }
+.catalogo-lista .text-button { justify-self: start; display: inline-flex; align-items: center; gap: 4px; }
+.catalogo-remover { display: grid; place-items: center; flex: none; width: 42px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; }
+.catalogo-remover:hover { color: var(--ink); border-color: var(--muted); }
+
+/* Opções para marcar (chips de rádio e caixa) */
+.catalogo-marcar { display: flex; flex-wrap: wrap; gap: 8px; }
+.catalogo-marcar > legend { flex-basis: 100%; }
+.catalogo-marcar label { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface, #fff); color: var(--ink); font-size: 13.5px; font-weight: 600; cursor: pointer; transition: border-color .2s, background .2s; }
+.catalogo-marcar label:hover { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
+.catalogo-marcar label.marcado { border-color: var(--green); background: var(--accent-soft, #f1eade); box-shadow: inset 0 0 0 1px var(--green); }
+.catalogo-marcar input, .catalogo-escala input, .catalogo-desenhos input, .catalogo-escolha-familia input { position: absolute; opacity: 0; pointer-events: none; }
+.catalogo-marcar label:has(input:focus-visible), .catalogo-escala label:has(input:focus-visible), .catalogo-desenhos label:has(input:focus-visible), .catalogo-escolha-familia label:has(input:focus-visible) { outline: 2px solid var(--green); outline-offset: 2px; }
+.catalogo-marcar:disabled label { opacity: .55; cursor: not-allowed; }
+
+/* Notas de desempenho */
+.catalogo-desempenho { display: grid; gap: 12px; }
+.catalogo-notas { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); }
+.catalogo-notas > div { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: center; gap: 12px; }
+.catalogo-notas > div > span { color: var(--ink); font-size: 13.5px; font-weight: 600; }
+.catalogo-escala { display: flex; gap: 6px; }
+.catalogo-escala label { position: relative; display: grid; place-items: center; width: 40px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface, #fff); color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer; }
+.catalogo-escala label.cheio { border-color: var(--green); background: var(--green); color: #fff; }
+.catalogo-escala.custo label.cheio { background: var(--accent-soft, #f1eade); color: var(--green); }
+.catalogo-escala i { font-style: normal; }
+
+/* Família no cadastro do material */
+.catalogo-escolha-familia { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 18px 0 0; padding: 0; border: 0; }
+.catalogo-escolha-familia legend { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 10px; padding: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.catalogo-escolha-familia legend .text-button { display: inline-flex; align-items: center; gap: 4px; }
+.catalogo-escolha-familia label { position: relative; display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); cursor: pointer; transition: border-color .2s, background .2s; }
+.catalogo-escolha-familia label:hover { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
+.catalogo-escolha-familia label.marcado { border-color: var(--green); background: var(--accent-soft, #f1eade); box-shadow: inset 0 0 0 1px var(--green); }
+.catalogo-escolha-familia strong { color: var(--ink); font-size: 14.5px; }
+.catalogo-escolha-familia small { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+/* Cartões */
+.catalogo-familias, .catalogo-grade-acabamentos { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.catalogo-grade-acabamentos { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.catalogo-cartao { display: grid; align-content: start; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface, #fff); color: var(--ink); }
+.catalogo-cartao > header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 12px; }
+.catalogo-cartao h2 { margin: 0; font: 400 24px/1.15 Georgia, 'Times New Roman', serif; }
+.catalogo-cartao h3 { margin: 0; font: 400 21px/1.2 Georgia, 'Times New Roman', serif; }
+.catalogo-cartao > header small { display: block; margin-top: 3px; color: var(--muted); font-size: 12.5px; }
+.catalogo-cartao p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.catalogo-cartao > small { color: var(--ink); font-size: 13px; font-weight: 600; }
+.catalogo-cartao .text-button { display: inline-flex; align-items: center; gap: 4px; justify-self: start; }
+.catalogo-cartao-acoes { display: flex; gap: 12px; }
+.catalogo-cartao .text-button.perigo { color: var(--status-red-ink, #b3261e); }
+.catalogo-etiquetas { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.catalogo-etiquetas li { padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; font-weight: 600; }
+.catalogo-notas-lidas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 16px; margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--soft); }
+.catalogo-notas-lidas div { display: grid; gap: 5px; }
+.catalogo-notas-lidas dt { color: var(--muted); font-size: 11.5px; }
+.catalogo-notas-lidas dd { margin: 0; font-size: 13px; font-weight: 700; }
+.catalogo-barra { position: relative; display: block; height: 5px; overflow: hidden; border-radius: 99px; background: var(--line); }
+.catalogo-barra::after { content: ''; position: absolute; inset: 0 auto 0 0; width: calc(var(--nota) * 20%); border-radius: inherit; background: var(--green); }
+.catalogo-custo { color: var(--green); letter-spacing: .08em; }
+.catalogo-sem-notas, .catalogo-sem-preco { display: flex; align-items: center; gap: 6px; }
+.catalogo-cartao .catalogo-sem-preco { color: var(--status-yellow-ink, #8a5a00); font-size: 13px; }
+.catalogo-colunas { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.catalogo-colunas h3 { margin-bottom: 6px; color: var(--muted); font: 700 11px/1.4 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+.catalogo-colunas ul { display: grid; gap: 4px; margin: 0; padding-left: 16px; font-size: 13px; line-height: 1.45; }
+.catalogo-estilo { color: var(--muted) !important; font-weight: 500 !important; }
+
+/* Bordas e acabamentos */
+.catalogo-acabamentos { display: grid; gap: 28px; }
+.catalogo-acabamentos section { display: grid; gap: 14px; }
+.catalogo-acabamentos h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin: 0; font: 400 26px/1.2 Georgia, 'Times New Roman', serif; }
+.catalogo-acabamentos h2 small { color: var(--muted); font: 600 13px/1.4 system-ui, sans-serif; }
+.catalogo-acabamento .perfil-borda, .catalogo-acabamento .amostra-superficie { height: 130px; border-radius: 12px; background: var(--soft); }
+.catalogo-acabamento .amostra-superficie { aspect-ratio: auto; }
+.catalogo-acabamento.inativo { opacity: .65; }
+.catalogo-valor { padding: 4px 10px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.catalogo-valor.valor-medio { color: var(--green); }
+.catalogo-valor.valor-alto { background: var(--green); color: #fff; }
+.catalogo-valor.valor-tecnico { background: #e3edf3; color: #2f5b78; }
+html.inova-dark .inova-theme .catalogo-valor.valor-tecnico { background: #263744; color: #aecdef; }
+html.inova-dark .inova-theme .catalogo-valor.valor-alto { color: #17130e; }
+.catalogo-precos { display: grid; gap: 6px; margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--soft); list-style: none; }
+.catalogo-precos li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.catalogo-precos li b { flex: none; color: var(--green); }
+.catalogo-precos li.inativo { opacity: .6; }
+.catalogo-desenhos { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.catalogo-desenhos > legend { grid-column: 1 / -1; }
+.catalogo-desenhos label { position: relative; display: grid; gap: 4px; padding: 6px 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); color: var(--ink); font-size: 12.5px; font-weight: 600; text-align: center; cursor: pointer; }
+.catalogo-desenhos label.marcado { border-color: var(--green); background: var(--accent-soft, #f1eade); box-shadow: inset 0 0 0 1px var(--green); }
+.catalogo-desenhos :is(.perfil-borda, .amostra-superficie) { height: 64px; border-radius: 8px; }
+.catalogo-desenhos .amostra-superficie { aspect-ratio: auto; }
+.catalogo-precos-editar { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line) !important; border-radius: 12px; }
+.catalogo-precos-editar ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.catalogo-precos-editar li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; font-size: 14px; }
+.catalogo-precos-editar li b { color: var(--green); }
+.catalogo-novo-preco { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; gap: 8px; }
+.catalogo-novo-preco input { min-height: 42px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 14px; }
+.catalogo-ligar { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.catalogo-ligar select { min-height: 42px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 14px; }
+
+@media (max-width: 760px) {
+  .catalogo-formulario { grid-template-columns: 1fr; }
+  .catalogo-notas > div { grid-template-columns: 1fr; gap: 6px; }
+  .catalogo-familias, .catalogo-grade-acabamentos { grid-template-columns: 1fr; }
+  .catalogo-notas-lidas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .catalogo-novo-preco { grid-template-columns: 1fr 1fr; }
+  .catalogo-novo-preco button { grid-column: 1 / -1; }
+}

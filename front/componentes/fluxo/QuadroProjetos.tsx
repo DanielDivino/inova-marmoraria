@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { closestCenter, closestCorners, DndContext, DragOverlay, KeyboardSensor, MouseSensor, pointerWithin, TouchSensor, useDroppable, useSensor, useSensors, type Announcements, type CollisionDetection, type DragEndEvent, type DragOverEvent, type DragStartEvent, type UniqueIdentifier } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -55,11 +54,6 @@ function BotaoFaltaMaterial({ cartao, aoAlternar }: { cartao: CartaoFluxo; aoAlt
   </button>;
 }
 
-/** Projeto novo nasce no Novo orçamento (e entra no fluxo em "Aguardando início"). */
-function AdicionarProjeto() {
-  return <Link href="/" className="fluxo-adicionar" title="Abre o Novo orçamento"><Icone nome="mais" tamanho={18} />Adicionar projeto</Link>;
-}
-
 export type ColunaId = 'AGUARDANDO' | ProjectWorkflowStatus;
 /** Rótulos curtos para a barra de etapas do celular. */
 const ROTULO_CURTO: Partial<Record<ColunaId, string>> = { AGUARDANDO: 'Aguardando início', DONE: 'Produzido' };
@@ -85,7 +79,6 @@ function ColunaAguardando({ cartoes, abrir, ativa, faltaMaterial }: { cartoes: C
         onClick={() => abrir(cartao)} onKeyDown={(event) => { if (event.key === 'Enter') abrir(cartao); }} /><BotaoFaltaMaterial cartao={cartao} aoAlternar={faltaMaterial} /></div></li>)}
       {!cartoes.length && <li className="fluxo-vazio">Nenhum orçamento aguardando</li>}
     </ol>
-    <AdicionarProjeto />
   </section>;
 }
 
@@ -110,7 +103,6 @@ function Coluna({ status, ids, porId, abrir, ativa, moverPara, faltaMaterial }: 
         {!ids.length && <li className="fluxo-vazio">{moverPara ? 'Nenhum projeto nesta etapa' : 'Arraste um projeto para cá'}</li>}
       </ol>
     </SortableContext>
-    <AdicionarProjeto />
   </section>;
 }
 

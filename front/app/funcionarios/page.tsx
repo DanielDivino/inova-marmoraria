@@ -64,11 +64,7 @@ export default function FuncionariosPage() {
   }
 
   return <main className="list-page catalog-admin-page">
-    <CabecalhoEquipe />
-
-    <div className="barra-lista">
-      <button className="botao-destaque" type="button" onClick={() => { setWorkerForm(emptyWorker); setEditingWorker(''); }}><Icone nome="mais" />Criar funcionário</button>
-    </div>
+    <CabecalhoEquipe acoes={<button className="botao-destaque" type="button" onClick={() => { setWorkerForm(emptyWorker); setEditingWorker(''); }}><Icone nome="mais" />Criar funcionário</button>} />
 
     <div className="barra-filtros" role="search" aria-label="Buscar funcionários">
       <label className="barra-filtros-busca"><Icone nome="buscar" tamanho={20} /><input type="search" aria-label="Buscar funcionários" placeholder="Nome, CPF ou telefone" value={busca} onChange={(event) => setBusca(event.target.value)} /></label>

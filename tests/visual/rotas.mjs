@@ -49,7 +49,7 @@ await context.route('**/api/**', async route => {
   if (path === '/api/workers' || path === '/api/users') return route.fulfill({ json: [] });
   if (path === '/api/customers/c1') return route.fulfill({ json: maria });
   if (path === '/api/customers/c1/quotes') return route.fulfill({ json: [q1] });
-  if (path === '/api/customers') return route.fulfill({ json: { data: [maria, joao].filter(cliente => cliente.name.includes(url.searchParams.get('search') ?? '')), counts: { cadastrados: 2, semCadastro: 0 } } });
+  if (path === '/api/customers') return route.fulfill({ json: { data: [maria, joao].filter(cliente => cliente.name.includes(url.searchParams.get('search') ?? '')), counts: { todos: 2, ativos: 2, incompletos: 0, inativos: 0 } } });
   if (path === '/api/quotes' && method === 'GET') {
     const historico = url.searchParams.get('scope') === 'history';
     const lista = (historico ? [q3] : [q1]).filter(q => q.customerNameSnapshot.includes(url.searchParams.get('search') ?? ''));
@@ -117,8 +117,15 @@ try {
   await voltarDoDesenho.waitFor();
   assert.equal(semBase(await voltarDoDesenho.getAttribute('href')), '/orcamentos/q1?de=fluxo&cartao=k1');
 
-  // 3) Orçamentos com busca → orçamento → voltar reabre a lista com a busca.
+  // 3) Orçamentos com busca → orçamento → voltar reabre a lista com a busca. Título e atalhos
+  //    (Mostruário, Novo orçamento) na barra de cima, como nas outras telas.
+  const tituloEAtalhos = async (titulo) => {
+    await page.locator('.titulo-da-tela', { hasText: titulo }).waitFor();
+    await page.locator('#application-header-tabs .atalhos-cabecalho').getByRole('link', { name: 'Novo orçamento' }).waitFor();
+    assert.equal(await page.getByRole('link', { name: 'Novo Projeto' }).count(), 0, 'sem o "+ Novo Projeto" debaixo do título');
+  };
   await page.goto(base + '/orcamentos');
+  await tituloEAtalhos('Orçamentos');
   await page.getByLabel('Buscar orçamentos').fill('Maria');
   await page.waitForURL('**/orcamentos?busca=Maria');
   await page.getByRole('link', { name: 'ORC-2026-30' }).first().click();
@@ -131,6 +138,7 @@ try {
 
   // 4) Histórico → orçamento encerrado volta para o Histórico.
   await page.goto(base + '/historico');
+  await tituloEAtalhos('Histórico');
   await page.getByRole('link', { name: 'ORC-2026-12' }).first().click();
   await page.waitForURL('**/orcamentos/q3?de=historico');
   await page.getByRole('heading', { name: 'ORC-2026-12' }).waitFor();
@@ -152,6 +160,7 @@ try {
   //    num atendimento próprio, sem trocar o cliente que já estava aberto.
   await page.goto(base + '/');
   await page.locator('#project-name').waitFor();
+  assert.equal(await page.locator('.titulo-da-tela').count(), 0, 'Novo orçamento sem título na barra (ela tem as abas dos atendimentos)');
   await menuCliente();
   await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click();
   await page.getByPlaceholder('Digite nome, telefone ou CPF').fill('João');
@@ -191,7 +200,7 @@ try {
   await page.goto(base + '/orcamentos/q1?de=fluxo&cartao=k1');
   const seta = page.getByRole('link', { name: 'Voltar para Fluxo de trabalho' });
   await seta.waitFor();
-  assert.equal(await page.locator('.mobile-header-title').innerText(), 'Fluxo de trabalho');
+  assert.equal(await page.locator('.titulo-da-tela').innerText(), 'Fluxo de trabalho');
   await shot('05-celular-seta-voltar');
   await seta.click();
   await page.waitForURL(/\/fluxo(\?|$)/);
