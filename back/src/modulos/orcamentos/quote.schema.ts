@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { arredondarMoeda, tipoPresoAoLado, EXECUTION_STATUSES, WORK_STATUSES, WORK_STATUS_STORAGE, QUOTE_ENTRY_MODES, DETAILING_STATUSES } from '@inova/domain';
-import { trackingSchema } from './quote.tracking.js';
+import { calendarDateSchema, trackingSchema } from './quote.tracking.js';
 
 const billingUnitSchema = z.enum(['SQUARE_METER', 'LINEAR_METER', 'UNIT', 'FIXED']);
 const componentTypeSchema = z.enum(['TOP', 'COUNTER', 'BASE', 'VISTA', 'SKIRT', 'BACKSPLASH', 'SIDE_LEFT', 'SIDE_RIGHT', 'SILL', 'THRESHOLD', 'STEP', 'OTHER']);
@@ -62,9 +62,10 @@ value.cutouts.forEach((cutout, index) => { if (cutout.componentIndex !== undefin
 export const updateQuoteItemSchema = quoteItemBaseSchema.partial();
 export const createQuoteSchema = z.object({ customerId: z.string().cuid(), parentQuoteId: z.string().cuid().optional().nullable(), validUntil: z.coerce.date().optional().nullable(), discountAmount: money.default(0), notes: z.string().max(3000).optional().nullable(), items: z.array(quoteItemSchema).min(1), ...trackingSchema.shape });
 export const updateQuoteSchema = createQuoteSchema.omit({ customerId: true, items: true, parentQuoteId: true }).partial();
-const legacyStatusSchema = z.object({ status: z.enum(['DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED']), projetosNaoAprovados: z.array(z.string().cuid()).max(200).optional(), executionStatus: z.enum(EXECUTION_STATUSES).optional(), reason: z.string().min(3).max(500).optional(), estimatedBusinessDays: z.number().int().min(1).max(90).optional(), approvedAt: z.coerce.date().optional(), completedAt: z.coerce.date().optional() });
+const deadlinesNaAprovacao = { deliveryDeadline: calendarDateSchema.nullable().optional(), projectDeadlines: z.array(z.object({ projectId: z.string().cuid(), deliveryDeadline: calendarDateSchema.nullable() }).strict()).max(200).optional() };
+const legacyStatusSchema = z.object({ status: z.enum(['DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED']), projetosNaoAprovados: z.array(z.string().cuid()).max(200).optional(), ...deadlinesNaAprovacao, executionStatus: z.enum(EXECUTION_STATUSES).optional(), reason: z.string().min(3).max(500).optional(), estimatedBusinessDays: z.number().int().min(1).max(90).optional(), approvedAt: z.coerce.date().optional(), completedAt: z.coerce.date().optional() });
 export const updateStatusSchema = z.union([
-  z.object({ workStatus: z.enum(WORK_STATUSES), reason: z.string().min(3).max(500).optional(), projetosNaoAprovados: z.array(z.string().cuid()).max(200).optional() }).strict().transform(({ workStatus, reason, projetosNaoAprovados }) => ({ ...WORK_STATUS_STORAGE[workStatus], workStatus, reason, projetosNaoAprovados })),
+  z.object({ workStatus: z.enum(WORK_STATUSES), reason: z.string().min(3).max(500).optional(), projetosNaoAprovados: z.array(z.string().cuid()).max(200).optional(), ...deadlinesNaAprovacao }).strict().transform(({ workStatus, reason, projetosNaoAprovados, deliveryDeadline, projectDeadlines }) => ({ ...WORK_STATUS_STORAGE[workStatus], workStatus, reason, projetosNaoAprovados, deliveryDeadline, projectDeadlines })),
   legacyStatusSchema,
 ]);
 export const calculateQuoteSchema = z.object({ lines: z.array(z.object({ billingUnit: billingUnitSchema, unitPrice: money, lengthMm: z.number().positive().optional(), widthMm: z.number().positive().optional(), quantity: z.number().positive().optional(), billedQuantity: z.number().positive().optional() })).min(1), discount: money.default(0) });

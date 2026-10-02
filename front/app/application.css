@@ -603,6 +603,24 @@ body,
 .projetos-orcamento-topo { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 .projetos-orcamento-topo h2 { display: flex; align-items: baseline; gap: 8px; margin: 0; font: 600 16px/1.2 Georgia, serif; color: var(--ink); }
 .projetos-orcamento-topo h2 small { font: 600 12px system-ui, sans-serif; color: var(--muted); }
+.projetos-orcamento-topo .painel-filtros { flex: 1 1 100%; width: 100%; margin: 0; padding: 12px; }
+.projetos-orcamento-topo .painel-filtros-campos { gap: 10px; }
+.projeto-acompanhamento-resumo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 2px 0 12px; color: var(--muted); font-size: 12px; }
+.projeto-acompanhamento-resumo > span { display: inline-flex; align-items: center; gap: 6px; }
+.projeto-acompanhamento-resumo > span svg { color: var(--green); }
+.projeto-acompanhamento-resumo > p { flex-basis: 100%; margin: 0; color: var(--ink); white-space: pre-wrap; }
+.acompanhamento-edicao-campos { display: grid; gap: 16px; }
+.acompanhamento-edicao-campos label { display: grid; gap: 6px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.acompanhamento-edicao-campos input, .acompanhamento-edicao-campos textarea { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
+.acompanhamento-edicao-campos textarea { min-height: 110px; resize: vertical; }
+.janela-aprovacao .aprovacao-prazos { display: grid; gap: 10px; margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); }
+.janela-aprovacao .aprovacao-prazos h3 { margin: 0; font-size: 14px; }
+.aprovacao-prazo-modos { display: flex; flex-wrap: wrap; gap: 8px; }
+.aprovacao-prazo-modos label { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-size: 12px; cursor: pointer; }
+.aprovacao-prazo-modos label.ativa { border-color: var(--green); color: var(--ink); }
+.acompanhamento-data-label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
+.acompanhamento-data-label input { min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); font: inherit; }
+.janela-aprovacao .aprovacao-prazos > small { color: var(--muted); font-size: 11px; }
 .projetos-filtro { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface, #fff); }
 .projetos-filtro button { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
 .projetos-filtro button b { font-size: 11px; font-weight: 700; color: inherit; opacity: .75; }

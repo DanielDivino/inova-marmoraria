@@ -28,7 +28,8 @@ const escopoListagem = (user: AuthUser) => ({ declinedAt: null, quote: { ...esco
 
 /** O que é preciso para saber as peças do projeto (as mesmas da OS). */
 export const selectPecas = {
-  id: true, projectName: true, quantity: true, materialNameSnapshot: true, drawingData: true,
+  id: true, projectName: true, quantity: true, materialNameSnapshot: true, drawingData: true, deliveryDeadline: true,
+  workerAssignments: { orderBy: { assignedAt: 'desc' }, select: { releasedAt: true, worker: { select: { id: true, name: true, workColor: true } } } },
   components: { select: { id: true, label: true, componentType: true, lengthMm: true, widthMm: true, quantity: true, materialNameSnapshot: true }, orderBy: { sortOrder: 'asc' } },
 } satisfies Prisma.QuoteItemSelect;
 /** Cartões na ordem de criação: é a ordem em que as partes separadas reservam as peças. */
@@ -59,8 +60,9 @@ function paraCartao(cartao: CartaoSalvo, desenhos: Desenhos) {
   const projeto = cartao.quoteItem;
   const { pecas, porCartao } = pecasDosCartoes(projeto, desenhos);
   const mapa = porCartao.get(cartao.id) ?? {};
-  const prazo = prazoEfetivo(projeto.quote);
-  const responsavel = projeto.quote.workerAssignments[0]?.worker;
+  const prazo = prazoEfetivo({ ...projeto.quote, deliveryDeadline: projeto.deliveryDeadline ?? projeto.quote.deliveryDeadline });
+  const atribuicaoAtual = projeto.workerAssignments.find((atribuicao) => !atribuicao.releasedAt);
+  const responsavel = atribuicaoAtual?.worker ?? (projeto.workerAssignments.length ? undefined : projeto.quote.workerAssignments[0]?.worker);
   return {
     id: cartao.id,
     projectId: projeto.id,

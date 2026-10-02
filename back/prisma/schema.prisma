@@ -147,6 +147,7 @@ model Worker {
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
   workerAssignments QuoteWorkerAssignment[]
+  itemAssignments  QuoteItemWorkerAssignment[]
 }
 
 model Customer {
@@ -590,6 +591,8 @@ model QuoteItem {
   total                Decimal              @db.Decimal(12, 2)
   /// Projeto que o cliente não aprovou (aprovação parcial): fica no orçamento, mas fora do valor, do fluxo e da entrega.
   declinedAt           DateTime?
+  deliveryDeadline     DateTime?            @db.Date
+  notes                String?              @db.Text
   quote                Quote                @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   productType          ProductType          @relation(fields: [productTypeId], references: [id])
   material             Material             @relation(fields: [materialId], references: [id])
@@ -597,6 +600,21 @@ model QuoteItem {
   components           QuoteItemComponent[]
   cutouts              QuoteItemCutout[]
   workflowCards        WorkflowCard[]
+  workerAssignments    QuoteItemWorkerAssignment[]
+}
+
+model QuoteItemWorkerAssignment {
+  id            String    @id @default(cuid())
+  quoteItemId   String
+  workerId      String
+  colorSnapshot String
+  assignedAt    DateTime  @default(now())
+  releasedAt    DateTime?
+  quoteItem     QuoteItem @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+  worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Restrict)
+
+  @@index([quoteItemId, releasedAt])
+  @@index([workerId, releasedAt])
 }
 
 /// Cartão do fluxo de trabalho. O projeto começa com um só cartão, o principal

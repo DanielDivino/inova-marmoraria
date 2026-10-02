@@ -79,7 +79,10 @@ export function montarFiltrosOrcamento(query: Omit<QuoteFilters, 'ordem'>, now =
   if (query.situacaoPrazoInterno) conditions.push(filtroPrazo(query.situacaoPrazoInterno, now));
   if (query.sellerId) conditions.push({ createdById: query.sellerId });
   if (query.customerId) conditions.push({ customerId: query.customerId });
-  if (query.responsibleId) conditions.push({ workerAssignments: { some: { workerId: query.responsibleId, releasedAt: null } } });
+  if (query.responsibleId) conditions.push({ OR: [
+    { workerAssignments: { some: { workerId: query.responsibleId, releasedAt: null } } },
+    { items: { some: { workerAssignments: { some: { workerId: query.responsibleId, releasedAt: null } } } } },
+  ] });
   if (query.search) conditions.push({ OR: [
     { number: { contains: query.search, mode: 'insensitive' } },
     { customer: { is: { OR: [{ name: { contains: query.search, mode: 'insensitive' } }, { phone: { contains: query.search } }] } } },

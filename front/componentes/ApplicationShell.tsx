@@ -56,7 +56,7 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
   const mobileMenu = useRef<HTMLDialogElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [darkTheme, setDarkTheme] = useState(false);
-  const [alerts, setAlerts] = useState<{ id: string; number: string; customerName: string; projectName?: string | null; status: string; label: string; businessDays: number; dueDate: string }[]>([]);
+  const [alerts, setAlerts] = useState<{ id: string; projectId?: string | null; number: string; customerName: string; projectName?: string | null; status: string; label: string; businessDays: number; dueDate: string }[]>([]);
 
   useEffect(() => {
     setDarkTheme(document.documentElement.classList.contains('inova-dark'));
@@ -152,7 +152,7 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
   const indiceDaPagina = navegacaoRapida.findIndex(ativo);
   const indiceDaCurva = menuOpen || indiceDaPagina < 0 ? 4 : indiceDaPagina;
   const sino = (id: string) => <button type="button" className="notification-bell" aria-label="Notificações de prazo" aria-expanded={alertsOpen} aria-controls={id} onClick={() => setAlertsOpen((open) => !open)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>{alerts.length > 0 && <b>{alerts.length}</b>}</button>;
-  const painelAvisos = (id: string) => <aside id={id} className="notification-panel" aria-label="Notificações de prazo"><strong>Prazos de projetos</strong>{alerts.length ? alerts.map((alert) => <Link onClick={() => { setAlertsOpen(false); mobileMenu.current?.close(); }} href={`/orcamentos/${alert.id}`} key={alert.id} className={`deadline-alert ${alert.status.toLowerCase()}`}><b>{alert.number}</b><span>{alert.customerName}{alert.projectName ? ` · ${alert.projectName}` : ''}</span><small>{apresentacaoPrazo(alert.dueDate)?.description ?? alert.label}</small></Link>) : <p>Nenhum prazo exige atenção.</p>}</aside>;
+  const painelAvisos = (id: string) => <aside id={id} className="notification-panel" aria-label="Notificações de prazo"><strong>Prazos de projetos</strong>{alerts.length ? alerts.map((alert) => <Link onClick={() => { setAlertsOpen(false); mobileMenu.current?.close(); }} href={`/orcamentos/${alert.id}${alert.projectId ? `#projeto-${alert.projectId}` : ''}`} key={`${alert.id}-${alert.projectId ?? 'geral'}`} className={`deadline-alert ${alert.status.toLowerCase()}`}><b>{alert.number}</b><span>{alert.customerName}{alert.projectName ? ` · ${alert.projectName}` : ''}</span><small>{apresentacaoPrazo(alert.dueDate)?.description ?? alert.label}</small></Link>) : <p>Nenhum prazo exige atenção.</p>}</aside>;
   return <SessionContext.Provider value={user}><VoltarContext.Provider value={setVoltar}><div className="application-frame">
     <aside className="application-sidebar"><Link className="application-brand" href="/" aria-label="Inova — novo orçamento"><img src="/inova-logo.png" alt="Inova Marmoraria" /></Link>
       <span className="sidebar-section-label">ÁREA DE TRABALHO</span>

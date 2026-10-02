@@ -4,7 +4,7 @@ import { nomeArquivoPdf, disposicaoArquivoPdf, itemSalvoParaCopia, nomeProjeto }
 import { Prisma } from '@prisma/client';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { adicionarDiasUteis, podeAlterarStatusOrcamento, calcularLinha, calcularTotalOrcamento, DEFAULT_PROJECT_BUSINESS_DAYS, WORK_STATUS_STORAGE } from '@inova/domain';
+import { podeAlterarStatusOrcamento, calcularLinha, calcularTotalOrcamento, WORK_STATUS_STORAGE } from '@inova/domain';
 import { prisma } from '../../config/prisma.js';
 import { AppError, idSchema } from '../../compartilhado/http.js';
 import { createQuoteSchema, quoteItemSchema, updateQuoteItemSchema, updateQuoteSchema, updateStatusSchema, calculateQuoteSchema } from './quote.schema.js';
@@ -19,7 +19,7 @@ import { montarHistorico } from './quote.historico.js';
 import { definirProjetosNaoAprovados } from './aprovacao-projetos.js';
 import { naoAprovarPecas, naoAprovarPecasSchema } from './pecas-nao-aprovadas.js';
 import { retrabalharProjeto } from '../fluxo/workflow.service.js';
-import { acompanhamentoSchema } from './quote.tracking.js';
+import { acompanhamentoSchema, calendarDateSchema } from './quote.tracking.js';
 
 const asNumber = (value: unknown) => Number(value);
 type QuoteParaExportar = { id: string; number: string; customerId: string; customerNameSnapshot: string; deliveryDeadline: Date | null; dueDate: Date | null; items: { id: string; projectName: string | null; drawingData: unknown; declinedAt: Date | null }[] };
@@ -78,11 +78,29 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     });
     return serializarOrcamento(updated);
   });
+  app.put('/:id/items/:itemId/worker', { preHandler: [...authenticated.preHandler, exigirPermissao('team')] }, async (request) => {
+    const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const { workerId } = z.object({ workerId: z.string().cuid().nullable() }).parse(request.body);
+    const item = await prisma.quoteItem.findFirst({ where: { id: params.itemId, quoteId: params.id }, select: { id: true, projectName: true } });
+    if (!item) throw new AppError(404, 'Projeto não encontrado neste orçamento.', 'NOT_FOUND');
+    const current = await prisma.quoteItemWorkerAssignment.findFirst({ where: { quoteItemId: item.id, releasedAt: null }, include: { worker: { select: { id: true, name: true } } }, orderBy: { assignedAt: 'desc' } });
+    if (current?.workerId === workerId) return serializarOrcamento(await prisma.quote.findUniqueOrThrow({ where: { id: params.id }, include: incluirOrcamento(request.user) }));
+    const worker = workerId ? await prisma.worker.findFirst({ where: { id: workerId, isActive: true }, select: { id: true, name: true, workColor: true } }) : null;
+    if (workerId && !worker) throw new AppError(422, 'Funcionário não está disponível.', 'WORKER_UNAVAILABLE');
+    const updated = await prisma.$transaction(async (tx) => {
+      const now = new Date();
+      if (current) await tx.quoteItemWorkerAssignment.update({ where: { id: current.id }, data: { releasedAt: now } });
+      if (worker) await tx.quoteItemWorkerAssignment.create({ data: { quoteItemId: item.id, workerId: worker.id, colorSnapshot: worker.workColor, assignedAt: now } });
+      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: item.id, action: 'WORKER_CHANGED', previous: { quoteId: params.id, projectName: item.projectName, workerName: current?.worker.name ?? null }, current: { quoteId: params.id, projectName: item.projectName, workerName: worker?.name ?? null } } });
+      return tx.quote.findUniqueOrThrow({ where: { id: params.id }, include: incluirOrcamento(request.user) });
+    });
+    return serializarOrcamento(updated);
+  });
   // Botão "Histórico" da tela do orçamento: linha do tempo com o que aconteceu (situação, prazos, equipe, Fluxo, entregas).
   app.get('/:id/historico', authenticated, async (request) => {
     const { id } = idSchema.parse(request.params);
     const quote = await prisma.quote.findUnique({ where: { id }, select: {
-      createdAt: true, validUntil: true, approvedAt: true, completedAt: true, dueDate: true,
+      createdAt: true, validUntil: true, approvedAt: true, completedAt: true, dueDate: true, deliveryDeadline: true,
       items: { select: { id: true, projectName: true } },
       workerAssignments: { select: { id: true, assignedAt: true, releasedAt: true, worker: { select: { name: true } } }, orderBy: { assignedAt: 'asc' } },
     } });
@@ -120,8 +138,29 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
       ...(input.deadlineNote !== undefined ? { deadlineNote: input.deadlineNote } : {}),
       ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
     };
-    const updated = await prisma.quote.update({ where: { id }, data, include: incluirOrcamento(request.user) });
-    await prisma.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'DEADLINE_UPDATED', previous: { deliveryDeadline: before.deliveryDeadline, installationDeadline: before.installationDeadline, deadlineConfirmed: before.deadlineConfirmed, deadlineNote: before.deadlineNote, notes: before.notes }, current: { deliveryDeadline: updated.deliveryDeadline, installationDeadline: updated.installationDeadline, deadlineConfirmed: updated.deadlineConfirmed, deadlineNote: updated.deadlineNote, notes: updated.notes } } });
+    const updated = await prisma.$transaction(async (tx) => {
+      if (input.deliveryDeadline !== undefined) {
+        await tx.quoteItem.updateMany({ where: { quoteId: id, declinedAt: null }, data: { deliveryDeadline: input.deliveryDeadline ? new Date(`${input.deliveryDeadline}T00:00:00.000Z`) : null } });
+      }
+      const quote = await tx.quote.update({ where: { id }, data, include: incluirOrcamento(request.user) });
+      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'DEADLINE_UPDATED', previous: { deliveryDeadline: before.deliveryDeadline, installationDeadline: before.installationDeadline, deadlineConfirmed: before.deadlineConfirmed, deadlineNote: before.deadlineNote, notes: before.notes }, current: { deliveryDeadline: quote.deliveryDeadline, installationDeadline: quote.installationDeadline, deadlineConfirmed: quote.deadlineConfirmed, deadlineNote: quote.deadlineNote, notes: quote.notes } } });
+      return quote;
+    });
+    return serializarOrcamento(updated);
+  });
+  app.patch('/:id/items/:itemId/acompanhamento', authenticated, async (request) => {
+    const params = z.object({ id: z.string().cuid(), itemId: z.string().cuid() }).parse(request.params);
+    const input = z.object({ deliveryDeadline: calendarDateSchema.nullable(), notes: z.string().trim().max(3000).nullable() }).strict().parse(request.body);
+    const item = await prisma.quoteItem.findFirst({ where: { id: params.itemId, quoteId: params.id }, select: { id: true, projectName: true, deliveryDeadline: true, notes: true } });
+    if (!item) throw new AppError(404, 'Projeto não encontrado neste orçamento.', 'NOT_FOUND');
+    const updated = await prisma.$transaction(async (tx) => {
+      const itemAtualizado = await tx.quoteItem.update({ where: { id: item.id }, data: { deliveryDeadline: input.deliveryDeadline ? new Date(`${input.deliveryDeadline}T00:00:00.000Z`) : null, notes: input.notes || null } });
+      const prazos = await tx.quoteItem.findMany({ where: { quoteId: params.id, declinedAt: null, deliveryDeadline: { not: null } }, select: { deliveryDeadline: true } });
+      const prazoGeral = prazos.map((projeto) => projeto.deliveryDeadline!).sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+      await tx.quote.update({ where: { id: params.id }, data: { deliveryDeadline: prazoGeral } });
+      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: item.id, action: 'TRACKING_UPDATED', previous: { quoteId: params.id, projectName: item.projectName, deliveryDeadline: item.deliveryDeadline, notes: item.notes }, current: { quoteId: params.id, projectName: item.projectName, deliveryDeadline: itemAtualizado.deliveryDeadline, notes: itemAtualizado.notes } } });
+      return tx.quote.findUniqueOrThrow({ where: { id: params.id }, include: incluirOrcamento(request.user) });
+    });
     return serializarOrcamento(updated);
   });
   app.patch('/:id', authenticated, async (request) => {
@@ -147,21 +186,20 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     const { id } = idSchema.parse(request.params);
     const input = updateStatusSchema.parse(request.body);
     const normalized = 'workStatus' in input ? { ...input, ...WORK_STATUS_STORAGE[input.workStatus] } : input;
-    const quote = await prisma.quote.findUnique({ where: { id }, include: { items: { select: { declinedAt: true } } } });
+    const quote = await prisma.quote.findUnique({ where: { id }, include: { items: { select: { id: true, projectName: true, declinedAt: true, deliveryDeadline: true } } } });
     if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
     if (quote.status !== normalized.status && !podeAlterarStatusOrcamento(quote.status, normalized.status)) throw new AppError(409, 'Esta alteração de status não é permitida.', 'INVALID_STATUS_TRANSITION');
     if (normalized.executionStatus && normalized.executionStatus !== 'NOT_STARTED' && normalized.status !== 'APPROVED') throw new AppError(409, 'A execução exige um orçamento aprovado.', 'INVALID_EXECUTION_STATUS');
     if (quote.executionStatus === 'COMPLETED' && normalized.executionStatus && !['COMPLETED', 'REWORK'].includes(normalized.executionStatus)) throw new AppError(409, 'Para reabrir um projeto entregue, use Em retrabalho.', 'INVALID_EXECUTION_STATUS');
     const firstApproval = normalized.status === 'APPROVED' && !quote.approvedAt;
     const now = new Date();
-    const estimatedBusinessDays = normalized.estimatedBusinessDays ?? quote.estimatedBusinessDays ?? DEFAULT_PROJECT_BUSINESS_DAYS;
     const startedAt = quote.startedAt ?? now;
     const executionStatus = normalized.executionStatus ?? quote.executionStatus;
     const data: Prisma.QuoteUpdateInput = {
       status: normalized.status,
       ...(normalized.executionStatus ? { executionStatus } : {}),
       ...(normalized.approvedAt ? { approvedAt: normalized.approvedAt } : {}),
-      ...(firstApproval ? { approvedAt: normalized.approvedAt ?? now, estimatedBusinessDays, dueDate: quote.dueDate ?? adicionarDiasUteis(normalized.approvedAt ?? now, estimatedBusinessDays) } : {}),
+      ...(firstApproval ? { approvedAt: normalized.approvedAt ?? now } : {}),
       ...(normalized.executionStatus === 'IN_PROGRESS' || normalized.executionStatus === 'REWORK' ? { startedAt } : {}),
       ...(normalized.executionStatus === 'COMPLETED' ? { completedAt: quote.completedAt ?? now } : {}),
       ...(normalized.executionStatus === 'REWORK' ? { completedAt: null } : {}),
@@ -171,11 +209,32 @@ export async function registrarRotasOrcamentos(app: FastifyInstance) {
     const aprovando = normalized.status === 'APPROVED' && quote.status !== 'APPROVED';
     const pendente = normalized.status === 'SENT' || normalized.status === 'DRAFT';
     const pedidos = aprovando ? normalized.projetosNaoAprovados ?? [] : [];
+    const idsNaoAprovados = new Set(pedidos);
+    const projetosAprovados = quote.items.filter((item) => !idsNaoAprovados.has(item.id));
+    if (normalized.projectDeadlines !== undefined) {
+      const prazosPorProjeto = new Map(normalized.projectDeadlines.map((projeto) => [projeto.projectId, projeto.deliveryDeadline]));
+      if (prazosPorProjeto.size !== normalized.projectDeadlines.length || prazosPorProjeto.size !== projetosAprovados.length || projetosAprovados.some((item) => !prazosPorProjeto.has(item.id)) || normalized.projectDeadlines.some((projeto) => !quote.items.some((item) => item.id === projeto.projectId))) {
+        throw new AppError(422, 'Informe um prazo para cada projeto aprovado.', 'INVALID_PROJECT_DEADLINES');
+      }
+    }
+    const datasDosProjetos = normalized.projectDeadlines?.map((projeto) => projeto.deliveryDeadline).filter((data): data is string => !!data)
+      ?? (normalized.deliveryDeadline ? projetosAprovados.map(() => normalized.deliveryDeadline!) : []);
+    const prazoGeral = normalized.deliveryDeadline !== undefined ? normalized.deliveryDeadline
+      : normalized.projectDeadlines !== undefined ? [...datasDosProjetos].sort()[0] ?? null : undefined;
+    if (aprovando && prazoGeral !== undefined) data.deliveryDeadline = prazoGeral ? new Date(`${prazoGeral}T00:00:00.000Z`) : null;
     const mudaAprovacao = (aprovando || pendente) && (pedidos.length > 0 || !!quote.items?.some((item) => item.declinedAt));
     const updated = await prisma.$transaction(async (tx) => {
       const naoAprovados = mudaAprovacao ? await definirProjetosNaoAprovados(tx, id, pedidos) : [];
+      if (aprovando && (normalized.projectDeadlines !== undefined || normalized.deliveryDeadline !== undefined)) {
+        const prazosPorProjeto = normalized.projectDeadlines ? new Map(normalized.projectDeadlines.map((projeto) => [projeto.projectId, projeto.deliveryDeadline])) : null;
+        for (const item of projetosAprovados) {
+          const deliveryDeadline = prazosPorProjeto ? prazosPorProjeto.get(item.id) ?? null : normalized.deliveryDeadline ?? null;
+          await tx.quoteItem.update({ where: { id: item.id }, data: { deliveryDeadline: deliveryDeadline ? new Date(`${deliveryDeadline}T00:00:00.000Z`) : null } });
+          await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE_ITEM', entityId: item.id, action: 'TRACKING_UPDATED', previous: { quoteId: id, projectName: item.projectName, deliveryDeadline: item.deliveryDeadline }, current: { quoteId: id, projectName: item.projectName, deliveryDeadline } } });
+        }
+      }
       const result = await tx.quote.update({ where: { id }, data, include: incluirOrcamento(request.user) });
-      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'STATUS_CHANGED', previous: { status: quote.status, executionStatus: quote.executionStatus, completedAt: quote.completedAt }, current: { status: result.status, executionStatus: result.executionStatus, reason: input.reason, ...(naoAprovados.length ? { projetosNaoAprovados: result.items.filter((item) => naoAprovados.includes(item.id)).map((item) => nomeProjeto(item)) } : {}), approvedAt: result.approvedAt, completedAt: result.completedAt, startedAt: result.startedAt, dueDate: result.dueDate } } });
+      await tx.auditLog.create({ data: { userId: request.user.id, entityType: 'QUOTE', entityId: id, action: 'STATUS_CHANGED', previous: { status: quote.status, executionStatus: quote.executionStatus, completedAt: quote.completedAt }, current: { status: result.status, executionStatus: result.executionStatus, reason: input.reason, ...(naoAprovados.length ? { projetosNaoAprovados: result.items.filter((item) => naoAprovados.includes(item.id)).map((item) => nomeProjeto(item)) } : {}), approvedAt: result.approvedAt, completedAt: result.completedAt, startedAt: result.startedAt, dueDate: result.dueDate, deliveryDeadline: result.deliveryDeadline } } });
       return result;
     });
     return serializarOrcamento(updated);

@@ -289,8 +289,8 @@ const rotuloValidade = (quote: any) => quote.validUntil ? pdfDate(quote.validUnt
  * mesma folha, com o total do projeto; o desconto final vale para o orçamento completo e não entra.
  */
 export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pick<QuotePdfOptions, 'individualPrices' | 'drawings'> = { individualPrices: false, drawings: true }, projetoId?: string) {
-  const deliveryLabel = rotuloEntregaPdf(quote);
   const projeto = projetoId ? quote.items.find((item: any) => item.id === projetoId) : undefined;
+  const deliveryLabel = rotuloEntregaPdf(projeto ? { deliveryDeadline: projeto.deliveryDeadline, dueDate: null } : quote);
   // Orçamento aprovado em parte: o PDF do orçamento traz só os projetos aprovados.
   const itens: any[] = projeto ? [projeto] : quote.items.filter((item: any) => !item.declinedAt);
   header(pdf, 'ORÇAMENTO', quote);
@@ -397,7 +397,7 @@ export function renderizarPdfOrcamento(pdf: PdfDocument, quote: any, options: Pi
   // Fechamento da folha do orçamento: a tabela com o valor total (no cartão) e o valor à vista, em
   // destaque; embaixo, as condições de pagamento, as informações importantes (em todo PDF de
   // orçamento) e as observações deste orçamento.
-  const notes = String(quote.notes ?? '').trim();
+  const notes = String(projeto?.notes ?? quote.notes ?? '').trim();
   const leftX = 36;
   const leftWidth = 523;
   const desconto = projeto ? 0 : Number(quote.discountAmount);
@@ -518,12 +518,13 @@ function renderizarFolhasDesenho(pdf: PdfDocument, quote: any, deliveryLabel: st
   if (!drawnItems.length) return;
   let y = 0;
   let folhaVazia = aproveitarFolhaAtual;
+  let prazoDoProjeto = deliveryLabel;
   // Every drawing sheet can be identified independently in the workshop.
   // Keep the three header columns separate, including for long customer names.
   const newDrawingPage = () => {
     if (folhaVazia) folhaVazia = false;
     else pdf.addPage();
-    y = cabecalhoOrdemServicoPdf(pdf, { entrega: deliveryLabel, cliente: quote.customerNameSnapshot, numero: quote.number });
+    y = cabecalhoOrdemServicoPdf(pdf, { entrega: prazoDoProjeto, cliente: quote.customerNameSnapshot, numero: quote.number });
   };
   newDrawingPage();
   const ensureSpace = (height: number) => {
@@ -606,6 +607,8 @@ function renderizarFolhasDesenho(pdf: PdfDocument, quote: any, deliveryLabel: st
     }
   };
   drawnItems.forEach(({ item, itemIndex }: { item: any; itemIndex: number }, position: number) => {
+    const prazoProjeto = item.deliveryDeadline ?? (quote.items.some((projeto: any) => projeto.deliveryDeadline) ? null : quote.deliveryDeadline ?? quote.dueDate);
+    prazoDoProjeto = rotuloEntregaPdf({ deliveryDeadline: prazoProjeto, dueDate: null });
     // Separate projects without charging the final project for an unused gap.
     // That trailing space could push a short observation onto its own sheet.
     if (position > 0) y += 12;
@@ -660,6 +663,7 @@ function renderizarFolhasDesenho(pdf: PdfDocument, quote: any, deliveryLabel: st
     }
     writeDescription('Recortes sem componente vinculado', cutoutsForDrawing.filter((cutout: any) => !components.some((component: any) => component.id === cutout.componentId)).flatMap((cutout: any) => descricaoProducaoRecorte(cutoutDetail(cutout))));
     writeDescription('Serviços e detalhes do projeto', (item.services ?? []).map((service: any) => ({ label: 'Serviço', text: `${service.serviceNameSnapshot}${service.billingUnitSnapshot === 'UNIT' ? ` · quantidade: ${number(Number(service.billedQuantity), 0)}` : ''}` })));
+    if (item.notes?.trim()) writeDescription('Observações do projeto', [{ label: 'Observação', text: item.notes.trim() }]);
   });
   pdf.font('Helvetica').fontSize(9);
   const noteLines: string[] = [];

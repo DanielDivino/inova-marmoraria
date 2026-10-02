@@ -11,7 +11,7 @@ export type EventoHistorico = { id: string; data: string; titulo: string; detalh
 export type MarcoHistorico = { rotulo: string; data: string | null };
 type Registro = { id: string; action: string; entityType: string; entityId: string; previous: unknown; current: unknown; createdAt: Date; user?: { name: string } | null };
 type Orcamento = {
-  createdAt: Date; validUntil: Date | null; approvedAt: Date | null; completedAt: Date | null; dueDate: Date | null;
+  createdAt: Date; validUntil: Date | null; approvedAt: Date | null; completedAt: Date | null; dueDate: Date | null; deliveryDeadline?: Date | null;
   items: { id: string; projectName: string | null }[];
   workerAssignments: { id: string; assignedAt: Date; releasedAt: Date | null; worker: { name: string | null } }[];
 };
@@ -83,6 +83,15 @@ export function montarHistorico(orcamento: Orcamento, registros: Registro[]): { 
       case 'QUOTE_ITEM:APPROVAL_CHANGED':
         eventos.push({ ...base(registro), titulo: atual.aprovado ? `${projeto} aprovado pelo cliente` : `${projeto} marcado como não aprovado`, tom: atual.aprovado ? 'verde' : 'amarelo', icone: 'situacao' });
         break;
+      case 'QUOTE_ITEM:WORKER_CHANGED':
+        eventos.push({ ...base(registro), titulo: atual.workerName ? `${texto(atual.workerName)} atribuído a ${projeto}` : `Funcionário removido de ${projeto}`, ...(texto(anterior.workerName) && atual.workerName ? { detalhe: `${texto(anterior.workerName)} substituído` } : {}), tom: 'azul', icone: 'equipe' });
+        break;
+      case 'QUOTE_ITEM:TRACKING_UPDATED': {
+        const { partes, notas } = mudancasDeAcompanhamento(anterior, atual);
+        if (partes.length) eventos.push({ ...base(registro), titulo: `Prazo atualizado: ${projeto}`, detalhe: partes.join(' · '), tom: 'azul', icone: 'prazo' });
+        if (notas) eventos.push({ ...base(registro), id: `${registro.id}-notas`, titulo: texto(atual.notes) ? `Observações atualizadas: ${projeto}` : `Observações removidas: ${projeto}`, tom: 'neutro', icone: 'editado' });
+        break;
+      }
       case 'QUOTE_ITEM:PIECES_DECLINED': {
         const pecas = Array.isArray(atual.pieces) ? atual.pieces.map(objeto) : [];
         const quantas = pecas.reduce((soma: number, peca) => soma + (Number(peca.quantidade) || 0), 0);
@@ -141,7 +150,7 @@ export function montarHistorico(orcamento: Orcamento, registros: Registro[]): { 
     { rotulo: 'Emissão', data: diaDoMomento(orcamento.createdAt) },
     { rotulo: 'Validade', data: diaGravado(orcamento.validUntil) ?? validadeOrcamento(orcamento.createdAt) },
     { rotulo: 'Aprovação', data: diaDoMomento(orcamento.approvedAt) },
-    { rotulo: 'Data limite', data: diaGravado(orcamento.dueDate) },
+    { rotulo: 'Prazo de entrega', data: diaGravado(orcamento.deliveryDeadline ?? orcamento.dueDate) },
     { rotulo: 'Entrega', data: diaDoMomento(orcamento.completedAt) },
   ];
   return { eventos, marcos };

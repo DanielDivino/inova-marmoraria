@@ -11,15 +11,16 @@ import { api, ApiError } from '../../../utilitarios/api';
 import { ExportarPdfOrcamento, ExportarPdfProjeto } from '../../../componentes/orcamento/QuotePdfExport';
 import { BlocoProjeto } from '../../../componentes/orcamento/BlocoProjeto';
 import { JanelaAprovacao } from '../../../componentes/orcamento/JanelaAprovacao';
+import { JanelaFuncionarioProjeto } from '../../../componentes/orcamento/JanelaFuncionarioProjeto';
+import { JanelaAcompanhamento } from '../../../componentes/orcamento/JanelaAcompanhamento';
 import { JanelaRetrabalho, type DestinoRetrabalho } from '../../../componentes/orcamento/JanelaRetrabalho';
 import { NotaEntregaProjeto, type EntregasOrcamento } from '../../../componentes/orcamento/NotaEntregaProjeto';
 import { EntregaGeral } from '../../../componentes/orcamento/EntregaGeral';
 import { IndicadorEntrega } from '../../../componentes/orcamento/IndicadorEntrega';
 import { JanelaNomes } from '../../../componentes/orcamento/JanelaNomes';
 import { JanelaNaoAprovado, type EscolhaNaoAprovado } from '../../../componentes/orcamento/JanelaNaoAprovado';
-import { Icone, type NomeIcone } from '../../../componentes/filtros/Filtros';
+import { AbasFiltro, CampoFiltro, Icone, PainelFiltros, type NomeIcone } from '../../../componentes/filtros/Filtros';
 import { MenuAcoes, type AcaoMenu } from '../../../componentes/MenuAcoes';
-import { SecaoRecolhivel } from '../../../componentes/SecaoRecolhivel';
 import { EditarContato } from '../../../componentes/clientes/EditarContato';
 import { HistoricoOrcamento } from '../../../componentes/orcamento/HistoricoOrcamento';
 import { Caminho } from '../../../componentes/Caminho';
@@ -32,6 +33,7 @@ type Component = { id: string; label: string; orientation: 'HORIZONTAL' | 'VERTI
 type Cutout = { id: string; cutoutType: string; label?: string; lengthMm?: number; widthMm?: number; diameterMm?: number; quantity: number };
 type Worker = { id: string; name: string; workColor: string };
 type WorkerAssignment = { id: string; assignedAt: string; releasedAt?: string | null; colorSnapshot: string; worker: Worker };
+type FiltroProjeto = 'todos' | 'aprovados' | 'nao-aprovados';
 type Quote = {
   parentQuote?: { id: string; number: string } | null; complements?: { id: string; number: string; netTotal: number }[];
   number: string; customerId: string; createdAt?: string; status: string; executionStatus?: string; approvedAt?: string; completedAt?: string; validUntil?: string; dueDate?: string; deliveryDeadline?: string; installationDeadline?: string; deadlineConfirmed?: boolean; deadlineNote?: string | null; customerNameSnapshot: string; customerPhoneSnapshot?: string; workAddressSnapshot?: string;
@@ -39,7 +41,7 @@ type Quote = {
   /** Desconto negociado para o orçamento completo, enquanto há projetos não aprovados. */
   fullDiscountAmount?: number | null;
   workerAssignments?: WorkerAssignment[];
-  items: (SavedQuoteItem & { id: string; declinedAt?: string | null; materialNameSnapshot: string; unitPriceSnapshot: number; billedQuantity: number; materialSubtotal: number; total: number; calculationMode: 'DIMENSIONS' | 'MANUAL_M2'; productType: { name: string }; services: { serviceNameSnapshot: string; billedQuantity: number; unitPriceSnapshot: number; subtotal: number; calculatedSubtotal: number; appliedSubtotal: number; billingUnitSnapshot: string }[]; components: Component[]; cutouts: Cutout[] })[];
+  items: (SavedQuoteItem & { id: string; declinedAt?: string | null; deliveryDeadline?: string | null; notes?: string | null; workerAssignments?: WorkerAssignment[]; materialNameSnapshot: string; unitPriceSnapshot: number; billedQuantity: number; materialSubtotal: number; total: number; calculationMode: 'DIMENSIONS' | 'MANUAL_M2'; productType: { name: string }; services: { serviceNameSnapshot: string; billedQuantity: number; unitPriceSnapshot: number; subtotal: number; calculatedSubtotal: number; appliedSubtotal: number; billingUnitSnapshot: string }[]; components: Component[]; cutouts: Cutout[] })[];
 };
 const cm = (millimeters: number) => (millimeters / 10).toLocaleString('pt-BR');
 type PecaNaoAprovada = { nome: string; lengthMm: number; widthMm: number; quantidade: number };
@@ -48,7 +50,7 @@ const pecasNaoAprovadas = (item: { drawingData?: unknown }): PecaNaoAprovada[] =
   const lista = (item.drawingData as { pecasNaoAprovadas?: unknown } | null)?.pecasNaoAprovadas;
   return Array.isArray(lista) ? lista.filter((peca): peca is PecaNaoAprovada => !!peca && typeof peca === 'object' && typeof (peca as PecaNaoAprovada).nome === 'string') : [];
 };
-const dateLabel = (value?: string) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não definida';
+const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'Não definida';
 
 export default function QuoteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -61,14 +63,17 @@ export default function QuoteDetailPage() {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState('');
  const [updating, setUpdating] = useState(false);
-  const [savingTracking, setSavingTracking] = useState(false);
-  const [trackingSaved, setTrackingSaved] = useState(false);
-  // Aba "Equipe, prazo e observação": o formulário recomeça (com o que está salvo) ao salvar ou descartar.
-  const [formVersao, setFormVersao] = useState(0);
   const [editandoContato, setEditandoContato] = useState(false);
-  const [alterado, setAlterado] = useState(false);
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [savingWorker, setSavingWorker] = useState(false);
+  const [salvandoFuncionario, setSalvandoFuncionario] = useState(false);
+  const [projetoFuncionario, setProjetoFuncionario] = useState<Quote['items'][number] | null>(null);
+  const [projetoAcompanhamento, setProjetoAcompanhamento] = useState<Quote['items'][number] | null>(null);
+  const [acompanhamentoGeral, setAcompanhamentoGeral] = useState(false);
+  const [salvandoAcompanhamento, setSalvandoAcompanhamento] = useState(false);
+  const [buscaProjeto, setBuscaProjeto] = useState('');
+  const [filtroProjetos, setFiltroProjetos] = useState<FiltroProjeto>('todos');
+  const [filtroPrazo, setFiltroPrazo] = useState<'todos' | 'com-prazo' | 'sem-prazo'>('todos');
+  const [filtroFuncionario, setFiltroFuncionario] = useState('');
   // Projeto cujo desenho técnico está abrindo.
   const [openingDesign, setOpeningDesign] = useState<string | null>(null);
   // Entregas por projeto (notas de entrega) só existem depois da aprovação.
@@ -86,7 +91,6 @@ export default function QuoteDetailPage() {
   const [aprovacaoPedida, setAprovacaoPedida] = useState<{ status: string; executionStatus?: string } | null>(null);
   // Projetos em blocos compactos: quais estão abertos e quais aparecem (todos, aprovados ou não aprovados).
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
-  const [filtroProjetos, setFiltroProjetos] = useState<'todos' | 'aprovados' | 'nao-aprovados'>('todos');
   const [alterandoAprovacao, setAlterandoAprovacao] = useState<string | null>(null);
   // "Não aprovado / alterar": as peças do projeto que o cliente não aprovou.
   const [naoAprovar, setNaoAprovar] = useState<Quote['items'][number] | null>(null);
@@ -117,6 +121,11 @@ export default function QuoteDetailPage() {
   if (!quote) return <main className="list-page"><p className="empty">Carregando orçamento…</p></main>;
   // Projetos que o cliente não aprovou ficam fora do valor.
   const recusados = quote.items.filter((item) => item.declinedAt);
+  const funcionarioGeral = quote.workerAssignments?.find((assignment) => !assignment.releasedAt)?.worker;
+  const funcionarioDoProjeto = (item: Quote['items'][number]) => {
+    const atribuicoes = item.workerAssignments ?? [];
+    return atribuicoes.find((assignment) => !assignment.releasedAt)?.worker ?? (atribuicoes.length ? undefined : funcionarioGeral);
+  };
   const individualDiscount = descontosIndividuais(quote.items.filter((item) => !item.declinedAt));
   const entregasPorProjeto = new Map(entregas?.projects.map((projeto) => [projeto.id, projeto]) ?? []);
   const totalDiscountGiven = individualDiscount + quote.discountAmount;
@@ -147,42 +156,30 @@ export default function QuoteDetailPage() {
     } catch (cause) { setErroRetrabalho(cause instanceof Error ? cause.message : 'Não foi possível colocar o projeto em retrabalho.'); }
     finally { setEnviandoRetrabalho(false); }
   }
- async function changeStatus(payload: { status: string; executionStatus?: string; reason?: string; projetosNaoAprovados?: string[] }) {
+ async function changeStatus(payload: { status: string; executionStatus?: string; reason?: string; projetosNaoAprovados?: string[]; deliveryDeadline?: string | null; projectDeadlines?: { projectId: string; deliveryDeadline: string | null }[] }) {
     if (updating) return;
     setUpdating(true); setError('');
     try { setQuote(await api<Quote>(`/quotes/${id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar o projeto.'); }
     finally { setUpdating(false); }
  }
-  /** Aba "Equipe, prazo e observação": salva de uma vez o responsável, os prazos e as observações do orçamento. */
-  async function salvarAba(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (savingTracking || !quote) return;
-    const form = new FormData(event.currentTarget); setSavingTracking(true); setError('');
-    try {
-      const responsavel = String(form.get('workerId') ?? '');
-      if (form.has('workerId') && responsavel !== (quote.workerAssignments?.find((assignment) => !assignment.releasedAt)?.worker.id ?? '')) {
-        await api<Quote>(`/quotes/${id}/worker`, { method: 'PUT', body: JSON.stringify({ workerId: responsavel || null }) });
-      }
-      const payload = {
-        deliveryDeadline: String(form.get('deliveryDeadline') || '') || null, installationDeadline: String(form.get('installationDeadline') || '') || null,
-        // Desmarcado, o navegador nem manda o campo: vale como "não confirmado".
-        deadlineConfirmed: form.get('deadlineConfirmed') === 'on', notes: String(form.get('notes') || '').trim() || null,
-      };
-      setQuote(await api<Quote>(`/quotes/${id}/tracking`, { method: 'PATCH', body: JSON.stringify(payload) }));
-      setAlterado(false); setFormVersao((versao) => versao + 1);
-      setTrackingSaved(true); window.setTimeout(() => setTrackingSaved(false), 2500);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar.'); }
-    finally { setSavingTracking(false); }
+  async function salvarFuncionarioProjeto(item: Quote['items'][number], workerId: string | null) {
+    setSalvandoFuncionario(true); setError('');
+    try { setQuote(await api<Quote>(`/quotes/${id}/items/${item.id}/worker`, { method: 'PUT', body: JSON.stringify({ workerId }) })); setProjetoFuncionario(null); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o funcionário.'); }
+    finally { setSalvandoFuncionario(false); }
   }
-  const descartar = () => { setAlterado(false); setFormVersao((versao) => versao + 1); };
-  async function changeWorkerColor(worker: Worker, workColor: string) {
-    setSavingWorker(true); setError('');
-    try {
-      const updated = await api<Worker>(`/workers/${worker.id}`, { method: 'PATCH', body: JSON.stringify({ workColor }) });
-      setWorkers((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
-      setQuote((current) => current ? { ...current, workerAssignments: current.workerAssignments?.map((assignment) => assignment.worker.id === updated.id ? { ...assignment, worker: updated } : assignment) } : current);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar a cor do funcionário.'); }
-    finally { setSavingWorker(false); }
+  async function salvarAcompanhamentoProjeto(item: Quote['items'][number], dados: { deliveryDeadline: string | null; notes: string | null }) {
+    setSalvandoAcompanhamento(true); setError('');
+    try { setQuote(await api<Quote>(`/quotes/${id}/items/${item.id}/acompanhamento`, { method: 'PATCH', body: JSON.stringify(dados) })); setProjetoAcompanhamento(null); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o prazo e as observações.'); }
+    finally { setSalvandoAcompanhamento(false); }
+  }
+  async function salvarAcompanhamentoOrcamento(dados: { deliveryDeadline: string | null; notes: string | null }) {
+    setSalvandoAcompanhamento(true); setError('');
+    try { setQuote(await api<Quote>(`/quotes/${id}/tracking`, { method: 'PATCH', body: JSON.stringify(dados) })); setAcompanhamentoGeral(false); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o prazo e as observações.'); }
+    finally { setSalvandoAcompanhamento(false); }
   }
   // Desenho técnico de um projeto: abre o dele ou cria um novo, só dele.
   async function abrirDesenhoTecnico(item: Quote['items'][number]) {
@@ -217,7 +214,6 @@ export default function QuoteDetailPage() {
     finally { setSalvandoNomes(false); }
   }
   const currentWorkStatus = obterStatusTrabalho(quote);
-  const activeWorker = quote.workerAssignments?.find((assignment) => !assignment.releasedAt);
   const caminho = caminhoAteOrcamento(quote, origem);
   const validade = dateLabel(quote.validUntil ?? (quote.createdAt ? validadeOrcamento(new Date(quote.createdAt)) : undefined));
   // A próxima ação da situação fica em destaque; as outras, no menu "⋯".
@@ -235,6 +231,7 @@ export default function QuoteDetailPage() {
     : { rotulo: 'Marcar como entregue', icone: 'entregue', acao: entregar };
   const cancelar: AcaoMenu = { rotulo: 'Cancelar orçamento', icone: 'lixeira', perigo: true, aoEscolher: perguntarAntes({ titulo: 'Cancelar orçamento?', mensagem: 'O orçamento será cancelado e permanecerá disponível para consulta no Histórico.', confirmar: 'Cancelar orçamento', cancelar: 'Voltar', perigo: true }, { status: 'CANCELLED', reason: 'Cancelado no acompanhamento comercial' }) };
   const acoesDoOrcamento: AcaoMenu[] = [
+    { rotulo: 'Prazo e observações', icone: 'prazo', aoEscolher: () => setAcompanhamentoGeral(true) },
     ...(podeEditarOrcamento(quote) ? [{ rotulo: 'Editar orçamento', icone: 'lapis', href: enderecoOrcamento(id, origem, { tela: 'editar' }) } satisfies AcaoMenu] : []),
     { rotulo: 'Vincular complemento', icone: 'vinculo', href: `/?parent=${id}` },
     { rotulo: 'Desmontagem / Remontagem', icone: 'montagem', href: enderecoOrcamento(id, origem, { tela: 'remontagem' }) },
@@ -249,9 +246,16 @@ export default function QuoteDetailPage() {
     ...(!['NOT_STARTED', 'PAUSED'].includes(execucao) ? [{ rotulo: 'Parar produção', icone: 'pendente', aoEscolher: perguntarAntes({ titulo: 'Interromper a produção?', mensagem: 'O orçamento permanecerá em Orçamentos com a situação "Produção parada", e seus projetos serão retirados do Fluxo de trabalho até a retomada.', confirmar: 'Parar produção' }, { status: 'APPROVED', executionStatus: 'PAUSED', reason: 'Produção parada' }) } satisfies AcaoMenu] : []),
     { rotulo: 'Cliente desistiu', icone: 'recusado', perigo: true, aoEscolher: perguntarAntes({ titulo: 'Registrar desistência do cliente?', mensagem: 'O orçamento será transferido para o Histórico. Nenhuma informação será excluída.', confirmar: 'Registrar desistência', cancelar: 'Voltar', perigo: true }, { status: 'CANCELLED', reason: 'Cliente desistiu' }) },
   ] : [];
-  // O funcionário atual aparece na lista mesmo antes da equipe carregar.
-  const responsaveis = activeWorker && !workers.some((worker) => worker.id === activeWorker.worker.id) ? [activeWorker.worker, ...workers] : workers;
-  const marcarAlterado = (event: React.FormEvent<HTMLFormElement>) => { if (!(event.target as HTMLElement).closest('.worker-colors')) setAlterado(true); };
+  const itensVisiveis = quote.items.map((item, indice) => ({ item, indice })).filter(({ item }) => {
+    const aprovado = !item.declinedAt;
+    const funcionarioAtual = funcionarioDoProjeto(item)?.id;
+    const nome = `${nomeProjeto(item)} ${item.environment ?? ''}`.toLocaleLowerCase('pt-BR');
+    return (filtroProjetos === 'todos' || (filtroProjetos === 'aprovados') === aprovado)
+      && nome.includes(buscaProjeto.trim().toLocaleLowerCase('pt-BR'))
+      && (filtroPrazo === 'todos' || (filtroPrazo === 'com-prazo') === !!(item.deliveryDeadline ?? quote.deliveryDeadline))
+      && (!filtroFuncionario || funcionarioAtual === filtroFuncionario);
+  });
+  const filtrosAtivos = Number(!!buscaProjeto || filtroProjetos !== 'todos' || filtroPrazo !== 'todos' || !!filtroFuncionario);
   return <main className="list-page">
     <header className="orcamento-topo">
       <div className="orcamento-topo-titulo">
@@ -273,41 +277,24 @@ export default function QuoteDetailPage() {
     {error && <p role="alert" className="form-error">{error}</p>}
     {editandoContato && <EditarContato clienteId={quote.customerId} aoFechar={() => setEditandoContato(false)} aoSalvar={async (dados) => { setQuote(await api<Quote>(`/quotes/${id}/contact`, { method: 'PATCH', body: JSON.stringify(dados) })); }} />}
     {(quote.parentQuote || Boolean(quote.complements?.length)) && <section className="detail-card"><span>PROJETOS VINCULADOS</span>{quote.parentQuote && <Link href={enderecoOrcamento(quote.parentQuote.id, origem)}>Complemento de {quote.parentQuote.number}</Link>}{quote.complements?.map((complement) => <Link href={enderecoOrcamento(complement.id, origem)} key={complement.id}>{complement.number} · {formatarMoeda(Number(complement.netTotal))}</Link>)}<small>Os valores dos complementos são contabilizados separadamente do orçamento original.</small></section>}
-    <SecaoRecolhivel className="quote-workbench" rotulo="Acompanhamento do serviço" icone="equipe" titulo={canTeam ? 'Equipe, prazo e observação' : 'Prazo e observação'}>
-      {/* Equipe, prazos e observações do orçamento (as do PDF): salvos juntos. Fica montada ao trocar de aba, sem perder o que foi digitado. */}
-      <form key={formVersao} className="quote-workbench-aba" onSubmit={salvarAba} onInput={marcarAlterado} onChange={marcarAlterado}>
-        <div className={`quote-workbench-work${canTeam ? '' : ' sem-equipe'}`}>
-          {canTeam && <section className="quote-workbench-bloco" aria-label="Equipe">
-            <h3><Icone nome="equipe" tamanho={16} />Equipe</h3>
-            <label>Responsável pela execução<select name="workerId" defaultValue={activeWorker?.worker.id ?? ''}><option value="">Selecione um funcionário</option>{responsaveis.map(worker => <option value={worker.id} key={worker.id}>{worker.name}</option>)}</select></label>
-            <details className="worker-colors"><summary><Icone nome="paleta" tamanho={14} />Definir cores da equipe</summary><div>{workers.map((worker) => <label key={worker.id}><i style={{ backgroundColor: worker.workColor }} />{worker.name}<input aria-label={`Cor de ${worker.name}`} type="color" value={worker.workColor} disabled={savingWorker} onChange={(event) => void changeWorkerColor(worker, event.target.value)} /></label>)}</div></details>
-          </section>}
-          <section className="quote-workbench-bloco" aria-label="Prazos">
-            <h3><Icone nome="calendario" tamanho={16} />Prazos</h3>
-            <div className="quote-workbench-datas"><label>Entrega acordada<input type="date" name="deliveryDeadline" defaultValue={quote.deliveryDeadline?.slice(0, 10) ?? ''} /></label><label>Previsão de montagem<input type="date" name="installationDeadline" defaultValue={quote.installationDeadline?.slice(0, 10) ?? ''} /></label></div>
-            <label className="tracking-check"><input type="checkbox" name="deadlineConfirmed" defaultChecked={quote.deadlineConfirmed} /> Prazo confirmado com o cliente</label>
-          </section>
-          <section className="quote-workbench-bloco" aria-label="Observações do orçamento">
-            <h3><Icone nome="documento" tamanho={16} />Observações do orçamento</h3>
-            <textarea name="notes" aria-label="Observações do orçamento" defaultValue={quote.notes ?? ''} maxLength={3000} rows={3} placeholder="Ex.: conferir medidas no local e alinhar os veios das peças." />
-            <small><Icone nome="info" tamanho={13} />Exibidas no PDF enviado ao cliente.</small>
-          </section>
-        </div>
-        <footer className="quote-workbench-rodape">
-          <small><Icone nome="info" tamanho={14} />Equipe, prazos e observações são salvos em conjunto.</small>
-          <div>{trackingSaved && <span role="status">Salvo ✓</span>}<button type="button" className="botao-contorno" disabled={!alterado || savingTracking} onClick={descartar}>Descartar</button><button className="botao-principal" disabled={!alterado || savingTracking}>{savingTracking ? 'Salvando…' : 'Salvar alterações'}</button></div>
-        </footer>
-      </form>
-    </SecaoRecolhivel>
+    {acompanhamentoGeral && <JanelaAcompanhamento prazo={quote.deliveryDeadline} observacoes={quote.notes} ocupada={salvandoAcompanhamento} aoFechar={() => setAcompanhamentoGeral(false)} aoSalvar={(dados) => void salvarAcompanhamentoOrcamento(dados)} />}
+    {projetoAcompanhamento && <JanelaAcompanhamento projeto={nomeProjeto(projetoAcompanhamento)} prazo={projetoAcompanhamento.deliveryDeadline} observacoes={projetoAcompanhamento.notes} ocupada={salvandoAcompanhamento} aoFechar={() => setProjetoAcompanhamento(null)} aoSalvar={(dados) => void salvarAcompanhamentoProjeto(projetoAcompanhamento, dados)} />}
+    {projetoFuncionario && <JanelaFuncionarioProjeto projeto={nomeProjeto(projetoFuncionario)} funcionarios={workers} selecionado={funcionarioDoProjeto(projetoFuncionario)?.id ?? ''} ocupada={salvandoFuncionario} aoFechar={() => setProjetoFuncionario(null)} aoSalvar={(workerId) => void salvarFuncionarioProjeto(projetoFuncionario, workerId)} />}
     <section className="projetos-orcamento" aria-label="Projetos do orçamento">
       <header className="projetos-orcamento-topo">
-        <h2>Projetos <small>{quote.items.length}</small></h2>
-        {recusados.length > 0 && <div className="projetos-filtro" role="group" aria-label="Mostrar projetos">
-          {([['todos', 'Todos', quote.items.length], ['aprovados', 'Aprovados', quote.items.length - recusados.length], ['nao-aprovados', 'Não aprovados', recusados.length]] as const).map(([valor, rotulo, total]) =>
-            <button key={valor} type="button" aria-pressed={filtroProjetos === valor} onClick={() => setFiltroProjetos(valor)}>{rotulo}<b>{total}</b></button>)}
-        </div>}
+        <h2>Projetos <small>{itensVisiveis.length} de {quote.items.length}</small></h2>
+        <PainelFiltros rotulo="Filtrar projetos deste orçamento" ativos={filtrosAtivos} aoLimpar={() => { setBuscaProjeto(''); setFiltroProjetos('todos'); setFiltroPrazo('todos'); setFiltroFuncionario(''); }}>
+          <CampoFiltro rotulo="Buscar projeto" icone="buscar"><input type="search" value={buscaProjeto} onChange={(event) => setBuscaProjeto(event.target.value)} placeholder="Nome do projeto ou ambiente" /></CampoFiltro>
+          <CampoFiltro rotulo="Prazo" icone="prazo"><select value={filtroPrazo} onChange={(event) => setFiltroPrazo(event.target.value as typeof filtroPrazo)}><option value="todos">Todos os prazos</option><option value="com-prazo">Com prazo</option><option value="sem-prazo">Sem prazo</option></select></CampoFiltro>
+          {canTeam && <CampoFiltro rotulo="Funcionário" icone="equipe"><select value={filtroFuncionario} onChange={(event) => setFiltroFuncionario(event.target.value)}><option value="">Todos os funcionários</option>{workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select></CampoFiltro>}
+        </PainelFiltros>
       </header>
-      <div className="projetos-blocos">{quote.items.map((item, indice) => ({ item, indice })).filter(({ item }) => filtroProjetos === 'todos' || (filtroProjetos === 'aprovados') === !item.declinedAt).map(({ item, indice }) => <BlocoProjeto key={item.id} id={`projeto-${item.id}`} tom={indice}
+      <AbasFiltro rotulo="Situação dos projetos" valor={filtroProjetos} aoEscolher={setFiltroProjetos} grupos={[{ opcoes: [
+        { valor: 'todos', rotulo: 'Todos', icone: 'documento', total: quote.items.length },
+        { valor: 'aprovados', rotulo: 'Aprovados', icone: 'aprovado', total: quote.items.length - recusados.length },
+        { valor: 'nao-aprovados', rotulo: 'Não aprovados', icone: 'recusado', total: recusados.length },
+      ] }]} />
+      <div className="projetos-blocos">{itensVisiveis.length ? itensVisiveis.map(({ item, indice }) => <BlocoProjeto key={item.id} id={`projeto-${item.id}`} tom={indice}
         nome={nomeProjeto(item)} valor={formatarMoeda(item.total)} aberto={abertos.has(item.id)}
         resumo={[[...new Set(item.components.length ? item.components.map(component => component.materialNameSnapshot ?? item.materialNameSnapshot) : [item.materialNameSnapshot])].join(' · '), `${item.billedQuantity.toLocaleString('pt-BR')} m²`, item.components.length ? `${item.components.length} ${item.components.length === 1 ? 'peça' : 'peças'}` : ''].filter(Boolean).join(' · ')}
         situacao={quote.status === 'APPROVED' ? item.declinedAt ? 'nao-aprovado' : 'aprovado' : undefined}
@@ -319,12 +306,18 @@ export default function QuoteDetailPage() {
         acoes={[[
           { rotulo: 'Exportar PDF', icone: 'download', aoEscolher: () => { setAbertos((atual) => new Set(atual).add(item.id)); setExportarProjeto(item.id); } },
           { rotulo: 'Editar nomes', icone: 'lapis', aoEscolher: () => { setErroNomes(''); setNomesProjeto(item); } },
+          ...(canTeam ? [{ rotulo: item.workerAssignments?.some((assignment) => !assignment.releasedAt) ? 'Trocar funcionário' : 'Adicionar funcionário', icone: 'equipe', aoEscolher: () => setProjetoFuncionario(item) } satisfies AcaoMenu] : []),
+          { rotulo: 'Prazo e observações', icone: 'prazo', aoEscolher: () => setProjetoAcompanhamento(item) },
           ...(canTechnical ? [{ rotulo: comTecnico?.has(item.id) ? 'Desenho técnico' : 'Adicionar desenho técnico', icone: 'esquadro', desabilitada: !!openingDesign, aoEscolher: () => void abrirDesenhoTecnico(item) } satisfies AcaoMenu] : []),
         ], quote.status === 'APPROVED' && quote.executionStatus !== 'COMPLETED' ? [item.declinedAt
           ? { rotulo: 'Aprovar projeto', icone: 'marcado', desabilitada: !!alterandoAprovacao, aoEscolher: () => void aprovarProjeto(item) }
           : { rotulo: 'Não aprovado / alterar', icone: 'recusado', perigo: true, aoEscolher: () => { setErroNaoAprovado(''); setNaoAprovar(item); } }] : []]}>
 <div className="projeto-impressoes"><ExportarPdfProjeto quoteId={id} itemId={item.id} quoteNumber={quote.number} customerName={quote.customerNameSnapshot} projectName={nomeProjeto(item)} comConferencia={quote.status === 'APPROVED' && !item.declinedAt} abrirAgora={exportarProjeto === item.id} aoAbrir={exportacaoAberta} />{canTechnical && comTecnico && !comTecnico.has(item.id) && <button type="button" className="secondary-button" disabled={!!openingDesign} onClick={() => void abrirDesenhoTecnico(item)}>{openingDesign === item.id ? 'Abrindo desenho…' : 'Adicionar desenho técnico'}</button>}</div>{entregas && entregasPorProjeto.has(item.id) && <NotaEntregaProjeto quoteId={id} customerName={quote.customerNameSnapshot} projeto={entregasPorProjeto.get(item.id)!} canDeliver={entregas.canDeliver} reason={entregas.reason} abrirAoCarregar={notaPedida === item.id}
-        aoRegistrar={(nota) => { void carregarEntregas(); if (nota.quoteDelivered) void api<Quote>(`/quotes/${id}`).then(setQuote); }} />}<SavedItemDrawing item={item} notes={quote.notes} /><strong>{[...new Set(item.components.length ? item.components.map(component => component.materialNameSnapshot ?? item.materialNameSnapshot) : [item.materialNameSnapshot])].join(' · ')}</strong>
+        aoRegistrar={(nota) => { void carregarEntregas(); if (nota.quoteDelivered) void api<Quote>(`/quotes/${id}`).then(setQuote); }} />}<div className="projeto-acompanhamento-resumo">
+        {funcionarioDoProjeto(item) && <span><Icone nome="equipe" tamanho={14} />{funcionarioDoProjeto(item)?.name}</span>}
+        <span><Icone nome="prazo" tamanho={14} />Prazo: {dateLabel(item.deliveryDeadline)}</span>
+        {(item.notes || quote.notes) && <p>{item.notes || quote.notes}</p>}
+      </div><SavedItemDrawing item={item} notes={item.notes || quote.notes} /><strong>{[...new Set(item.components.length ? item.components.map(component => component.materialNameSnapshot ?? item.materialNameSnapshot) : [item.materialNameSnapshot])].join(' · ')}</strong>
       <small>{item.calculationMode === 'MANUAL_M2' ? 'Área manual registrada' : 'Área calculada pelos componentes'} · {item.billedQuantity.toLocaleString('pt-BR')} m² · Material: {formatarMoeda(item.materialSubtotal)}</small>
       {item.components.map((component) => <div className="quote-component" key={component.id}><strong>{component.label}</strong><small>{component.materialNameSnapshot ?? item.materialNameSnapshot}</small><small>{cm(component.lengthMm)} × {cm(component.widthMm)} cm · {component.orientation === 'HORIZONTAL' ? 'horizontal' : 'vertical'} · qtd. {component.quantity} · {(component.lengthMm * component.widthMm * component.quantity / 1_000_000).toLocaleString('pt-BR')} m²</small><small>Calculado: {formatarMoeda(Number(component.calculatedTotal))} · Aplicado: {formatarMoeda(Number(component.appliedTotal))} · Desconto: {formatarMoeda(Math.max(0, Number(component.calculatedTotal) - Number(component.appliedTotal)))}</small>{component.edges.map((edge, index) => <small key={`${edge.side}-${index}`}>↳ {rotuloLadoBorda(edge.side)}: {edge.serviceNameSnapshot} · Calculado {formatarMoeda(Number(edge.calculatedSubtotal))} · Aplicado {formatarMoeda(Number(edge.appliedSubtotal))}</small>)}</div>)}
       {item.cutouts.map((cutout) => <small key={cutout.id}>Recorte: {cutout.label ?? cutout.cutoutType}{cutout.lengthMm && cutout.widthMm ? ` · ${cm(cutout.lengthMm)} × ${cm(cutout.widthMm)} cm` : ''}</small>)}
@@ -336,7 +329,7 @@ export default function QuoteDetailPage() {
           ? <><small>O cliente não aprovou este projeto: ele está fora do valor e do fluxo de trabalho.</small><button type="button" className="botao-contorno" disabled={!!alterandoAprovacao} onClick={() => void aprovarProjeto(item)}>Aprovar projeto</button></>
           : <button type="button" className="text-button" onClick={() => { setErroNaoAprovado(''); setNaoAprovar(item); }}>Não aprovado / alterar</button>}
       </div>}
-    </BlocoProjeto>)}</div>
+      </BlocoProjeto>) : <p className="empty">Nenhum projeto corresponde aos filtros. Ajuste ou limpe a busca.</p>}</div>
     </section>
     {retrabalho && <JanelaRetrabalho projeto={nomeProjeto(retrabalho)} ocupada={enviandoRetrabalho} erro={erroRetrabalho} aoFechar={() => setRetrabalho(null)} aoConfirmar={(destino, motivo) => void enviarRetrabalho(destino, motivo)} />}
     {naoAprovar && (() => {
@@ -360,7 +353,7 @@ export default function QuoteDetailPage() {
       aoEntregarSemNota={['NOT_STARTED', 'PAUSED'].includes(execucao) ? entregarSemNota : undefined} />
     {aprovacaoPedida && <JanelaAprovacao numero={quote.number} cliente={quote.customerNameSnapshot} ocupada={updating}
       projetos={quote.items.map((item) => ({ id: item.id, nome: nomeProjeto(item), total: item.total }))} descontoCompleto={quote.fullDiscountAmount ?? quote.discountAmount}
-      aoFechar={() => setAprovacaoPedida(null)} aoConfirmar={(naoAprovados) => { const pedido = aprovacaoPedida; setAprovacaoPedida(null); void changeStatus({ ...pedido, ...(naoAprovados.length ? { projetosNaoAprovados: naoAprovados } : {}) }); }} />}
+      aoFechar={() => setAprovacaoPedida(null)} aoConfirmar={(dados) => { const pedido = aprovacaoPedida; setAprovacaoPedida(null); void changeStatus({ ...pedido, ...(dados.naoAprovados.length ? { projetosNaoAprovados: dados.naoAprovados } : {}), ...(dados.deliveryDeadline !== undefined ? { deliveryDeadline: dados.deliveryDeadline } : {}), ...(dados.projectDeadlines ? { projectDeadlines: dados.projectDeadlines } : {}) }); }} />}
     <section className="detail-total"><span>Total bruto</span><strong>{formatarMoeda(quote.grossTotal)}</strong><span>Descontos individuais</span><strong>- {formatarMoeda(individualDiscount)}</strong><span>Desconto geral</span><strong>- {formatarMoeda(quote.discountAmount)}</strong><span>Desconto total dado</span><strong>- {formatarMoeda(totalDiscountGiven)}</strong><b>Total do orçamento: {formatarMoeda(quote.netTotal)}</b>{recusados.length > 0 && <small className="detail-total-fora">{recusados.length === 1 ? '1 projeto não aprovado fica' : `${recusados.length} projetos não aprovados ficam`} fora do valor: {formatarMoeda(recusados.reduce((soma, item) => soma + item.total, 0))}</small>}</section>
   </main>;
 }
