@@ -58,14 +58,14 @@ const selecionarCliente = async () => { await page.getByRole('button', { name: /
 try {
   await page.goto(base + '/');
   await expect(page.locator('.quick-quote')).toBeVisible();
-  await page.getByRole('button', { name: 'Abrir menu', exact: true }).click();
+  await page.getByRole('button', { name: 'Abrir todas as telas', exact: true }).click();
   const menu = page.getByRole('dialog', { name: 'Navegação da Inova' });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Orçamentos', exact: true })).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(menu).not.toBeVisible();
-  await expect(page.getByRole('button', { name: 'Abrir menu', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Abrir todas as telas', exact: true })).toBeFocused();
   await selecionarCliente();
   await page.getByPlaceholder('Digite nome, telefone ou CPF').fill('Cliente');
   await page.locator('.customer-result').click();
@@ -146,7 +146,7 @@ try {
   await expect(page.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('2,00');
   await expect(page.getByLabel('Desconto geral rápido', { exact: true })).toHaveValue('15');
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await expect(page.getByRole('button', { name: 'Abrir menu', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Abrir todas as telas', exact: true })).not.toBeVisible();
   assert.equal(await page.locator('.quick-table').evaluate(el => getComputedStyle(el).display), 'table');
   await page.screenshot({ path: resolve(output, 'desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

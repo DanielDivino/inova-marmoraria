@@ -1,5 +1,5 @@
 /* Sistema visual do celular. As cores vêm do tema; impressão e desktop mantêm seus layouts. */
-.mobile-bottom-nav { display: none; }
+.mobile-bottom-nav, .application-mobile-summary { display: none; }
 .secao-recolhivel > h2 { margin: 0; font: inherit; }
 .secao-recolhivel > h2 > button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 13px 18px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); text-align: left; font: inherit; font-size: 14px; font-weight: 650; cursor: default; }
 .secao-recolhivel > h2 > button > svg { flex: none; color: var(--muted); }
@@ -29,7 +29,15 @@
   html .inova-theme .application-header-actions { position: sticky; top: 0; z-index: 40; min-height: var(--mobile-header); gap: 8px; padding: max(8px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); background: color-mix(in srgb, var(--surface) 94%, transparent); border-bottom: 1px solid var(--line); backdrop-filter: blur(18px); }
   html .inova-theme .titulo-da-tela { font-size: 17px; font-weight: 700; letter-spacing: -.025em; }
   html .inova-theme .notification-bell { border-radius: 14px; background: var(--soft); border: 1px solid transparent; }
-  html .inova-theme .application-header-actions > .theme-toggle { display: none; }
+  html .inova-theme .application-header-actions > :is(.notification-bell, .notification-panel) { display: none; }
+  html .inova-theme .application-mobile-summary:has(.mobile-quote-bar) { display: flex; flex: 1; min-width: 0; }
+  html .inova-theme .application-header-actions:has(.mobile-quote-bar) { flex-wrap: nowrap; }
+  html .inova-theme .application-header-actions:has(.mobile-quote-bar) > .titulo-da-tela { display: none; }
+  html .inova-theme .application-header-tabs:empty { display: none; }
+  html .inova-theme .application-mobile-summary .mobile-quote-bar { position: static; inset: auto; width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  html .inova-theme .application-content:has(.mobile-summary-anchor[data-expanded="true"]) > .application-header-actions { z-index: 62; }
+  html .inova-theme .mobile-summary-backdrop { z-index: 60; }
+  html .inova-theme :is(.project-builder, .remount-page):has(.mobile-summary-anchor[data-expanded="true"]) .quote-summary-card { z-index: 61; inset: calc(var(--summary-header-height, 64px) + 12px) 12px auto; max-height: calc(100dvh - var(--summary-header-height, 64px) - var(--mobile-nav) - 24px); overscroll-behavior-y: contain; }
   html .inova-theme .application-header-tabs:has(> .atalhos-cabecalho) { display: none; }
   html .inova-theme .application-content { padding-bottom: var(--mobile-nav); }
   html .inova-theme .application-content :is(.shell, .list-page) { padding: 18px max(16px, env(safe-area-inset-right)) 28px max(16px, env(safe-area-inset-left)); }
@@ -44,15 +52,17 @@
   html .inova-theme .mobile-bottom-nav [aria-current=page] { color: var(--green); }
   html .inova-theme .mobile-bottom-nav [aria-current=page] > span { background: var(--accent-soft); }
   html .inova-theme .mobile-bottom-nav .mobile-nav-create > span { height: 34px; background: var(--forest); color: white; box-shadow: 0 3px 8px #00000012; }
-  html .inova-theme .application-frame:has(:is(.project-builder, .tec-editor, .remount-page)) > .mobile-bottom-nav,
+  html .inova-theme .application-frame:has(.tec-editor) > .mobile-bottom-nav,
   html .inova-theme .application-frame:has(input:focus, textarea:focus, select:focus) > .mobile-bottom-nav { display: none; }
   html .inova-theme .application-content:has(:is(.project-builder, .tec-editor, .remount-page)) { padding-bottom: 0; }
+  html .inova-theme .application-content .remount-page { padding-bottom: calc(var(--mobile-nav) + 24px); }
   html .inova-theme .application-content:has(.tec-editor) > .application-header-actions { position: relative; }
 
   /* Todas as telas em uma folha curta, com navegação em duas colunas. */
   html .inova-theme .mobile-navigation-dialog { inset: auto 0 0; width: 100%; max-width: 100%; height: auto; max-height: calc(100dvh - 12px); margin: auto 0 0; border-radius: 24px 24px 0 0; box-shadow: 0 -12px 48px #00000024; }
   html .inova-theme .mobile-navigation-dialog .mobile-sidebar { display: flex; height: auto; max-height: calc(100dvh - 12px); padding: 16px 20px max(20px, env(safe-area-inset-bottom)); gap: 14px; background: var(--surface); }
-  html .inova-theme .mobile-sidebar .mobile-menu-close { position: absolute; top: 14px; right: 16px; z-index: 1; min-height: 44px; border: 0; background: var(--soft); }
+  html .inova-theme .mobile-sidebar .mobile-menu-tools { position: absolute; top: 14px; right: 16px; z-index: 1; display: flex; align-items: center; gap: 8px; }
+  html .inova-theme .mobile-sidebar .mobile-menu-close { min-height: 44px; border: 0; background: var(--soft); }
   html .inova-theme .mobile-sidebar .application-brand { align-self: flex-start; margin: 0; padding: 0; border: 0; }
   html .inova-theme .mobile-sidebar .application-brand::after { content: none; }
   html .inova-theme .mobile-sidebar .application-brand img { width: 98px; height: 58px; }
@@ -66,7 +76,7 @@
   html .inova-theme .mobile-menu-account :is(strong, small) { display: block; overflow-wrap: anywhere; }
   html .inova-theme .mobile-menu-account strong { font-size: 14px; }
   html .inova-theme .mobile-menu-account > .text-button { grid-column: 1 / -1; justify-self: start; margin: 0; padding: 0; }
-  html .inova-theme .notification-panel { position: fixed; inset: calc(var(--mobile-header) + 8px) 12px auto; width: auto; max-height: calc(100dvh - 160px); border-radius: 18px; }
+  html .inova-theme .mobile-sidebar .notification-panel { position: static; width: 100%; max-height: 35dvh; flex-shrink: 0; border-radius: 18px; }
 
   /* Busca sempre acessível; filtros e abas rolam dentro de sua própria faixa. */
   html .inova-theme .barra-filtros { gap: 8px; margin-bottom: 16px; padding: 0; border: 0; background: transparent; box-shadow: none; }
