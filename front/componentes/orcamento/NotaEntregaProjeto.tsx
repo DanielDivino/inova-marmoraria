@@ -14,7 +14,8 @@ import './nota-entrega.css';
 export type PecaEntrega = { key: string; name: string; material: string | null; lengthMm: number | null; widthMm: number | null; quantity: number; delivered: number; ready: number; inProduction: number };
 export type NotaGerada = { id: string; number: string; createdAt: string; createdBy: string; pieces: number };
 export type EntregasProjeto = { id: string; name: string; pieces: PecaEntrega[]; notes: NotaGerada[] };
-export type EntregasOrcamento = { canDeliver: boolean; reason: string | null; projects: EntregasProjeto[] };
+/** `generalNotes`: notas de entrega gerais (todos os projetos de uma vez). */
+export type EntregasOrcamento = { canDeliver: boolean; reason: string | null; projects: EntregasProjeto[]; generalNotes?: NotaGerada[] };
 type NotaRegistrada = { id: string; number: string; quoteDelivered: boolean };
 
 const soma = (pecas: PecaEntrega[], campo: (peca: PecaEntrega) => number) => pecas.reduce((total, peca) => total + campo(peca), 0);

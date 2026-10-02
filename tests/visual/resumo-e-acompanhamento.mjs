@@ -34,6 +34,7 @@ const orcamento = {
   items: [{ id: 'i1', projectName: 'Cozinha', materialNameSnapshot: 'Branco Dallas', unitPriceSnapshot: 600, billedQuantity: 1.2, materialSubtotal: 720, total: 720, calculationMode: 'DIMENSIONS', productType: { name: 'Bancada' }, services: [], cutouts: [], drawingData: null,
     components: [{ id: 'k1', label: 'Bancada', orientation: 'HORIZONTAL', lengthMm: 2000, widthMm: 600, quantity: 1, billableArea: 1.2, subtotal: 720, calculatedTotal: 720, appliedTotal: 720, hasManualPriceOverride: false, edges: [] }] }],
 };
+const entregasGerais = [];
 await page.route('**/api/**', async route => {
   const url = new URL(route.request().url());
   const path = url.pathname, method = route.request().method();
@@ -88,7 +89,17 @@ await page.route('**/api/**', async route => {
       ],
     } });
   }
-  if (path === '/api/quotes/q1/entregas') return route.fulfill({ json: { canDeliver: true, reason: null, projects: [] } });
+  // Entrega geral: dois projetos; uma peça pronta, outras em produção e uma já entregue.
+  if (path === '/api/quotes/q1/entregas' && method === 'POST') { entregasGerais.push(route.request().postDataJSON()); return route.fulfill({ status: 201, json: { id: 'cnotageral0000000001', number: 'ENT-2026-30.1', quoteDelivered: false } }); }
+  if (path === '/api/quotes/q1/entregas/cnotageral0000000001/pdf') return route.fulfill({ contentType: 'application/pdf', body: '%PDF-1.4\n%%EOF\n' });
+  if (path === '/api/quotes/q1/entregas') return route.fulfill({ json: { canDeliver: true, reason: null, generalNotes: [], projects: [
+    { id: 'p1', name: 'Cozinha', notes: [], pieces: [
+      { key: 'bancada', name: 'Bancada', material: 'Branco Dallas', lengthMm: 2000, widthMm: 600, quantity: 1, delivered: 0, ready: 1, inProduction: 0 },
+      { key: 'rodabanca', name: 'Rodabanca', material: 'Branco Dallas', lengthMm: 2000, widthMm: 100, quantity: 1, delivered: 0, ready: 0, inProduction: 1 },
+      { key: 'saia', name: 'Saia', material: 'Branco Dallas', lengthMm: 2000, widthMm: 100, quantity: 1, delivered: 1, ready: 0, inProduction: 0 },
+    ] },
+    { id: 'p2', name: 'Lavabo', notes: [], pieces: [{ key: 'soleira', name: 'Soleira', material: 'Branco Dallas', lengthMm: 800, widthMm: 150, quantity: 2, delivered: 0, ready: 0, inProduction: 2 }] },
+  ] } });
   if (path === '/api/workers') return route.fulfill({ json: [{ id: 'w1', name: 'Carlos', workColor: '#5b7f4a' }] });
   errors.push('API não prevista: ' + method + ' ' + path);
   return route.fulfill({ status: 404, json: {} });
@@ -159,12 +170,25 @@ try {
   await janela.waitFor({ state: 'detached' });
   assert.equal(contatos.length, 1);
   const itensDoMenu = async () => { await page.getByRole('button', { name: 'Mais ações do orçamento' }).click(); const itens = await page.getByRole('menu').getByRole('menuitem').allInnerTexts(); return itens.map(texto => texto.trim()); };
-  assert.deepEqual(await itensDoMenu(), ['Editar orçamento', 'Desenho técnico', 'Vincular complemento', 'Desmontagem / Remontagem', 'Marcar em retrabalho', 'Parar produção', 'Cliente desistiu']);
+  assert.deepEqual(await itensDoMenu(), ['Editar orçamento', 'Vincular complemento', 'Desmontagem / Remontagem', 'Marcar em retrabalho', 'Parar produção', 'Cliente desistiu']);
   await page.keyboard.press('Escape');
+  // "Marcar como entregue": janela com todos os projetos e as peças (as prontas já marcadas e as já
+  // entregues listadas), "Todas entregues" e a nota de entrega geral, que abre em PDF.
+  await topo.getByRole('button', { name: 'Marcar como entregue' }).click();
+  const entrega = page.getByRole('dialog', { name: 'Entrega geral · ORC-2026-30' });
+  await entrega.getByRole('heading', { name: /Lavabo/ }).waitFor();
+  await entrega.getByRole('button', { name: 'Gerar nota geral · 1 peça' }).waitFor();
+  await entrega.getByText('Já entregues · 1 peça').waitFor();
+  await page.screenshot({ path: resolve(output, '10-entrega-geral.png') });
+  await entrega.getByRole('button', { name: 'Todas entregues' }).click();
+  const [notaGeral] = await Promise.all([page.context().waitForEvent('page'), entrega.getByRole('button', { name: 'Gerar nota geral · 4 peças' }).click()]);
+  await notaGeral.close();
+  assert.deepEqual(entregasGerais, [{ projects: { p1: { bancada: 1, rodabanca: 1 }, p2: { soleira: 2 } } }]);
+  await entrega.waitFor({ state: 'detached' });
   // Aguardando aprovação: "Confirmar aprovação" em destaque; não aprovado e cancelar no menu.
   await page.goto(base + '/orcamentos/q2');
   await page.getByRole('heading', { name: 'SET-2026-20' }).waitFor();
-  assert.deepEqual(await itensDoMenu(), ['Editar orçamento', 'Desenho técnico', 'Vincular complemento', 'Desmontagem / Remontagem', 'Marcar como não aprovado', 'Cancelar orçamento']);
+  assert.deepEqual(await itensDoMenu(), ['Editar orçamento', 'Vincular complemento', 'Desmontagem / Remontagem', 'Marcar como não aprovado', 'Cancelar orçamento']);
   await page.screenshot({ path: resolve(output, '06-topo-e-menu.png'), clip: { x: 230, y: 80, width: 1050, height: 420 } });
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Confirmar aprovação' }).click();
