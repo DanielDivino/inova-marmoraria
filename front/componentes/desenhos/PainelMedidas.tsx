@@ -1,6 +1,6 @@
 'use client';
 
-import { deletePiece, duplicatePiece, formatMeasure, nomeDaPeca, updatePiece, type Diagnostic, type Feature, type TechnicalDocument } from '@inova/domain/technical';
+import { deletePiece, duplicatePiece, emendasDaPeca, formatMeasure, nomeDaPeca, partesDaPeca, updatePiece, type Diagnostic, type Feature, type TechnicalDocument } from '@inova/domain/technical';
 import { criarId } from '../../utilitarios/id';
 import { CampoMedida } from './CampoMedida';
 import { pontoDaCota } from './CotasLivres';
@@ -30,7 +30,8 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
     {peca && <PainelPeca key={peca.id} documento={documento} peca={peca} materiais={materiais} aoMudar={aoMudar} aoAbrirLado={(ladoId) => aoAbrirLado(peca.id, ladoId)} aoMarcarArea={aoMarcarArea}
       aoDuplicar={() => { const id = criarId(); aoMudar(duplicatePiece(documento, peca.id, id)); aoSelecionar({ tipo: 'peca', id }); }}
       aoExcluir={() => void confirmar({ titulo: `Excluir ${nomeDaPeca(peca, documento.pieces)}?`, mensagem: 'Cubas, recortes e faixas da peça também serão excluídos. Use Ctrl+Z para desfazer.', confirmar: 'Excluir peça', perigo: true }).then((sim) => { if (sim) { aoMudar(deletePiece(documento, peca.id)); aoSelecionar(null); } })} />}
-    {recurso && paiDoRecurso && <PainelRecurso key={recurso.id} recurso={recurso} peca={paiDoRecurso} nomePeca={nomeDaPeca(paiDoRecurso, documento.pieces)} aoMudar={(patch) => mudarRecurso(recurso.id, patch)}
+    {recurso && paiDoRecurso && <PainelRecurso key={recurso.id} recurso={recurso} peca={paiDoRecurso} nomePeca={nomeDaPeca(paiDoRecurso, documento.pieces)}
+      pedras={recurso.type === 'SEAM' ? partesDaPeca(paiDoRecurso, emendasDaPeca(documento, paiDoRecurso.id)) : undefined} aoMudar={(patch) => mudarRecurso(recurso.id, patch)}
       aoExcluir={() => { aoMudar({ ...documento, features: documento.features.filter((entrada) => entrada.id !== recurso.id) }); aoSelecionar(null); }} />}
     {vertice && pecaDoVertice && <section className="tec-painel-secao" aria-label="Vértice">
       <h3>Vértice {pecaDoVertice.contour.indexOf(vertice) + 1} · {pecaDoVertice.name}</h3>

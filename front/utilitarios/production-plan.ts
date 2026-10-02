@@ -1,18 +1,20 @@
-import { centimetrosParaMilimetros, pecaInicial, dividirComponente, dividirPorMedida, dividirIgualmente, validarDivisao, calcularUltimaPeca, seguirDivisao, planoDeProducao, comPlanoDeProducao, precisaRevisao,
-  type ProductionPlan, type ProductionPiece, type ProductionSource, type ProductionCutout, type ProductionEdge, type ProductionEdgeSide, type ResultadoDivisao, type ProductionSplitAxis, type PecaPorMedida } from '@inova/domain';
+import { centimetrosParaMilimetros, pecaInicial, planoDeProducao, comPlanoDeProducao, precisaRevisao,
+  type ProductionPlan, type ProductionPiece, type ProductionSource, type ProductionCutout, type ProductionEdge } from '@inova/domain';
 import type { DraftComponent, DraftCutout, DraftItem } from '../componentes/orcamento/types';
 import { criarId } from './id';
 
-export type { ProductionPlan, ProductionPiece, ProductionSource, ProductionCutout, ProductionEdge, ProductionEdgeSide, ResultadoDivisao, ProductionSplitAxis, PecaPorMedida };
-export { dividirIgualmente, validarDivisao, calcularUltimaPeca, planoDeProducao, precisaRevisao };
-export { areaDaOrigemMm2, quantidadeAteAcabar, validarDivisaoPorMedida } from '@inova/domain';
+/**
+ * Plano de produção dos projetos antigos (feito no extinto "Com desenho"): a divisão das peças do
+ * orçamento em peças físicas. Hoje a divisão é a emenda do desenho técnico; o plano antigo continua
+ * valendo para a OS, o fluxo e as entregas desses projetos, e acompanha as peças quando o orçamento
+ * é editado (conciliarPlanoParaSalvar). Aqui só ficam a leitura e essa conciliação.
+ */
+export type { ProductionPlan };
 
 const cm = (mm?: number) => mm === undefined || mm <= 0 ? undefined : String(mm / 10);
 const mm = (value?: string) => { if (!value?.trim()) return undefined; try { const parsed = centimetrosParaMilimetros(value); return parsed; } catch { return undefined; } };
 
-/** Peça de produção -> DraftComponent, só para reaproveitar EditorComponentes/
- * MapaBordasComponente (que operam em DraftComponent). Nunca carrega materialId
- * nem appliedTotal — produção não tem preço. */
+/** Peça de produção -> DraftComponent, para o desenho das peças (DesenhoTecnico). Sem preço. */
 export function pecaParaComponente(piece: ProductionPiece): DraftComponent {
   return {
     id: piece.id, label: piece.label, componentType: piece.componentType, orientation: piece.orientation,
@@ -22,20 +24,6 @@ export function pecaParaComponente(piece: ProductionPiece): DraftComponent {
     sillDetailCm: cm(piece.sillDetailMm), sillDetailHeightCm: cm(piece.sillDetailHeightMm),
     sillTopWidthCm: cm(piece.sillTopWidthMm), sillBottomWidthCm: cm(piece.sillBottomWidthMm),
     sillFinalWidthCm: cm(piece.sillFinalWidthMm), sillOverlapCm: cm(piece.sillOverlapMm),
-  };
-}
-
-/** DraftComponent editado de volta pra ProductionPiece. `servicos` resolve o nome
- * (snapshot) de cada acabamento a partir do serviceId. */
-export function componenteParaPeca(component: DraftComponent, sourceComponentId: string, servicos: { id: string; name: string }[]): ProductionPiece {
-  return {
-    id: component.id, sourceComponentId, label: component.label, componentType: component.componentType, orientation: component.orientation,
-    lengthMm: mm(component.lengthCm) ?? 1, widthMm: mm(component.widthCm) ?? 1, quantity: Math.max(1, component.quantity),
-    edges: component.edges.map((edge) => ({ side: edge.side, serviceId: edge.serviceId, serviceName: servicos.find((entry) => entry.id === edge.serviceId)?.name ?? 'Acabamento', lengthMm: mm(edge.lengthCm), heightMm: mm(edge.heightCm), quantity: edge.quantity })),
-    parentPieceId: component.parentComponentId, parentSide: component.parentSide,
-    sillDetailMm: mm(component.sillDetailCm), sillDetailHeightMm: mm(component.sillDetailHeightCm),
-    sillTopWidthMm: mm(component.sillTopWidthCm), sillBottomWidthMm: mm(component.sillBottomWidthCm),
-    sillFinalWidthMm: mm(component.sillFinalWidthCm), sillOverlapMm: mm(component.sillOverlapCm),
   };
 }
 
@@ -128,67 +116,7 @@ export function reconciliarPlano(item: DraftItem, planoAtual: ProductionPlan | u
   return { version: 1, sources, pieces, cutouts: [...cutoutsExistentes, ...novosCutouts] };
 }
 
-/** Confirma a divisão de uma origem em N peças iguais (sugestão inicial). */
-export function aplicarDivisaoIgual(plano: ProductionPlan, source: ProductionSource, componentSnapshot: { label: string; componentType: ProductionPiece['componentType']; orientation: ProductionPiece['orientation']; edges: ProductionPiece['edges'] }, partes: number): ProductionPlan {
-  const totalMm = source.splitAxis === 'LENGTH' ? source.snapshotLengthMm : source.snapshotWidthMm;
-  const medidas = dividirIgualmente(totalMm, partes);
-  return aplicarDivisaoManual(plano, source, componentSnapshot, medidas);
-}
-
-/** Confirma uma divisão manual (medidas já validadas com validarDivisao). */
-export function aplicarDivisaoManual(plano: ProductionPlan, source: ProductionSource, componentSnapshot: { label: string; componentType: ProductionPiece['componentType']; orientation: ProductionPiece['orientation']; edges: ProductionPiece['edges'] }, medidasMm: number[]): ProductionPlan {
-  const outraMedida = source.splitAxis === 'LENGTH' ? source.snapshotWidthMm : source.snapshotLengthMm;
-  const novasPecas = dividirComponente({ id: source.componentId, label: componentSnapshot.label, componentType: componentSnapshot.componentType, orientation: componentSnapshot.orientation,
-    lengthMm: source.splitAxis === 'LENGTH' ? source.snapshotLengthMm : outraMedida, widthMm: source.splitAxis === 'LENGTH' ? outraMedida : source.snapshotWidthMm,
-    quantity: source.snapshotQuantity, edges: componentSnapshot.edges }, medidasMm, source.splitAxis, newId);
-  const idsAntigos = new Set(plano.pieces.filter((piece) => piece.sourceComponentId === source.componentId).map((piece) => piece.id));
-  return {
-    ...plano,
-    pieces: [...plano.pieces.filter((piece) => piece.sourceComponentId !== source.componentId), ...novasPecas],
-    cutouts: plano.cutouts.filter((cutout) => !idsAntigos.has(cutout.pieceId)),
-  };
-}
-
-/** Confirma a divisão por medida (comprimento × largura repetidos), já validada com validarDivisaoPorMedida. */
-export function aplicarDivisaoPorMedida(plano: ProductionPlan, source: ProductionSource, componentSnapshot: { label: string; componentType: ProductionPiece['componentType']; orientation: ProductionPiece['orientation']; edges: ProductionPiece['edges'] }, pecas: PecaPorMedida[]): ProductionPlan {
-  const novasPecas = dividirPorMedida({ id: source.componentId, ...componentSnapshot }, pecas, newId);
-  const idsAntigos = new Set(plano.pieces.filter((piece) => piece.sourceComponentId === source.componentId).map((piece) => piece.id));
-  return {
-    ...plano,
-    pieces: [...plano.pieces.filter((piece) => piece.sourceComponentId !== source.componentId), ...novasPecas],
-    cutouts: plano.cutouts.filter((cutout) => !idsAntigos.has(cutout.pieceId)),
-  };
-}
-
-/**
- * O comercial mudou depois do detalhamento (needsReview). "Reconciliar" atualiza
- * a origem para a medida atual E reinicia essa origem com uma única peça (o
- * usuário divide de novo do zero). "Manter e revisar manualmente" só reconhece
- * a mudança (limpa needsReview) sem mexer nas peças já criadas — o usuário
- * ajusta à mão no assistente/editor.
- */
-export function aceitarMudancaComercial(plano: ProductionPlan, item: DraftItem, componentId: string, resetarPecas: boolean, servicos: { id: string; name: string }[] = []): ProductionPlan {
-  const component = item.components.find((entry) => entry.id === componentId);
-  const source = plano.sources.find((entry) => entry.componentId === componentId);
-  if (!component || !source) return plano;
-  const lengthMm = mm(component.lengthCm) ?? source.snapshotLengthMm; const widthMm = mm(component.widthCm) ?? source.snapshotWidthMm;
-  const novaFonte: ProductionSource = { ...source, needsReview: false, snapshotLengthMm: lengthMm, snapshotWidthMm: widthMm, snapshotQuantity: component.quantity, snapshotComponentType: component.componentType, snapshotMaterialId: component.materialId };
-  const sources = plano.sources.map((entry) => entry.componentId === componentId ? novaFonte : entry);
-  if (!resetarPecas) return { ...plano, sources };
-  const idsAntigos = new Set(plano.pieces.filter((piece) => piece.sourceComponentId === componentId).map((piece) => piece.id));
-  const novaPeca = pecaInicial({ id: componentId, label: component.label, componentType: component.componentType, orientation: component.orientation, lengthMm, widthMm, quantity: component.quantity, edges: converterEdges(component.edges, servicos),
-    sillDetailMm: mm(component.sillDetailCm), sillDetailHeightMm: mm(component.sillDetailHeightCm), sillTopWidthMm: mm(component.sillTopWidthCm), sillBottomWidthMm: mm(component.sillBottomWidthCm), sillFinalWidthMm: mm(component.sillFinalWidthCm), sillOverlapMm: mm(component.sillOverlapCm) }, newId);
-  return { ...plano, sources, pieces: [...plano.pieces.filter((piece) => piece.sourceComponentId !== componentId), novaPeca], cutouts: plano.cutouts.filter((cutout) => !idsAntigos.has(cutout.pieceId)) };
-}
-
-/** Rodabanca/saia/vista seguindo a mesma divisão de uma peça já dividida. */
-export function aplicarSeguirDivisao(plano: ProductionPlan, sourceComponentId: string, parentSide: Exclude<ProductionPiece['parentSide'], undefined>, heightMm: number, componentType: ProductionPiece['componentType']): ProductionPlan {
-  const pecasOrigem = plano.pieces.filter((piece) => piece.sourceComponentId === sourceComponentId && !piece.parentPieceId);
-  const novas = seguirDivisao(pecasOrigem, parentSide, heightMm, componentType, newId);
-  return { ...plano, pieces: [...plano.pieces, ...novas] };
-}
-
-export { planoDeProducao as lerPlanoDeProducao, comPlanoDeProducao as gravarPlanoDeProducao };
+export { planoDeProducao as lerPlanoDeProducao };
 
 /**
  * Para salvar: o plano gravado no rascunho passa a seguir os componentes que vão

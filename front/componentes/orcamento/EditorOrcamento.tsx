@@ -1,9 +1,7 @@
 'use client';
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type SetStateAction } from 'react';
 import { arredondarMoeda, valorAplicadoComponente, podeEditarOrcamento, type SavedQuoteItem, somarAreasComponentes, calcularComponente, calcularLinha, calcularLinhaServico, calcularTotalOrcamento, centimetrosParaMilimetros, calcularAreaRetangularM2, acabamentoBordaPedra, calcularAcabamentoBorda } from '@inova/domain';
-import { EditorComponentes } from './ComponentEditor';
-import { DesenhoTecnico } from './TechnicalDrawing';
 import type { ComponentType, DraftComponent, DraftEdge, DraftItem } from './types';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -11,24 +9,20 @@ import { currency, rascunhoParaEntradaItem, itemSalvoParaRascunho } from '../../
 import { restaurarNomesComponentes } from '../../utilitarios/component-groups';
 import { VincularOrcamento, type QuoteLink } from './QuoteLinker';
 import { api } from '../../utilitarios/api';
-import { TituloEtapaProjeto } from './ProjectStageHeading';
 import '../../app/project-builder.css';
 import { useSession } from '../ApplicationShell';
-import { EtapasProjeto } from './ProjectStepper';
-import { calcularTotalCartao, projetoTemDesenho, dadosEntradaProjeto, trocarModoEntrada, modoEntradaOrcamento, temPermissao, type QuoteEntryMode } from '@inova/domain';
+import { calcularTotalCartao, temPermissao } from '@inova/domain';
 import { EditorOrcamentoRapido } from './QuickQuoteEditor';
 import { ResumoMovel } from './MobileQuoteSummary';
 import { criarId } from '../../utilitarios/id';
 import { duplicarProjeto } from '../../utilitarios/duplicar-projeto';
 import { JanelaDuplicarProjeto } from './JanelaDuplicarProjeto';
-import { alterouOrcamentoRapido, arredondarMedidaParaCima, normalizarPedrasDasPecas, prepararItemRapido } from '../../utilitarios/quick-quote';
+import { arredondarMedidaParaCima, normalizarPedrasDasPecas, prepararItemRapido } from '../../utilitarios/quick-quote';
 import './quick-quote.css';
-import { conciliarPlanoParaSalvar, reconciliarPlano, aplicarDivisaoIgual, aplicarDivisaoManual, aplicarDivisaoPorMedida, aceitarMudancaComercial, lerPlanoDeProducao, gravarPlanoDeProducao, componenteParaPeca, planoParaDesenho, type ProductionPlan, type ProductionPiece } from '../../utilitarios/production-plan';
-import { AssistenteDivisaoProducao } from './ProductionSplitAssistant';
+import { conciliarPlanoParaSalvar } from '../../utilitarios/production-plan';
 import { createPortal } from 'react-dom';
 import { Icone, useCelular } from '../filtros/Filtros';
 import { BarraAtendimento } from './BarraAtendimento';
-import { RecortesDaPeca } from './ProductionCutouts';
 import { OpcaoSemCadastro, contatoCliente, payloadCliente } from '../clientes/SemCadastro';
 import { DesenhoTecnicoNoOrcamento, type DesenhoUsado } from './DesenhoTecnicoNoOrcamento';
 import { projetoDoDesenho, projetoParaDesenho, vinculoDesenho } from '../../utilitarios/desenho-orcamento';
@@ -61,9 +55,7 @@ const catalogCacheTtlMs = 60_000;
 const legacyQuoteDraftStorageKey = 'inova_quote_draft_v2';
 const componentSummaryLabels: Record<ComponentType, string> = { TOP: 'Bancada', COUNTER: 'Bancada', BASE: 'Base', VISTA: 'Vista', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', SIDE_LEFT: 'Lateral esquerda', SIDE_RIGHT: 'Lateral direita', SILL: 'Peitoril', THRESHOLD: 'Soleira', STEP: 'Degrau', OTHER: 'Componente' };
 const blankComponent = (componentType: ComponentType): DraftComponent => ({ id: newId(), label: '', componentType, orientation: ['TOP', 'COUNTER', 'BASE', 'VISTA', 'SILL', 'THRESHOLD', 'STEP'].includes(componentType) ? 'HORIZONTAL' : 'VERTICAL', lengthCm: '', widthCm: '', quantity: 1, edges: [] });
-// Orçamentos novos começam no modo rápido; o usuário pode mudar para o
-// detalhado a qualquer momento sem criar outro orçamento.
-const newItem = (): DraftItem => ({ id: newId(), projectName: '', productTypeId: '', materialId: '', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [blankComponent('TOP')], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {}, drawingData: dadosEntradaProjeto(undefined, 'QUICK') });
+const newItem = (): DraftItem => ({ id: newId(), projectName: '', productTypeId: '', materialId: '', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [blankComponent('TOP')], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {} });
 const newClientWorkspace = (): ClientWorkspace => ({ id: newId(), customer: null, items: [newItem()], activeIndex: 0, discount: '0', parentQuote: null });
 const workspaceHasData = (entry: ClientWorkspace) => !!entry.customer || entry.items.some((project) => projetoPreenchido(project));
 const normalizarProjetos = (entries: DraftItem[] | undefined, componentNamesVersion?: number) => entries?.length ? restaurarNomesComponentes(entries, componentNamesVersion).map((entry) => ({ ...entry, projectName: entry.projectName ?? '', components: normalizarPedrasDasPecas(entry, entry.components), serviceAppliedValues: entry.serviceAppliedValues ?? {} })) : [newItem()];
@@ -109,23 +101,6 @@ export default function EditorOrcamento() {
   const [summarySelection, setSummarySelection] = useState<number | 'TOTAL'>(0);
   /** Aviso depois de usar um desenho técnico no orçamento. */
   const [avisoDesenho, setAvisoDesenho] = useState('');
-  const [currentStep, setCurrentStep] = useState(1);
-  const [showAll, setShowAll] = useState(false);
-  const [reviewedSteps, setReviewedSteps] = useState<number[]>([]);
-  const navigateStep = (step: number) => {
-    setCurrentStep(step);
-    window.setTimeout(() => {
-      const target = document.getElementById(`project-step-${step}`);
-      // Não desce a tela (clicar em 1 ou 2 no topo fica onde está); só volta ao começo
-      // da etapa quando ele ficou acima da área visível (ex.: "Conferir produção" no fim da página).
-      if (target && target.getBoundingClientRect().top < 0) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      target?.focus({ preventScroll: true });
-    }, 0);
-  };
-  const nextStep = () => {
-    if (currentStep >= 2) setReviewedSteps((steps) => [...new Set([...steps, currentStep])]);
-    navigateStep(Math.min(currentStep + 1, 2));
-  };
   const [saving, setSaving] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [componentNamesVersion, setComponentNamesVersion] = useState(0);
@@ -135,7 +110,6 @@ export default function EditorOrcamento() {
   const [erroDuplicar, setErroDuplicar] = useState('');
   const savedRef = useRef(false);
   const latestDraft = useRef<string>('');
-  const linearServices = useMemo(() => catalog?.services.filter((service) => service.billingUnit === 'LINEAR_METER') ?? [], [catalog]);
   const workspace = workspaces[activeClientIndex] ?? workspaces[0];
   const customer = workspace.customer;
   const items = workspace.items;
@@ -228,7 +202,7 @@ export default function EditorOrcamento() {
       });
       const aberto = recebidos.findIndex((entry) => entry.id === abertoId);
       setActiveClientIndex(Math.max(0, aberto));
-      if (aberto < 0) { setSummarySelection(0); setReviewedSteps([]); setCurrentStep(1); }
+      if (aberto < 0) setSummarySelection(0);
     },
   });
   useEffect(() => {
@@ -261,14 +235,6 @@ export default function EditorOrcamento() {
             if (stored.customer) setCustomer(stored.customer);
           }
         } catch {}
-        const detailId = new URLSearchParams(window.location.search).get('detail');
-        if (detailId) {
-          const index = quote.items.findIndex(entry => entry.id === detailId);
-          if (index >= 0) {
-            setItems(current => current.map((entry, i) => i === index ? { ...entry, drawingData: dadosEntradaProjeto(entry.drawingData, 'DETAILED') } : entry));
-            setActiveIndex(index); setCurrentStep(2);
-          }
-        }
         setComponentNamesVersion(1);
         setDraftHydrated(true);
       }).catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Não foi possível abrir a edição.'); });
@@ -312,17 +278,14 @@ export default function EditorOrcamento() {
     return result;
   };
   const item = items[activeIndex] ?? items[0];
-  const quickMode = modoEntradaOrcamento(item.drawingData) === 'QUICK';
-  const temDesenho = projetoTemDesenho(item.drawingData);
-  const concluirDetalhamento = () => { const problem = projectProblem(item); if (problem) { setError(problem.message); return; } updateItem({ drawingData: { ...item.drawingData, detailingStatus: 'COMPLETED' } }); };
+  // Projeto antigo com área manual (sem peças): só consulta; o Orçamento Rápido é feito por peças.
+  const areaManual = item.calculationMode === 'MANUAL_M2';
   const activeServices = servicesFor(item);
-  const drawingServices = editingQuote ? activeServices.filter((service) => service.billingUnit === 'LINEAR_METER') : linearServices;
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
   // M² fechado é da empresa (Materiais e serviços → Serviços e acabamentos), sempre marcado nos
   // orçamentos novos. Orçamento salvo mantém como foi salvo: o valor dele nunca muda ao editar.
   const m2Fechado = catalog?.settings?.closedSquareMeter ?? true;
   const arredondaM2 = (draft: DraftItem) => quoteId ? !!draft.arredondarM2 : m2Fechado;
-  const completedSteps = [(item.calculationMode === 'MANUAL_M2' ? !!materialFor(item) && decimal(item.manualM2) > 0 && !!item.manualJustification.trim() : item.components.length > 0 && item.components.every(component => !!materialFor(item, component) && !!calculateDraftComponent(component, arredondaM2(item)))) ? 1 : 0, ...reviewedSteps].filter(Boolean);
   const edgeCalculatedSubtotal = (draft: DraftItem, component: DraftComponent, edge: DraftEdge) => {
     const material = materialFor(draft, component);
     const savedEdge = snapshotFor(draft)?.components.flatMap((component) => component.edges).find((row) => row.id === edge.id && row.serviceId === edge.serviceId);
@@ -430,45 +393,7 @@ export default function EditorOrcamento() {
   const discountValue = currencyDecimal(discount);
   const total = calcularTotalOrcamento(summaries.map((summary) => summary.total), Math.min(discountValue, gross));
   const updateItem = (patch: Partial<DraftItem>) => setItems((current) => current.map((entry, index) => index === activeIndex ? { ...entry, ...patch } : entry));
-  // Plano de produção: como o orçamento comercial (item.components/cutouts) vira
-  // peças físicas para fabricar. Fica inteiro dentro de item.drawingData — nunca
-  // escreve em components/cutouts/serviceIds/serviceQuantities/serviceAppliedValues,
-  // que continuam sendo a única fonte do valor cobrado (Orçamento Rápido).
-  // servicesFor() sempre devolve um array novo a cada render (não é
-  // memoizado) — usar activeServices como dependência recomputaria o plano a
-  // cada render, então dependemos só de item (activeServices deriva dele).
-  const productionPlan = useMemo(() => reconciliarPlano(item, lerPlanoDeProducao(item.drawingData), activeServices), [item]); // eslint-disable-line react-hooks/exhaustive-deps
-  const updateProductionPlan = (updater: (plan: ProductionPlan) => ProductionPlan) => updateItem({ drawingData: gravarPlanoDeProducao(item.drawingData, updater(productionPlan)) });
-  const productionSourceSnapshots: Record<string, Pick<ProductionPiece, 'label' | 'componentType' | 'orientation' | 'edges'>> = Object.fromEntries(productionPlan.sources.map((source) => {
-    const piece = productionPlan.pieces.find((entry) => entry.sourceComponentId === source.componentId && !entry.parentPieceId);
-    const comercial = item.components.find((component) => component.id === source.componentId);
-    return piece ? [source.componentId, { label: comercial?.label ?? piece.label, componentType: comercial?.componentType ?? piece.componentType, orientation: piece.orientation, edges: piece.edges }] as const : null;
-  }).filter((entry): entry is [string, Pick<ProductionPiece, 'label' | 'componentType' | 'orientation' | 'edges'>] => entry !== null));
-  const { components: productionPieceDraftComponents, cutouts: productionCutoutsAsDraft } = planoParaDesenho(productionPlan);
-  const updateProductionPieces = (components: DraftComponent[]) => updateProductionPlan((plan) => {
-    const porId = new Map(plan.pieces.map((piece) => [piece.id, piece]));
-    const resolveSource = (component: DraftComponent): string => {
-      const existing = porId.get(component.id);
-      if (existing) return existing.sourceComponentId;
-      const parent = component.parentComponentId ? components.find((entry) => entry.id === component.parentComponentId) : undefined;
-      return parent ? resolveSource(parent) : component.id;
-    };
-    return { ...plan, pieces: components.map((component) => componenteParaPeca(component, resolveSource(component), activeServices)) };
-  });
-  const materialForPeca = (pecaComponent: DraftComponent) => {
-    const peca = productionPlan.pieces.find((entry) => entry.id === pecaComponent.id);
-    const origem = peca ? item.components.find((entry) => entry.id === peca.sourceComponentId) : undefined;
-    return origem ? materialFor(item, origem) : undefined;
-  };
-  const productionDrawingComponents = useDeferredValue(productionPieceDraftComponents);
-  const productionDrawingCutouts = useDeferredValue(productionCutoutsAsDraft);
-  const changeEntryMode = (mode: QuoteEntryMode) => {
-    if (mode === 'QUICK' && item.calculationMode === 'MANUAL_M2') { setError('Este projeto utiliza área manual. Adicione um novo projeto para informar peças no Orçamento Rápido.'); return; }
-    const prepared = prepararItemRapido(item);
-    updateItem({ ...(prepared.components.length ? { components: prepared.components, cutouts: prepared.cutouts } : {}), ...(mode === 'QUICK' && !item.materialId ? { materialId: item.components[0]?.materialId ?? '' } : {}), drawingData: trocarModoEntrada(item.drawingData, mode) });
-    setError(''); setCurrentStep(1);
-  };
-  const selectProject = (index: number) => { setActiveIndex(index); setSummarySelection(index); setReviewedSteps([]); };
+  const selectProject = (index: number) => { setActiveIndex(index); setSummarySelection(index); };
   const summaryIsTotal = summarySelection === 'TOTAL';
   const selectedSummary = typeof summarySelection === 'number' ? summaries[summarySelection] : undefined;
   const selectedComponentBreakdown = selectedSummary?.componentBreakdown ?? [];
@@ -498,7 +423,6 @@ export default function EditorOrcamento() {
       setActiveClientIndex(abertos.findIndex(candidate => candidate.id === targetWorkspaceId));
       setSummarySelection(0);
     } else setCustomer(entry);
-    if (target) { setReviewedSteps([]); setCurrentStep(1); }
     setCustomerTarget(null);
     setEditingCustomerId(null);
     setCustomerMode(null);
@@ -539,7 +463,7 @@ export default function EditorOrcamento() {
     catch (cause) { setCustomerError(cause instanceof Error ? cause.message : 'Não foi possível salvar o cliente.'); }
     finally { setSavingCustomer(false); }
   }
-  function adicionarProjeto() { setItems((current) => [...current, { ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '', arredondarM2: m2Fechado, ...(quickMode ? { drawingData: dadosEntradaProjeto(undefined, 'QUICK') } : {}) }]); setActiveIndex(items.length); setReviewedSteps([]); }
+  function adicionarProjeto() { setItems((current) => [...current, { ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '', arredondarM2: m2Fechado }]); setActiveIndex(items.length); }
   const nomesDosProjetos = items.map((projeto, index) => projeto.projectName.trim() || `Projeto ${index + 1}`);
   /**
    * "Duplicar projeto" (com o nome escolhido na janela): cópia fiel do projeto atual logo depois
@@ -571,12 +495,11 @@ export default function EditorOrcamento() {
     const filled = projetoPreenchido(project);
     if (filled && !await confirmar({ titulo: `Excluir ${project.projectName || 'Projeto ' + (index + 1)}?`, mensagem: 'O projeto e todos os seus dados serão removidos deste orçamento.', confirmar: 'Excluir projeto', perigo: true })) return;
     if (items.length === 1) {
-      setItems([{ ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '' }]); setActiveIndex(0); setSummarySelection(0); navigateStep(1);
+      setItems([{ ...newItem(), productTypeId: catalog?.productTypes[0]?.id ?? '' }]); setActiveIndex(0); setSummarySelection(0);
     } else {
       setItems(current => current.filter((_, currentIndex) => currentIndex !== index));
       setActiveIndex(current => current > index ? current - 1 : Math.min(current, items.length - 2));
     }
-    setReviewedSteps([]);
   }
   async function removerEspacoCliente(index: number, confirmed = false) {
     const entry = workspaces[index];
@@ -593,8 +516,6 @@ export default function EditorOrcamento() {
       setActiveClientIndex((current) => current > index ? current - 1 : Math.min(current, workspaces.length - 2));
     }
     setSummarySelection(0);
-    setReviewedSteps([]);
-    setCurrentStep(1);
   }
   /**
    * Abre um atendimento para o cliente (da tela do cliente: ?cliente=) ou para um complemento
@@ -610,7 +531,7 @@ export default function EditorOrcamento() {
     const aberto = { ...base, customer: cliente, parentQuote: parent };
     setWorkspaces(current => vazio >= 0 ? current.map(entry => entry.id === base.id ? aberto : entry) : [...current, aberto]);
     setActiveClientIndex(vazio >= 0 ? vazio : abertos.length);
-    setSummarySelection(0); setReviewedSteps([]); setCurrentStep(1); setCustomerMode(null);
+    setSummarySelection(0); setCustomerMode(null);
   }
   const pedidoDoEndereco = useRef(false);
   useEffect(() => {
@@ -630,13 +551,9 @@ export default function EditorOrcamento() {
     if (index < 0 || index >= workspaces.length) return;
     setActiveClientIndex(index);
     setSummarySelection(0);
-    setReviewedSteps([]);
-    setCurrentStep(1);
   }
   const projectProblem = (draft: DraftItem): { message: string; componentId?: string } | null => {
     draft = prepararItemRapido(draft);
-    const quickDraft = modoEntradaOrcamento(draft.drawingData) === 'QUICK';
-    if (!draft.productTypeId && !quickDraft) return { message: 'O catálogo de tipos de peça ainda não foi carregado. Aguarde e tente novamente.' };
     if (draft.calculationMode === 'MANUAL_M2') {
       if (!materialFor(draft)) return { message: 'Selecione o material.' };
       if (!isSuperAdmin) return { message: 'O cálculo manual requer o perfil Super administrador.' };
@@ -649,15 +566,10 @@ export default function EditorOrcamento() {
       const name = component.label.trim() || `Componente ${index + 1}`;
       if (!materialFor(draft, component)) return { componentId: component.id, message: `${name}: selecione o material dessa peça no campo Material.` };
       if (!calculateDraftComponent(component, arredondaM2(draft))) return { componentId: component.id, message: `${name}: confira comprimento, largura/altura e quantidade. As medidas devem ser maiores que zero.` };
-      for (const edge of quickDraft ? [] : component.edges) {
-        const service = servicesFor(draft).find(entry => entry.id === edge.serviceId);
-        if (acabamentoBordaPedra(service?.name ?? '') && !(decimal(edge.heightCm ?? '') > 0)) return { componentId: component.id, message: `${name}: informe a altura/largura de ${service?.name}.` };
-      }
     }
     return null;
   };
   const isEmptyQuickProject = (project: DraftItem) => {
-    if (modoEntradaOrcamento(project.drawingData) !== 'QUICK') return false;
     return !project.projectName.trim() && !project.materialId && !project.manualM2 && !project.manualJustification
       && project.components.length <= 1 && !project.cutouts.length && !project.serviceIds.length
       && project.components.every(component => !component.label.trim() && !component.materialId && !component.lengthCm && !component.widthCm && component.quantity === 1 && component.componentType === 'TOP' && !component.edges.length && component.appliedTotal === undefined);
@@ -674,7 +586,7 @@ export default function EditorOrcamento() {
       vinculo: { designId: desenho.designId, nome: desenho.nome, versao: desenho.versao, total: desenho.estimativa.total, aceitoEm: new Date().toISOString() },
     });
     setItems((current) => alvo < current.length ? current.map((entry, index) => index === alvo ? projeto : entry) : [...current, projeto]);
-    setActiveIndex(alvo); setSummarySelection(alvo); setReviewedSteps([]); setError('');
+    setActiveIndex(alvo); setSummarySelection(alvo); setError('');
     setAvisoDesenho(`${projeto.projectName}: ${formatarMoeda(desenho.estimativa.total)} do desenho técnico ${existente >= 0 ? 'atualizado' : 'adicionado'} no resumo do orçamento.`);
   };
   // Antes de abrir o desenho técnico de um projeto deste orçamento, o desenho recebe o que mudou no Orçamento Rápido.
@@ -714,7 +626,6 @@ export default function EditorOrcamento() {
   };
   const prepareDraftForSave = (draft: DraftItem) => {
     const prepared = prepararItemRapido(draft);
-    const rapido = modoEntradaOrcamento(prepared.drawingData) === 'QUICK';
     const arredondar = prepared.calculationMode === 'DIMENSIONS' && arredondaM2(prepared);
     const draftServices = servicesFor(prepared);
     const omitted = new Set<string>();
@@ -724,16 +635,16 @@ export default function EditorOrcamento() {
     // como sobreposição antes de retornar o valor a gravar aqui). As medidas
     // (lengthCm/widthCm) nunca são alteradas — o desenho técnico e o PDF continuam
     // mostrando exatamente o que foi digitado.
-    // (vale nos dois modos: o Detalhado só divide as peças para produzir, o valor é o mesmo). A
-    // marca m2Fechado no projeto faz o valor voltar a ser calculado ao reabrir (itemSalvoParaRascunho).
+    // A marca m2Fechado no projeto faz o valor voltar a ser calculado ao reabrir (itemSalvoParaRascunho).
+    // Saia e vista antigas (acabamento) sem a altura não vão: entram como serviço do projeto.
     const components = prepared.components.map(component => ({ ...component,
       appliedTotal: arredondar ? componentAppliedTotal(prepared, component).toFixed(2).replace('.', ',') : component.appliedTotal,
-      edges: rapido ? component.edges.filter(edge => {
+      edges: component.edges.filter(edge => {
       const service = draftServices.find(entry => entry.id === edge.serviceId);
       const stripWithoutMeasure = !!acabamentoBordaPedra(service?.name ?? '') && !(decimal(edge.heightCm ?? '') > 0);
       if (stripWithoutMeasure) omitted.add(edge.serviceId);
       return !stripWithoutMeasure;
-    }) : component.edges }));
+    }) }));
     const { m2Fechado: _marca, ...semMarca } = prepared.drawingData ?? {};
     const drawingData = !prepared.drawingData ? undefined : arredondar ? { ...prepared.drawingData, m2Fechado: true } : 'm2Fechado' in prepared.drawingData ? semMarca : prepared.drawingData;
     if (!omitted.size && !arredondar && drawingData === prepared.drawingData) return prepared;
@@ -755,7 +666,6 @@ export default function EditorOrcamento() {
         setWorkspaces((current) => current.map((entry, index) => index === activeClientIndex ? { ...entry, activeIndex: invalidIndex } : entry));
         setSummarySelection(invalidIndex);
       }
-      navigateStep(1);
       if (!activeWorkspace?.customer) openCustomerSearch();
       setError(!activeWorkspace?.customer ? 'Selecione o cliente deste grupo.' : !itemsToSave.length ? 'Adicione ao menos uma peça no orçamento rápido.' : `${itemsToSave[invalidIndex].projectName || 'Projeto ' + (invalidIndex + 1)} — ${activeProblems[invalidIndex]!.message}`);
       return;
@@ -823,14 +733,9 @@ export default function EditorOrcamento() {
       </>}
     </Janela>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className={`quote-workspace${quickMode ? ' quick-workspace' : ''}`}><div className="quote-form-column" id="active-project-panel" role="region" aria-label={`Projeto: ${item.projectName.trim() || `Projeto ${activeIndex + 1}`}`}>
+    <div className="quote-workspace quick-workspace"><div className="quote-form-column" id="active-project-panel" role="region" aria-label={`Projeto: ${item.projectName.trim() || `Projeto ${activeIndex + 1}`}`}>
     {editingQuote && <p className="customer-help">Edição de orçamento salvo: os preços registrados e os ajustes manuais são preservados; novos materiais e serviços utilizam o catálogo atual. <Link href={enderecoOrcamento(quoteId!, origem)} onClick={() => { savedRef.current = true; localStorage.removeItem(quoteDraftStorageKey); }}>Cancelar edição</Link></p>}
-    {/* Modo do orçamento e, no Detalhado, as etapas na mesma linha. */}
     <div className="modo-e-etapas">
-    <div className={`quote-mode-switch${quickMode ? ' is-quick-mode' : ''}`} role="group" aria-label="Modo do orçamento">
-      <button type="button" className="modo-botao" aria-pressed={quickMode} aria-label="Orçamento Rápido" onClick={() => changeEntryMode('QUICK')}><Icone nome="raio" tamanho={16} />Rápido</button>
-      <button type="button" className="modo-botao" aria-pressed={!quickMode} aria-label={`Orçamento com Desenho / Detalhado (${temDesenho ? 'desenho adicionado' : 'desenho pendente'})`} onClick={() => changeEntryMode('DETAILED')}><Icone nome="esquadro" tamanho={16} />Com desenho<span className={`modo-selo${temDesenho ? ' feito' : ''}`} title={temDesenho ? 'Desenho adicionado' : 'Desenho pendente'} aria-hidden="true">{temDesenho ? '✓' : '!'}</span></button>
-    </div>
     <DesenhoTecnicoNoOrcamento cliente={customer ? { id: customer.id, name: customer.name } : null} desenhosNoOrcamento={items.flatMap((projeto) => vinculoDesenho(projeto)?.designId ?? [])}
       podeRevisar={!!currentUser && temPermissao(currentUser.role, 'technical')} aoEscolherCliente={openCustomerSearch} aoSemCadastro={() => void orcamentoSemCadastro()} aoUsar={usarDesenhoTecnico} antesDeAbrir={levarOrcamentoAoDesenho}
       projetoAtual={customer && item ? { nome: item.projectName.trim() || `Projeto ${activeIndex + 1}`, pecas: item.components.filter((component) => component.lengthCm.trim() && component.widthCm.trim()).length, designId: vinculoDesenho(item)?.designId } : null}
@@ -839,41 +744,14 @@ export default function EditorOrcamento() {
         const { desenhoTecnico: _vinculo, ...drawingData } = projeto.drawingData ?? {};
         return { ...projeto, drawingData };
       }))} />
-    {!quickMode && <div className="project-navigation"><EtapasProjeto current={currentStep} completed={completedSteps} onSelect={navigateStep} /><button type="button" className="view-all-button" aria-pressed={showAll} onClick={() => setShowAll((value) => !value)}>{showAll ? 'Ver por etapas' : 'Ver tudo'}</button></div>}
-    {!quickMode && !temDesenho && <button type="button" className="botao-contorno botao-contorno-destaque concluir-detalhamento" onClick={concluirDetalhamento}><Icone nome="marcado" />Concluir detalhamento</button>}
     </div>
     {avisoDesenho && <p className="catalog-notice orc-desenho-aviso" role="status">{avisoDesenho}<button type="button" className="text-button" aria-label="Fechar aviso" onClick={() => setAvisoDesenho('')}>×</button></p>}
     {vinculoDesenho(item) && <p className="customer-help orc-desenho-vinculo"><Icone nome="esquadro" tamanho={14} />Desenho técnico deste projeto: “{vinculoDesenho(item)!.nome}”. Para mudar as peças pelo desenho, abra-o em Desenho técnico e use-o de novo no orçamento.</p>}
-    {quickMode && <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={item.materialId ? materialFor(item) : materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={patch => updateItem({ ...patch, drawingData: alterouOrcamentoRapido(item, { ...item, ...patch }) ? dadosEntradaProjeto(item.drawingData, 'QUICK') : item.drawingData })} m2Fechado={arredondaM2(item)} onDuplicate={() => { setErroDuplicar(''); setJanelaDuplicar(true); }} renderComponentInfo={medidaPeloDesenho} area={component => calculateDraftComponent(component, arredondaM2(item))?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
-    {!quickMode && <>
-    <div className="project-stage-group project-setup-grid" hidden={quickMode || (!showAll && currentStep !== 1)}>
-    <section className="section measurements-card" id="project-step-1" tabIndex={-1} onFocusCapture={() => setCurrentStep(1)}>
-      <TituloEtapaProjeto number={1} title="Divisão e peças" description="Divida cada componente comercial nas peças físicas a serem fabricadas. Essa divisão não altera o valor do orçamento." />
-      <AssistenteDivisaoProducao plan={productionPlan} componentSnapshots={productionSourceSnapshots}
-        onSplitEqual={(source, snapshot, parts) => updateProductionPlan((plan) => aplicarDivisaoIgual(plan, source, snapshot, parts))}
-        onSplitManual={(source, snapshot, lengths) => updateProductionPlan((plan) => aplicarDivisaoManual(plan, source, snapshot, lengths))}
-        onSplitBySize={(source, snapshot, pecas) => updateProductionPlan((plan) => aplicarDivisaoPorMedida(plan, source, snapshot, pecas))}
-        onReconcile={(source) => updateProductionPlan((plan) => aceitarMudancaComercial(plan, item, source.componentId, true, activeServices))}
-        onDismissReview={(source) => updateProductionPlan((plan) => aceitarMudancaComercial(plan, item, source.componentId, false, activeServices))}
-        onResetSplit={(source) => updateProductionPlan((plan) => aceitarMudancaComercial(plan, item, source.componentId, true, activeServices))} />
-      {productionPlan.pieces.length > 0 && <EditorComponentes
-        materialFor={materialForPeca} components={productionPieceDraftComponents} cutouts={productionCutoutsAsDraft} linearServices={drawingServices}
-        renderCutouts={(index) => { const peca = productionPlan.pieces.find((entry) => entry.id === productionPieceDraftComponents[index]?.id); return peca && !peca.parentPieceId ? <RecortesDaPeca pieceId={peca.id} cutouts={productionPlan.cutouts} onChange={(cutouts) => updateProductionPlan((plan) => ({ ...plan, cutouts }))} /> : null; }}
-        onChange={updateProductionPieces}
-        onRemove={(index) => { const removed = productionPieceDraftComponents[index]; if (!removed) return; updateProductionPlan((plan) => { const ids = new Set([removed.id, ...plan.pieces.filter((piece) => piece.parentPieceId === removed.id).map((piece) => piece.id)]); return { ...plan, pieces: plan.pieces.filter((piece) => !ids.has(piece.id)), cutouts: plan.cutouts.filter((cutout) => !ids.has(cutout.pieceId)) }; }); }} />}
-    </section>
+    {areaManual
+      ? <p className="catalog-notice" role="status">Projeto com área informada à mão ({item.manualM2.replace('.', ',')} m²), feito antes do Orçamento Rápido: ele fica como está. Para mudar, adicione um projeto com as peças.</p>
+      : <EditorOrcamentoRapido key={item.id} item={item} materials={catalog.materials} material={item.materialId ? materialFor(item) : materialFor(item, item.components[0])} services={activeServices} onCreateService={createQuickService} onChange={updateItem} m2Fechado={arredondaM2(item)} onDuplicate={() => { setErroDuplicar(''); setJanelaDuplicar(true); }} renderComponentInfo={medidaPeloDesenho} area={component => calculateDraftComponent(component, arredondaM2(item))?.billableArea ?? 0} value={component => componentAppliedTotal(item, component)} calculateCutout={cutout => cutoutCalculatedSubtotal(item, cutout)} />}
     </div>
-    <div className="project-stage-group" id="project-step-2" tabIndex={-1} hidden={quickMode || (!showAll && currentStep !== 2)}>
-    {/* Etapa 2: só o desenho e a ordem de serviço, para conferir. */}
-    <section className="section">
-      <TituloEtapaProjeto number={2} title="Conferência / produção" description="Revise o desenho e a ordem de serviço antes de salvar o orçamento. Alterações neste desenho não modificam o valor do orçamento." />
-      {(showAll || currentStep === 2) && <DesenhoTecnico components={productionDrawingComponents} cutouts={productionDrawingCutouts} materialNames={Object.fromEntries(productionPlan.pieces.map((piece) => [piece.id, materialFor(item, item.components.find((entry) => entry.id === piece.sourceComponentId) ?? item.components[0])?.name ?? 'Material não selecionado']))} linearServices={drawingServices} services={activeServices} additionalServices={item.serviceIds.flatMap((id) => { const service = activeServices.find((entry) => entry.id === id); return service ? [{ name: service.name, quantity: service.billingUnit === 'UNIT' ? item.serviceQuantities[id] : undefined }] : []; })} notes={editingQuote?.notes ?? ''} />}
-    </section>
-    </div>
-    <div className="project-stage-actions" hidden={quickMode}><button type="button" className="secondary-button" onClick={() => navigateStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>← Voltar</button><span>{`Etapa ${currentStep} de 2`}</span>{currentStep < 2 ? <button type="button" className="save-quote-button" onClick={nextStep}>Conferir produção <span aria-hidden="true">→</span></button> : <button type="button" className="save-quote-button" onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'} <span aria-hidden="true">✓</span></button>}</div>
-    </>}
-    </div>
-<aside id="quote-summary-card" className="quote-summary-card" aria-label="Resumo do orçamento"><div className="quote-visual-card"><p>Projetos únicos<br />para espaços<br />incríveis.</p><i /></div><strong>Resumo do orçamento</strong><label className="summary-project-select">Projeto em edição<select aria-label="Projeto em edição" value={summarySelection} onChange={(event) => { const value = event.target.value; if (value === 'TOTAL') { setSummarySelection('TOTAL'); return; } selectProject(Number(value)); }}>{items.map((draft, index) => <option key={draft.id} value={index}>{draft.projectName || `Projeto ${index + 1}`}</option>)}<option value="TOTAL">Total</option></select></label>{summaryIsTotal ? <div className="summary-project-totals">{items.map((draft, index) => <span key={draft.id}><span>{draft.projectName || `Projeto ${index + 1}`}</span><b>{formatarMoeda(summaries[index]?.total ?? 0)}</b></span>)}<span className="summary-grand-total"><span>Total dos projetos</span><b>{formatarMoeda(gross)}</b></span></div> : <><span>Projetos adicionados <b>{items.length}</b></span><span>Área total <b>{(selectedSummary?.area ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²</b></span>{selectedComponentBreakdown.length ? selectedComponentBreakdown.map((component) => <span key={component.id}>{component.name} <b>{formatarMoeda(component.amount)}</b></span>) : <span>Material <b>{formatarMoeda(selectedSummary?.materialSubtotal ?? 0)}</b></span>}{selectedServiceBreakdown.length ? selectedServiceBreakdown.map((service) => <span key={service.id}>{service.name} <b>{formatarMoeda(service.amount)}</b></span>) : <span>Serviços, recortes e cubas <b>{formatarMoeda(0)}</b></span>}<span>Descontos individuais <b>{formatarMoeda(selectedSummary?.individualDiscountTotal ?? 0)}</b></span><span className="summary-grand-total">Total do projeto <b>{formatarMoeda(selectedSummary?.total ?? 0)}</b></span></>}{/* Validade: sempre 10 dias úteis após a emissão (sai no PDF). Observações do orçamento: na tela do orçamento salvo. */}{!quoteId && <VincularOrcamento customer={customer} value={parentQuote} onChange={(quote) => { setParentQuote(quote); if (quote) selectCustomer(quote.customer); }} />}<small className="quote-summary-note">O orçamento é atualizado automaticamente conforme as medidas e os acabamentos.</small>{quickMode && <label>Desconto autorizado (R$)<input aria-label="Desconto geral rápido" inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label>}{quickMode && <><span>Total no Pix (10% de desconto) <b>{formatarMoeda(total)}</b></span><span>No cartão (+10%) <b>{formatarMoeda(calcularTotalCartao(total))}</b></span></>}<div className="quote-summary-actions">{quickMode && <><button type="button" className="save-quote-button" disabled={saving} onClick={() => salvarOrcamento(true)}>Salvar e abrir PDF</button><button type="button" className="save-draft-button" onClick={() => changeEntryMode('DETAILED')}>Adicionar desenhos</button></>}{!quickMode && currentStep < 3 && <button type="button" className="save-quote-button" onClick={nextStep}>Continuar <span aria-hidden="true">→</span></button>}<button type="button" className={currentStep < 3 ? 'save-draft-button' : 'save-quote-button'} onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'}</button><small>{quoteId ? 'O preenchimento é salvo automaticamente neste navegador.' : 'O preenchimento é salvo automaticamente e fica disponível no celular e no computador.'}</small></div></aside>
+<aside id="quote-summary-card" className="quote-summary-card" aria-label="Resumo do orçamento"><div className="quote-visual-card"><p>Projetos únicos<br />para espaços<br />incríveis.</p><i /></div><strong>Resumo do orçamento</strong><label className="summary-project-select">Projeto em edição<select aria-label="Projeto em edição" value={summarySelection} onChange={(event) => { const value = event.target.value; if (value === 'TOTAL') { setSummarySelection('TOTAL'); return; } selectProject(Number(value)); }}>{items.map((draft, index) => <option key={draft.id} value={index}>{draft.projectName || `Projeto ${index + 1}`}</option>)}<option value="TOTAL">Total</option></select></label>{summaryIsTotal ? <div className="summary-project-totals">{items.map((draft, index) => <span key={draft.id}><span>{draft.projectName || `Projeto ${index + 1}`}</span><b>{formatarMoeda(summaries[index]?.total ?? 0)}</b></span>)}<span className="summary-grand-total"><span>Total dos projetos</span><b>{formatarMoeda(gross)}</b></span></div> : <><span>Projetos adicionados <b>{items.length}</b></span><span>Área total <b>{(selectedSummary?.area ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²</b></span>{selectedComponentBreakdown.length ? selectedComponentBreakdown.map((component) => <span key={component.id}>{component.name} <b>{formatarMoeda(component.amount)}</b></span>) : <span>Material <b>{formatarMoeda(selectedSummary?.materialSubtotal ?? 0)}</b></span>}{selectedServiceBreakdown.length ? selectedServiceBreakdown.map((service) => <span key={service.id}>{service.name} <b>{formatarMoeda(service.amount)}</b></span>) : <span>Serviços, recortes e cubas <b>{formatarMoeda(0)}</b></span>}<span>Descontos individuais <b>{formatarMoeda(selectedSummary?.individualDiscountTotal ?? 0)}</b></span><span className="summary-grand-total">Total do projeto <b>{formatarMoeda(selectedSummary?.total ?? 0)}</b></span></>}{/* Validade: sempre 10 dias úteis após a emissão (sai no PDF). Observações do orçamento: na tela do orçamento salvo. */}{!quoteId && <VincularOrcamento customer={customer} value={parentQuote} onChange={(quote) => { setParentQuote(quote); if (quote) selectCustomer(quote.customer); }} />}<small className="quote-summary-note">O orçamento é atualizado automaticamente conforme as medidas e os acabamentos.</small><label>Desconto autorizado (R$)<input aria-label="Desconto geral rápido" inputMode="decimal" value={discount} onChange={event => setDiscount(event.target.value)} /></label><span>Total no Pix (10% de desconto) <b>{formatarMoeda(total)}</b></span><span>No cartão (+10%) <b>{formatarMoeda(calcularTotalCartao(total))}</b></span><div className="quote-summary-actions"><button type="button" className="save-quote-button" disabled={saving} onClick={() => salvarOrcamento(true)}>Salvar e abrir PDF</button><button type="button" className="save-draft-button" onClick={() => salvarOrcamento()} disabled={saving}>{saving ? 'Salvando…' : 'Salvar orçamento'}</button><small>{quoteId ? 'O preenchimento é salvo automaticamente neste navegador.' : 'O preenchimento é salvo automaticamente e fica disponível no celular e no computador.'}</small></div></aside>
     </div>
   </main>;
 }

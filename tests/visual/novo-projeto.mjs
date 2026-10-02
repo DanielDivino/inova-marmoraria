@@ -55,7 +55,6 @@ await page.route('**/api/**', async route => {
 // Todo dado comercial (material, medidas, acabamentos, recortes, valores,
 // desconto) é criado no Orçamento Rápido; "Detalhado" só divide as peças já
 // orçadas em produção — nunca recalcula nem edita valores.
-const step = number => page.locator('.project-step').nth(number - 1).getByRole('button').click();
 // Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
 const selecionarCliente = async () => { await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click(); };
 const menuProjeto = async () => { await page.getByRole('button', { name: /^Projeto:/ }).click(); await expect(page.getByRole('menu')).toBeVisible(); };
@@ -66,7 +65,7 @@ const screenshot = name => page.screenshot({ path: resolve(output, name + '.png'
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
   await page.locator('#project-name').waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Orçamento Rápido' }).getAttribute('aria-pressed'), 'true', 'Novo projeto começa no orçamento rápido');
+  await page.getByRole('heading', { name: 'Orçamento Rápido' }).waitFor();
   assert.equal(await page.getByLabel('Orientação', { exact: true }).count(), 0);
   await screenshot('01-inicial');
   await selecionarCliente();
@@ -128,42 +127,14 @@ try {
   await page.getByLabel('Desconto geral rápido', { exact: true }).fill('25');
   assert.equal(await page.getByLabel('Desconto geral rápido', { exact: true }).inputValue(), '25');
   await screenshot('04-valores');
-  // Com desenho: o recorte de produção (cuba oval 56 × 34 cm) é definido na própria peça.
-  await page.locator('button[aria-label^="Orçamento com Desenho"]').click();
-  const root = page.locator('.component-editor > .component-card').first();
-  await root.getByRole('button', { name: '+ Recorte / cuba', exact: true }).click();
-  await root.getByLabel('Tipo do recorte 1', { exact: true }).selectOption('OVAL_SINK');
-  await root.getByLabel('Medidas do recorte 1', { exact: true }).selectOption('DEFINED');
-  await root.getByLabel('Comprimento do recorte 1 (cm)', { exact: true }).fill('56');
-  await root.getByLabel('Largura do recorte 1 (cm)', { exact: true }).fill('34');
-  await assertTotalContains('1.375,00');
-  await step(2);
-  assert.equal(await page.locator('#project-step-2').isVisible(), true);
-  assert.equal(await page.locator('ellipse.drawing-cutout').count(), 1);
-  assert.match(await page.locator('.manufacturing-description').innerText(), /Adicional de 1\. Tampo · lado Inferior/);
-  assert.match(await page.locator('.manufacturing-description').innerText(), /56 × 34 cm/);
-  await screenshot('05-desenho');
-  await step(1);
-  assert.equal(await root.getByLabel('Comprimento (m)', { exact: true }).first().inputValue(), '2,50');
-  await page.getByRole('button', { name: 'Ver tudo', exact: true }).click();
-  for (const number of [1, 2]) assert.equal(await page.locator('#project-step-' + number).isVisible(), true);
-  await page.getByRole('button', { name: 'Ver por etapas', exact: true }).click();
-  for (const width of [1920, 1100, 768, 390]) {
+  // O Novo orçamento é só o Orçamento Rápido (o antigo "Com desenho" saiu: o desenho é o técnico).
+  assert.equal(await page.locator('button[aria-label^="Orçamento com Desenho"]').count(), 0);
+  for (const width of [1100, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const stage of [1, 2]) {
-      await step(stage);
-      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Sem overflow: ' + width + ', etapa ' + stage);
-    }
-    await screenshot('06-responsivo-' + width);
-    await step(1);
-    const inferiorButton = root.getByRole('button', { name: 'Editar acabamentos — Inferior', exact: true }).first();
-    if ((await inferiorButton.getAttribute('aria-expanded')) !== 'true') await inferiorButton.click();
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Acabamentos sem overflow em ' + width);
-    await root.locator('.component-edge-layout').first().screenshot({ path: resolve(output, 'acabamentos-' + width + '.png') });
-    await root.getByRole('button', { name: 'Fechar edição do lado', exact: true }).click();
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Sem overflow: ' + width);
+    await screenshot('05-responsivo-' + width);
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole('button', { name: 'Orçamento Rápido', exact: true }).click();
   await page.reload();
   await page.locator('#project-name').waitFor();
   assert.equal(await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).inputValue(), '2,50');
@@ -185,13 +156,12 @@ try {
   assert.deepEqual(saved.items[0].drawingData.componentDetails[1], { parentComponentIndex: 0, parentSide: 'FRONT' }, 'Saia presa ao lado Inferior');
   assert.equal(saved.items[0].components[0].orientation, 'HORIZONTAL', 'Orientação interna preservada');
   assert(saved.items[0].services.some((servico) => servico.serviceId === 'oval-cut'), 'Corte de cuba oval salvo como serviço do projeto');
-  const recorte = saved.items[0].drawingData.productionPlan.cutouts[0];
-  assert.deepEqual([recorte.cutoutType, recorte.lengthMm, recorte.widthMm], ['OVAL_SINK', 560, 340], 'Recorte de produção salvo no plano');
+  assert.equal(saved.items[0].drawingData?.productionPlan, undefined, 'sem plano de produção');
   assert.equal(saved.discountAmount, 25);
   assert.equal(saved.notes, undefined, 'observações se editam na tela do orçamento');
   assert.equal(saved.validUntil, undefined, 'validade calculada no servidor');
   assert.deepEqual(errors, []);
-  console.log('OK: Orçamento Rápido, acabamentos, saia no Tipo/descrição presa ao lado, opções da peça, cortes e furos, outros serviços, desconto, recorte de produção no desenho, Ver tudo, rascunho, salvamento e 4 larguras sem overflow e sem campo Orientação. Nenhuma API real chamada.');
+  console.log('OK: Orçamento Rápido, acabamentos, saia no Tipo/descrição presa ao lado, opções da peça, cortes e furos, outros serviços, desconto, rascunho, salvamento e larguras sem overflow e sem campo Orientação. Nenhuma API real chamada.');
 } finally {
   await browser.close();
 }

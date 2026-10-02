@@ -2,13 +2,13 @@
 
 import type { ReactNode } from 'react';
 import type { PieceShape } from '@inova/domain/technical';
-import type { Ferramenta, Modo, TipoBorda, TipoCorpo } from './tipos';
+import type { Ferramenta, Modo, TipoCorpo, TipoNoLado } from './tipos';
 
 type Props = {
-  modo: Modo; ferramenta: Ferramenta; pendenteBorda: TipoBorda | null; temPeca: boolean;
+  modo: Modo; ferramenta: Ferramenta; pendenteBorda: TipoNoLado | null; temPeca: boolean;
   podeDesfazer: boolean; podeRefazer: boolean; temTraco: boolean; passoMm: number;
   aoFerramenta: (ferramenta: Ferramenta) => void; aoAdicionarForma: (forma: PieceShape) => void; aoAdicionarCorpo: (tipo: TipoCorpo) => void;
-  aoEscolherBorda: (tipo: TipoBorda) => void; aoDesfazer: () => void; aoRefazer: () => void;
+  aoEscolherBorda: (tipo: TipoNoLado) => void; aoDesfazer: () => void; aoRefazer: () => void;
   aoDesfazerTraco: () => void; aoLimpar: () => void; aoPasso: (mm: number) => void;
 };
 
@@ -53,6 +53,7 @@ export function BarraFerramentas(props: Props) {
       <Botao rotulo="Rodabanca" icone="▬" ativo={pendenteBorda === 'BACKSPLASH'} desativado={!temPeca} aoClicar={() => props.aoEscolherBorda('BACKSPLASH')} />
       <Botao rotulo="Saia" icone="▭" ativo={pendenteBorda === 'SKIRT'} desativado={!temPeca} aoClicar={() => props.aoEscolherBorda('SKIRT')} />
       <Botao rotulo="Acabamento" icone="╱" ativo={pendenteBorda === 'EDGE_FINISH'} desativado={!temPeca} aoClicar={() => props.aoEscolherBorda('EDGE_FINISH')} />
+      <Botao rotulo="Emenda" icone="┆" ativo={pendenteBorda === 'SEAM'} desativado={!temPeca} aoClicar={() => props.aoEscolherBorda('SEAM')} />
     </div>
     <div className="tec-grupo tec-historico">
       <Botao rotulo="Desfazer" icone="↶" desativado={!props.podeDesfazer} aoClicar={props.aoDesfazer} />

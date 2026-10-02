@@ -227,7 +227,7 @@ try {
   assert.deepEqual((await impressoes.locator('a, button').allInnerTexts()).map(texto => texto.trim()), ['Exportar', 'Adicionar desenho técnico']);
   await impressoes.getByRole('button', { name: 'Exportar Cozinha' }).click();
   const opcoesDoProjeto = impressoes.getByRole('region', { name: 'Opções do PDF' });
-  assert.equal(await opcoesDoProjeto.getByLabel('Incluir desenho técnico').isDisabled(), true, 'sem desenho técnico, a opção fica apagada');
+  assert.equal(await opcoesDoProjeto.getByLabel('Incluir ordem de serviço').isEnabled(), true, 'a OS sai mesmo sem desenho técnico (com as peças)');
   await opcoesDoProjeto.scrollIntoViewIfNeeded();
   await shot('07-exportar-projeto');
   await page.keyboard.press('Escape');
@@ -245,6 +245,12 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForTimeout(200);
   await page.locator('.quote-workbench').screenshot({ path: resolve(output, '05-escuro.png') });
+  // Tema escuro de verdade: nenhum fundo claro no painel, nos blocos e nos campos.
+  const fundosClaros = await page.evaluate(() => [...document.querySelectorAll('.quote-workbench, .quote-workbench-bloco, .quote-workbench-rodape, .quote-workbench :is(select, input:not([type=checkbox]), textarea)')].flatMap((elemento) => {
+    const [r, g, b] = getComputedStyle(elemento).backgroundColor.match(/\d+(\.\d+)?/g).map(Number);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 140 ? [`${elemento.className || elemento.tagName}: ${getComputedStyle(elemento).backgroundColor}`] : [];
+  }));
+  assert.deepEqual(fundosClaros, [], 'no tema escuro o painel não fica branco');
   assert.deepEqual(errors, []);
   console.log('OK: resumo sem validade, observações e opção de valores no PDF; vincular mostra só os orçamentos do cliente (ou "sem projetos"); topo com situação, ação principal e menu ⋯ conforme a situação; Equipe, prazo e observação do orçamento salvos juntos (com Descartar), no celular e no tema escuro.');
 } catch (error) {

@@ -1,4 +1,4 @@
-import { modoEntradaOrcamento, calcularAreaPeitorilDuplo, centimetrosParaMilimetros } from '@inova/domain';
+import { calcularAreaPeitorilDuplo, centimetrosParaMilimetros } from '@inova/domain';
 import type { DraftComponent, DraftItem } from '../componentes/orcamento/types';
 import { removerGrupoComponentes } from './component-groups';
 import { criarId } from './id';
@@ -118,22 +118,8 @@ export function normalizarPedrasDasPecas<T extends DraftComponent>(item: { mater
   return components.map((component) => ({ ...component, materialId: component.materialId || item.materialId,
     materialProprio: component.materialProprio ?? ((!!component.materialId && !!item.materialId && component.materialId !== item.materialId) || undefined) }));
 }
-/**
- * O Orçamento Rápido mudou de fato? Não contam a linha vazia que o Enter cria
- * (e que não é salva) nem só mudar a ordem das peças.
- */
-export function alterouOrcamentoRapido(antes: DraftItem, depois: DraftItem): boolean {
-  const essencial = (item: DraftItem) => {
-    const preparado = prepararItemRapido(item);
-    return JSON.stringify({ ...preparado, drawingData: undefined,
-      components: [...preparado.components].sort((a, b) => a.id.localeCompare(b.id)),
-      cutouts: preparado.cutouts.map((cutout) => ({ ...cutout, componentIndex: cutout.componentIndex === undefined ? undefined : preparado.components[cutout.componentIndex]?.id })) });
-  };
-  return essencial(antes) !== essencial(depois);
-}
 /** Enter may leave an unused insertion row. Only completely untouched rows are omitted. */
 export function prepararItemRapido(item: DraftItem): DraftItem {
-  if (modoEntradaOrcamento(item.drawingData) !== 'QUICK') return item;
   let result = item;
   for (let index = item.components.length - 1; index >= 0; index--) {
     const row = result.components[index];

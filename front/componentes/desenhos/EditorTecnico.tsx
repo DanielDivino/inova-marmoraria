@@ -13,11 +13,11 @@ import { BarraFerramentas } from './BarraFerramentas';
 import { CanvasPlanta } from './CanvasPlanta';
 import { EditorLado } from './EditorLado';
 import { JanelaTraco } from './JanelaTraco';
-import { adicionarPeca, novoRecursoBorda, novoRecursoCorpo } from './operacoes';
+import { adicionarPeca, novaEmenda, novoRecursoBorda, novoRecursoCorpo } from './operacoes';
 import { PainelEstimativa, ResumoEstimativa } from './PainelEstimativa';
 import { PainelMedidas } from './PainelMedidas';
 import { PainelRevisoes } from './PainelRevisoes';
-import { ROTULO_RECURSO, type Ferramenta, type LadoEmEdicao, type Modo, type Selecao, type TipoBorda, type TipoCorpo } from './tipos';
+import { ROTULO_RECURSO, type Ferramenta, type LadoEmEdicao, type Modo, type Selecao, type TipoCorpo, type TipoNoLado } from './tipos';
 import { useDesenhoLivre } from './useDesenhoLivre';
 import { useEstimativa } from './useEstimativa';
 import { useDocumentoTecnico } from './useDocumentoTecnico';
@@ -51,7 +51,7 @@ export default function EditorTecnico({ designId, noOrcamento, voltar: voltarPar
   useVoltarNoTopo(noOrcamento ? null : { href: voltarPara?.href ?? '/orcamentos', rotulo: voltarPara?.rotulo ?? 'Orçamentos' });
   const [ferramenta, setFerramenta] = useState<Ferramenta>('SELECIONAR');
   const [selecao, setSelecao] = useState<Selecao>(null);
-  const [pendenteBorda, setPendenteBorda] = useState<TipoBorda | null>(null);
+  const [pendenteBorda, setPendenteBorda] = useState<TipoNoLado | null>(null);
   const [lado, setLado] = useState<LadoEmEdicao>(null);
   const [cotaInicio, setCotaInicio] = useState<{ pieceId: string; vertexId: string } | null>(null);
   const [folha, setFolha] = useState<Folha>(null);
@@ -152,15 +152,24 @@ export default function EditorTecnico({ designId, noOrcamento, voltar: voltarPar
     mudar({ ...documento, features: [...documento.features, recurso] });
     setSelecao({ tipo: 'recurso', id: recurso.id }); setFolha('medidas');
   };
-  const escolherBorda = (tipo: TipoBorda) => {
+  const escolherBorda = (tipo: TipoNoLado) => {
     if (!pecaAtiva) return;
     setPendenteBorda((atual) => atual === tipo ? null : tipo);
     setSelecao({ tipo: 'peca', id: pecaAtiva.id });
-    tecnico.setMensagem(`Toque no lado de ${nomeDaPeca(pecaAtiva, documento.pieces)} em que deseja incluir ${ROTULO_RECURSO[tipo].toLowerCase()}.`);
+    tecnico.setMensagem(tipo === 'SEAM'
+      ? `Toque no lado de ${nomeDaPeca(pecaAtiva, documento.pieces)} onde a emenda começa: ela atravessa a peça e divide em pedras (a distância muda no painel).`
+      : `Toque no lado de ${nomeDaPeca(pecaAtiva, documento.pieces)} em que deseja incluir ${ROTULO_RECURSO[tipo].toLowerCase()}.`);
   };
   const tocarLado = (pecaId: string, ladoId: string) => {
     const peca = documento.pieces.find((entrada) => entrada.id === pecaId);
     if (!peca) return;
+    if (pendenteBorda === 'SEAM') {
+      const emenda = novaEmenda(peca, ladoId, criarId());
+      if (!emenda) { tecnico.setMensagem('A emenda começa num lado reto. Toque em outro lado.'); return; }
+      mudar({ ...documento, features: [...documento.features, emenda] });
+      setSelecao({ tipo: 'recurso', id: emenda.id }); setPendenteBorda(null); setFolha('medidas'); tecnico.setMensagem('');
+      return;
+    }
     if (pendenteBorda) {
       const recurso = novoRecursoBorda(peca, ladoId, pendenteBorda, criarId());
       mudar({ ...documento, features: [...documento.features, recurso] });

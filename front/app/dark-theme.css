@@ -78,34 +78,34 @@
   html.inova-dark .inova-theme .deadline-alert { border-color: #6c593a; background: var(--status-yellow-bg); color: var(--status-yellow-ink); }
   html.inova-dark .inova-theme .deadline-alert.overdue { border-color: #7b4b44; background: var(--status-red-bg); color: var(--status-red-ink); }
 
-  html.inova-dark .inova-theme :is(.list-header h1, .project-title-client h1, .intro h1, .project-stage-heading h2, .quick-heading h2, .showcase-catalog h2, .ambientes-heading h2) { color: var(--ink); }
+  html.inova-dark .inova-theme :is(.list-header h1, .project-title-client h1, .intro h1, .quick-heading h2, .showcase-catalog h2, .ambientes-heading h2) { color: var(--ink); }
   html.inova-dark .inova-theme :is(.list-header, .project-tabs-bar, .client-tabs-bar) { border-color: var(--line); }
-  html.inova-dark .inova-theme :is(.client-tab, .project-tab, .admin-tabs, .quote-mode-switch, .quote-filter-row, .material-filter-bar) { background: #252a27; }
-  html.inova-dark .inova-theme :is(.client-tab.active, .project-tab.active, .admin-tabs button.selected, .quote-mode-switch button[aria-pressed=true]) {
+  html.inova-dark .inova-theme :is(.client-tab, .project-tab, .admin-tabs, .quote-filter-row, .material-filter-bar) { background: #252a27; }
+  html.inova-dark .inova-theme :is(.client-tab.active, .project-tab.active, .admin-tabs button.selected) {
     background: #343a35;
     border-color: #505851;
     border-bottom-color: #343a35;
     color: #e4e8e2;
   }
-  html.inova-dark .inova-theme :is(.client-tab button, .project-tab button, .admin-tabs button, .quote-mode-switch button) { color: #adb3ac; }
+  html.inova-dark .inova-theme :is(.client-tab button, .project-tab button, .admin-tabs button) { color: #adb3ac; }
   html.inova-dark .inova-theme :is(.client-tab.active button:first-child, .project-tab.active [role=tab]) { color: #f0e5d3; }
 
   html.inova-dark .inova-theme :is(
     .material-admin-card, .saved-quote-card, .detail-card, .admin-rows article, .quote-card,
     .customer-section, .project-manager, .project-context, .customer-card, .customer-flow,
     .project-builder .quote-form-column .section, .project-builder .quote-summary-card,
-    .project-builder .measurements-card, .project-builder .component-card,
+    .project-builder .measurements-card,
     .project-builder .selected-stone-card, .project-builder .cutout-row,
-    .quote-values, .edge-finish, .compact-option, .remount-individual-values,
+    .quote-values, .compact-option, .remount-individual-values,
     .technical-revisions, .showcase-material-card
   ) { background: #222724; border-color: #3c433e; color: var(--ink); box-shadow: var(--shadow); }
   html.inova-dark .inova-theme :is(.inline-form, .admin-form, .empty, .catalog-empty, .showcase-empty) { background: #202522; border-color: #414741; }
-  html.inova-dark .inova-theme :is(.secondary-button, .photo-upload-button, .view-all-button, .customer-choice button, .sill-overlap-buttons button) {
+  html.inova-dark .inova-theme :is(.secondary-button, .photo-upload-button, .customer-choice button, .sill-overlap-buttons button) {
     background: #292e2b;
     border-color: #4b514c;
     color: #d9d1c3;
   }
-  html.inova-dark .inova-theme :is(.secondary-button, .photo-upload-button, .view-all-button):hover:not(:disabled) { background: #343a35; border-color: #766548; }
+  html.inova-dark .inova-theme :is(.secondary-button, .photo-upload-button):hover:not(:disabled) { background: #343a35; border-color: #766548; }
   html.inova-dark .inova-theme :is(.primary-button, .primary-compact-button, .save-quote-button) { background: #485f48; border-color: #71866f; color: #fff; }
   html.inova-dark .inova-theme :is(.primary-button, .primary-compact-button, .save-quote-button):hover:not(:disabled) { background: #536c51; border-color: #81947f; }
 
@@ -123,11 +123,7 @@
   html.inova-dark .inova-theme .quote-card > b,
   html.inova-dark .inova-theme .summary-grand-total b { color: var(--ink); }
 
-  html.inova-dark .inova-theme :is(.edge-menu, .compact-menu, .project-builder .partial, .quote-values-total) { background: #262b28; border-color: #414842; }
-  html.inova-dark .inova-theme :is(.project-builder .map-side, .project-builder .measurements-card .map-side) { background: #292e2b; color: #c8c0b2; }
-  html.inova-dark .inova-theme :is(.project-builder .map-side.has-finishes, .project-builder .measurements-card .map-side.has-finishes) { background: #3b3224; color: #e0c18c; }
-  html.inova-dark .inova-theme .map-stone { background-color: #302d27; border-color: #514a3f; }
-  html.inova-dark .inova-theme .project-builder .component-card-title,
+  html.inova-dark .inova-theme :is(.compact-menu, .project-builder .partial, .quote-values-total) { background: #262b28; border-color: #414842; }
   html.inova-dark .inova-theme .project-builder .partial { background: #292e2b; }
   html.inova-dark .inova-theme .project-builder .quote-summary-card .summary-grand-total,
   html.inova-dark .inova-theme .detail-total { background: #303a32; border-color: #465348; color: #dce8da; }
@@ -175,26 +171,25 @@
   html.inova-dark .inova-theme :is(
     .session-screen, .worker-row, .quote-filter-panel, .quote-workbench,
     .quote-linker, .active-worker,
-    .attached-component, .split-assistant-card,
     .environment-picker-panel, .catalog-panel, .project-name-section,
     .material, .service, .piece
   ) { background: var(--surface); color: var(--ink); border-color: var(--line); }
   html.inova-dark .inova-theme :is(
     .quick-services, .quick-assembly-service, .quick-round-toggle,
-    .quick-new-service-form, .component-measure-preview, .pricing-notice,
-    .split-assistant-pieces li, .project-builder .customer-mode-tabs,
+    .quick-new-service-form, .pricing-notice,
+    .project-builder .customer-mode-tabs,
     .project-builder .selected-stone-placeholder
   ) { background: var(--soft); color: var(--ink); border-color: var(--line); }
   html.inova-dark .inova-theme :is(
     .quote-filter-toggle, .worker-edit-button, .showcase-header-request, .showcase-light-button,
     .draft-save-button, .save-draft-button, .quick-quote button, .quick-modal-add,
-    .environment-picker-panel button, .split-assistant-quick button, .item-tabs button,
+    .environment-picker-panel button, .item-tabs button,
     .measurements-card .calculation-mode
   ),
   html.inova-dark .inova-theme .project-builder :is(.quick-components button, .component-actions button, .project-manager-actions .secondary-button) {
     background: #292e2b; color: #ddd4c5; border-color: #4b514c;
   }
-  html.inova-dark .inova-theme :is(.quote-filter-toggle, .worker-edit-button, .showcase-header-request, .quick-quote button, .quick-modal-add, .environment-picker-panel button, .split-assistant-quick button):hover:not(:disabled) {
+  html.inova-dark .inova-theme :is(.quote-filter-toggle, .worker-edit-button, .showcase-header-request, .quick-quote button, .quick-modal-add, .environment-picker-panel button):hover:not(:disabled) {
     background: #343a35; color: var(--ink); border-color: #766548;
   }
   html.inova-dark .inova-theme :is(
@@ -231,9 +226,8 @@
     .quote-filter-chevron, .detail-card > span, .dashboard-table td small,
     .quick-services-modal header small, .quick-new-service-form label,
     .quick-modal-service-list legend, .quick-modal-simple-list label,
-    .split-assistant-available, .split-assistant-question, .split-assistant-manual-row label,
     .finish-count,
-    .component-measure-preview small, .component-stone-preview span, .project-intro-signature,
+    .project-intro-signature,
     .technical-editor-header p, .technical-editor-header small, .technical-editor-loading,
     .technical-revisions header p, .technical-revisions header small, .technical-revisions article small,
     .technical-tools h2, .technical-properties h2, .technical-properties label, .technical-properties > small,
@@ -242,16 +236,14 @@
     .technical-canvas-wrap footer, .technical-empty
   ) { color: var(--muted); }
   html.inova-dark .inova-theme .project-builder :is(
-    .project-material-field > label, .project-stage-heading p, .selected-stone-card > small,
-    .component-material-picker .picker-summary, .component-add-options label,
-    .measurements-card .component-fields > label, .measurements-card .component-fields > .type-description-field,
-    .measurements-card .project-stage-heading p, .component-card-title span,
-    .map-caption, .map-editor-empty, .quote-summary-actions small
+    .project-material-field > label, .selected-stone-card > small,
+    .component-material-picker .picker-summary,
+    .quote-summary-actions small
   ) { color: var(--muted); }
-  html.inova-dark .inova-theme :is(.quick-services-modal header strong, .quote-detail-heading h1, .component-measure-preview strong, .split-assistant-pieces, .technical-revisions article strong) { color: var(--ink); }
+  html.inova-dark .inova-theme :is(.quick-services-modal header strong, .quote-detail-heading h1, .technical-revisions article strong) { color: var(--ink); }
   html.inova-dark .inova-theme .project-builder :is(
-    .project-step.current, .project-step.completed, .material-picker-chevron,
-    .map-component-add label, .map-editor-heading button, .edge-length-editor, .backsplash-details-button
+    .material-picker-chevron,
+    .backsplash-details-button
   ) { color: var(--gold); }
   html.inova-dark .inova-theme .project-builder :is(.component-material-picker .picker-summary:hover, .project-selection-grid .picker-summary:hover) { background: #303631; }
   html.inova-dark .inova-theme :is(.quote-workbench-rodape [role=status], .quote-workbench-bloco .worker-colors summary) { color: #a9c29b; }
@@ -261,15 +253,12 @@
   html.inova-dark .inova-theme .menu-acoes-lista .perigo { color: #e39488; }
   html.inova-dark .inova-theme .historico-marcos > div { background: var(--soft); }
   html.inova-dark .inova-theme :is(.orcamento-status, .editar-contato-campos input, .editar-contato-campos textarea) { background-color: var(--surface); color: var(--ink); border-color: var(--line); }
-  html.inova-dark .inova-theme .project-builder .project-step-number { background: #343a35; color: var(--ink); }
-  html.inova-dark .inova-theme .project-stage-heading .stage-badge { background: var(--accent-soft); color: var(--gold); }
-  html.inova-dark .inova-theme .project-builder :is(.project-step.current, .project-step.completed) .project-step-number { background: #485f48; color: #fff; }
-  html.inova-dark .inova-theme :is(.project-step i, .quote-steps i, .material-filter-separator) { background: var(--line); }
+  html.inova-dark .inova-theme :is(.quote-steps i, .material-filter-separator) { background: var(--line); }
   html.inova-dark .inova-theme :is(
-    .quick-table-scroll, .quick-heading, .quote-mode-switch, .quote-summary-card > strong,
+    .quick-table-scroll, .quick-heading, .quote-summary-card > strong,
     .quote-summary-card > span, .component-material-picker, .project-tabs-bar,
     .quick-project-services,
-    .component-card-title, .summary-grand-total, .technical-revisions article,
+    .summary-grand-total, .technical-revisions article,
     .technical-dimensions-list, .technical-diagnostics, .ambientes-note,
     .quick-services-modal header, .quick-services-modal footer, .quick-inline-sides .quick-all-sides,
     .quick-material-override, .quick-sill-hint
@@ -279,13 +268,13 @@
   html.inova-dark .inova-theme :is(.status-neutral, .status:not([class*="status-"]), .worker-status-badge-incomplete, .save-state, .revision-status.superseded) { background: #343a35; color: #c3cbc0; }
   html.inova-dark .inova-theme :is(.worker-status-badge-active, .catalog-notice, .status.approved, .save-state.saved, .revision-status.approved, .revision-status.released) { background: var(--status-green-bg); color: var(--status-green-ink); }
   html.inova-dark .inova-theme :is(.worker-status-badge-inactive, .status.cancelled, .status.rejected, .save-state.error, .revision-status.returned, .technical-message, .technical-danger, .technical-dimension-row button) { background: var(--status-red-bg); color: var(--status-red-ink); border-color: #7b4b44; }
-  html.inova-dark .inova-theme :is(.status.sent, .split-assistant-review, .save-state.saving, .revision-status.in_review) { background: var(--status-yellow-bg); color: var(--status-yellow-ink); border-color: #6c593a; }
+  html.inova-dark .inova-theme :is(.status.sent, .save-state.saving, .revision-status.in_review) { background: var(--status-yellow-bg); color: var(--status-yellow-ink); border-color: #6c593a; }
   html.inova-dark .inova-theme :is(.catalog-archive-button b, .quote-filter-active-count) { background: #394438; color: #dce8da; }
-  html.inova-dark .inova-theme :is(.manual-warning, .split-assistant-review p, .split-assistant-status-incompleto) { color: var(--status-yellow-ink); }
-  html.inova-dark .inova-theme :is(.item-delete, .remove-project, .sill-overlap-choice > small, .ambientes-feedback, .split-assistant-status-excedeu, .technical-diagnostics p.structural, .technical-diagnostics p.technical) { color: var(--status-red-ink); }
-  html.inova-dark .inova-theme .project-builder :is(.component-actions button:last-child, .edge-finish-remove:hover) { color: var(--status-red-ink); }
+  html.inova-dark .inova-theme :is(.manual-warning) { color: var(--status-yellow-ink); }
+  html.inova-dark .inova-theme :is(.item-delete, .remove-project, .sill-overlap-choice > small, .ambientes-feedback, .technical-diagnostics p.structural, .technical-diagnostics p.technical) { color: var(--status-red-ink); }
+  html.inova-dark .inova-theme .project-builder :is(.component-actions button:last-child) { color: var(--status-red-ink); }
   html.inova-dark .inova-theme .material-filter-bar button.overdue { background: var(--status-red-bg); color: var(--status-red-ink); border-color: #7b4b44; }
-  html.inova-dark .inova-theme :is(.split-assistant-status-completo, .technical-diagnostics p.ok, .material-admin-copy b) { color: var(--status-green-ink); }
+  html.inova-dark .inova-theme :is(.technical-diagnostics p.ok, .material-admin-copy b) { color: var(--status-green-ink); }
   /* As regras originais destes textos usam !important. */
   html.inova-dark .inova-theme :is(.eyebrow, .catalog-eyebrow, .quick-service-launcher) { color: var(--gold) !important; }
   html.inova-dark .inova-theme .quote-worker { color: var(--muted) !important; }

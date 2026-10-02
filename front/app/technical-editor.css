@@ -69,6 +69,12 @@ html.inova-dark .inova-theme .tec-editor {
 .tec-recurso.tipo-backsplash polygon { fill: color-mix(in srgb, var(--tec-pedra) 70%, var(--tec-contorno)); stroke: var(--tec-contorno); cursor: pointer; }
 .tec-recurso.tipo-skirt polygon { fill: color-mix(in srgb, var(--tec-pedra) 45%, transparent); stroke: var(--tec-contorno); cursor: pointer; }
 .tec-recurso.tipo-edge_finish polyline { stroke: #b6811e; stroke-linecap: round; cursor: pointer; }
+/* Emenda: linha de corte tracejada de lado a lado; a linha larga invisível é a área de toque. */
+.tec-recurso.tipo-seam .tec-emenda { stroke: #b4493d; stroke-linecap: round; pointer-events: none; }
+.tec-recurso.tipo-seam .tec-emenda-toque { stroke: transparent; cursor: pointer; }
+.tec-recurso.tipo-seam.selecionado .tec-emenda { stroke: var(--tec-destaque); }
+.tec-pedras { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 0; font-size: 13px; color: var(--muted); }
+.tec-pedras strong { flex-basis: 100%; color: var(--ink); }
 .tec-recurso-rotulo { fill: var(--tec-contorno); font-weight: 700; }
 .tec-texto { fill: var(--ink); cursor: move; font-family: Arial, Helvetica, sans-serif; }
 .tec-texto.selecionado { fill: var(--tec-destaque); text-decoration: underline; }

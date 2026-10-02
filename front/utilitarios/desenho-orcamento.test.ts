@@ -32,7 +32,6 @@ describe('desenho técnico usado no orçamento', () => {
     const estimativa = estimarDesenho(cozinhaEmU(), catalogo);
     const projeto = projetoDoDesenho(estimativa.item, dados(false));
     expect(vinculoDesenho(projeto)).toMatchObject({ designId: 'cm000000000000000000design', versao: 3 });
-    expect(projeto.drawingData).toMatchObject({ entryMode: 'QUICK' });
     expect(projeto.components.map(({ label, componentType, lengthCm, widthCm }) => ({ label, componentType, lengthCm, widthCm }))).toEqual([
       { label: 'Bancada · parte 1', componentType: 'TOP', lengthCm: '260', widthCm: '60' },
       { label: 'Bancada · parte 2', componentType: 'TOP', lengthCm: '60', widthCm: '90' },

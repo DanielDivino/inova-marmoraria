@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { calcularComponente, calcularAcabamentoBorda, calcularTotalPix, projetoTemDesenho, dadosEntradaProjeto, trocarModoEntrada } from '@inova/domain';
-import { alterouOrcamentoRapido, aplicarMaterialProjeto, escolherPedraDaPeca, normalizarPedrasDasPecas, arredondarMedidaParaCima, campoMetrosInicial, duplicarComponenteRapido, editarCampoMetros, formatarCampoMetros, ehPeitorilDuplo, medidasEfetivasPeitorilDuplo, metrosParaCentimetrosRascunho, prepararItemRapido, criarComponenteRapido } from './quick-quote';
+import { calcularComponente, calcularAcabamentoBorda, calcularTotalPix } from '@inova/domain';
+import { aplicarMaterialProjeto, escolherPedraDaPeca, normalizarPedrasDasPecas, arredondarMedidaParaCima, campoMetrosInicial, duplicarComponenteRapido, editarCampoMetros, formatarCampoMetros, ehPeitorilDuplo, medidasEfetivasPeitorilDuplo, metrosParaCentimetrosRascunho, prepararItemRapido, criarComponenteRapido } from './quick-quote';
 import { rascunhoParaEntradaItem } from './saved-quote';
 import { moverComponente } from './component-groups';
 import type { DraftItem } from '../componentes/orcamento/types';
 
-const draft = (): DraftItem => ({ id: 'p', projectName: 'Cozinha', materialId: 'stone', productTypeId: 'type', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [{ ...criarComponenteRapido('stone'), lengthCm: '70', widthCm: '30' }], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {}, drawingData: dadosEntradaProjeto(undefined, 'QUICK') });
+const draft = (): DraftItem => ({ id: 'p', projectName: 'Cozinha', materialId: 'stone', productTypeId: 'type', calculationMode: 'DIMENSIONS', manualM2: '', manualJustification: '', components: [{ ...criarComponenteRapido('stone'), lengthCm: '70', widthCm: '30' }], cutouts: [], serviceIds: [], serviceQuantities: {}, serviceAppliedValues: {} });
 describe('Orçamento rápido compartilha o modelo detalhado', () => {
   it.each(['2,40', '2.40'])('converte %s metros para a unidade do desenho sem alterar o cálculo', value => {
     const item = draft(); item.components[0].lengthCm = metrosParaCentimetrosRascunho(value); item.components[0].widthCm = metrosParaCentimetrosRascunho('0,60');
@@ -54,15 +54,6 @@ describe('Orçamento rápido compartilha o modelo detalhado', () => {
     // M² fechado: arredonda comprimento e larguras antes de somar (7->10, 16->20 cm; 210 já é múltiplo de 5).
     const arredondada = medidasEfetivasPeitorilDuplo(peitoril, true);
     expect(arredondada).toEqual({ lengthMm: 2100, widthMm: 300 });
-  });
-  it('abrir o desenho preserva os dados, exige conclusão e mantém compatibilidade legada', () => {
-    expect(projetoTemDesenho(undefined)).toBe(true);
-    const item = draft();
-    expect(projetoTemDesenho(item.drawingData)).toBe(false);
-    const next = dadosEntradaProjeto({ ...item.drawingData, componentDetails: [{ sillDetailMm: 20 }] }, 'DETAILED');
-    expect(projetoTemDesenho(next)).toBe(false);
-    expect(next.componentDetails).toEqual([{ sillDetailMm: 20 }]);
-    expect(projetoTemDesenho({ ...next, detailingStatus: 'COMPLETED' })).toBe(true);
   });
 });
 
@@ -116,37 +107,13 @@ describe('Campo de medida em metros do Orçamento Rápido', () => {
   });
 });
 
-describe('Desenho pendente só quando o Orçamento Rápido muda', () => {
-  const comDesenho = () => { const item = draft(); item.drawingData = { ...trocarModoEntrada(item.drawingData, 'DETAILED'), detailingStatus: 'COMPLETED' }; return item; };
-
-  it('trocar entre Rápido e Detalhado mantém o desenho adicionado', () => {
-    const item = comDesenho();
-    const rapido = trocarModoEntrada(item.drawingData, 'QUICK');
-    expect(projetoTemDesenho(rapido)).toBe(true);
-    expect(projetoTemDesenho(trocarModoEntrada(rapido, 'DETAILED'))).toBe(true);
-    // Projeto detalhado antigo, sem status gravado, também continua com desenho.
-    expect(projetoTemDesenho(trocarModoEntrada({ entryMode: 'DETAILED' }, 'QUICK'))).toBe(true);
-    // Pendente continua pendente.
-    expect(projetoTemDesenho(trocarModoEntrada(draft().drawingData, 'DETAILED'))).toBe(false);
-  });
-
-  it('alterar o Orçamento Rápido deixa o desenho pendente; linha vazia do Enter não conta', () => {
-    const item = { ...comDesenho(), drawingData: trocarModoEntrada(comDesenho().drawingData, 'QUICK') };
-    expect(alterouOrcamentoRapido(item, { ...item, components: [...item.components, criarComponenteRapido('stone')] })).toBe(false);
-    expect(alterouOrcamentoRapido(item, item)).toBe(false);
-    const alterado = { ...item, components: [{ ...item.components[0], lengthCm: '80' }] };
-    expect(alterouOrcamentoRapido(item, alterado)).toBe(true);
-    expect(alterouOrcamentoRapido(item, { ...item, serviceIds: ['montagem'] })).toBe(true);
-    expect(projetoTemDesenho(dadosEntradaProjeto(item.drawingData, 'QUICK'))).toBe(false);
-  });
-
-  it('arrastar para mudar a ordem não conta como alteração, e o recorte acompanha a peça', () => {
-    const base = { ...comDesenho(), drawingData: trocarModoEntrada(comDesenho().drawingData, 'QUICK') };
+describe('Ordem das peças', () => {
+  it('arrastar muda a ordem e o recorte acompanha a peça', () => {
+    const base = draft();
     const item = { ...base, components: [...base.components, { ...criarComponenteRapido('stone'), lengthCm: '50', widthCm: '40' }], cutouts: [{ id: 'cuba', componentIndex: 1, cutoutType: 'SINK' as const, label: '', quantity: 1 }] };
     const movido = { ...item, ...moverComponente(item, 1, 0) };
     expect(movido.components.map((component) => component.lengthCm)).toEqual(['50', '70']);
     expect(movido.cutouts[0].componentIndex).toBe(0);
-    expect(alterouOrcamentoRapido(item, movido)).toBe(false);
     expect(moverComponente(item, 0, 0).components).toEqual(item.components);
   });
 });

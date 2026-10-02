@@ -1,30 +1,9 @@
-.quote-mode-switch { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
-.quote-mode-switch button, .quick-quote button { border:1px solid #ded7ca; background:#fff; color:#71532c; border-radius:5px; padding:7px 10px; cursor:pointer; }
-.quote-mode-switch button[aria-pressed="true"] { background:#a17b3e; color:#fff; border-color:#a17b3e; }
+.quick-quote button { border:1px solid #ded7ca; background:#fff; color:#71532c; border-radius:5px; padding:7px 10px; cursor:pointer; }
 /* Modo do orçamento: "Rápido | Com desenho", compacto, com o escolhido em mostarda. */
-html .inova-theme .project-builder div.quote-mode-switch { display:flex; width:fit-content; max-width:100%; gap:4px; margin:0 0 14px; padding:4px; border:1px solid var(--line); border-radius:12px; background:var(--soft); box-shadow:none; }
-html .inova-theme .project-builder .quote-mode-switch > button.modo-botao { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:38px; padding:0 14px; border:1px solid transparent; border-radius:9px; background:transparent; color:var(--muted); font-size:14px; font-weight:600; box-shadow:none; }
-html .inova-theme .project-builder .quote-mode-switch > button.modo-botao:hover:not([aria-pressed=true]) { background:transparent; border-color:transparent; color:var(--ink); }
-html .inova-theme .project-builder .quote-mode-switch > button.modo-botao[aria-pressed=true] { border-color:color-mix(in srgb, var(--green) 40%, transparent); background:color-mix(in srgb, var(--green) 20%, var(--surface, #fff)); color:var(--ink); font-weight:700; }
-html .inova-theme .project-builder .quote-mode-switch > button.modo-botao > svg { color:var(--green); }
 /* Situação do desenho: ✓ verde (adicionado) ou ! mostarda (pendente). */
-.modo-selo { display:inline-grid; place-items:center; min-width:20px; height:20px; padding:0 5px; border-radius:999px; background:#fbeed6; color:#86591a; font-size:11px; font-weight:800; line-height:1; }
-.modo-selo.feito { background:#d9eedf; color:#2f6040; }
-html.inova-dark .inova-theme .modo-selo { background:#3a2e17; color:#e6c17a; }
-html.inova-dark .inova-theme .modo-selo.feito { background:#1f3a28; color:#8fd3a3; }
-@media (max-width: 760px) {
-  html .inova-theme .project-builder div.quote-mode-switch { width:100%; }
-  html .inova-theme .project-builder .quote-mode-switch > button.modo-botao { flex:1 1 0; }
-}
 /* Modo do orçamento + etapas do Detalhado (1, 2, Ver tudo, Concluir) na mesma linha. */
 .modo-e-etapas { display:flex; flex-wrap:wrap; align-items:center; gap:10px 20px; margin:0 0 16px; }
-html .inova-theme .project-builder .modo-e-etapas > div.quote-mode-switch { flex:none; margin:0; }
-.project-builder .modo-e-etapas > .project-navigation { flex:1 1 320px; flex-wrap:wrap; gap:8px 12px; min-width:0; margin:0; }
-.project-builder .modo-e-etapas .project-stepper { flex:1 1 200px; min-width:0; }
-.project-builder .modo-e-etapas .project-step-label { font-size:11px; }
-.project-builder .modo-e-etapas .view-all-button { min-height:34px; padding:0 12px; border-radius:9px; background:var(--surface, #fff); color:var(--green); font-size:12px; font-weight:600; }
 /* "Concluir detalhamento" fica à direita; se não couber, desce sozinho para a linha de baixo. */
-.modo-e-etapas > .concluir-detalhamento { min-height:38px; margin-left:auto; }
 .quick-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
 .quick-heading h2 { margin:0 0 5px; font:600 21px Georgia,serif; }
 .quick-heading small, .quick-quote td small { display:block; color:#77766f; font-size:11px; }

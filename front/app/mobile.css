@@ -65,8 +65,6 @@
   html .inova-theme .compact-customer > .botao-contorno { flex: 1 1 0; }
   html .inova-theme .compact-customer:has(> span > strong) { display: grid; grid-template-columns: minmax(0, 1fr) 48px; }
   html .inova-theme .compact-customer > span:has(> strong) { grid-column: 1 / -1; max-width: none; white-space: normal; overflow-wrap: anywhere; }
-  html .inova-theme .project-builder .quote-mode-switch { gap: 6px; padding: 6px; }
-  html .inova-theme .project-builder .quote-mode-switch button { flex: 1 1 120px; font-size: 12px; line-height: 1.4; padding: 8px; }
   html .inova-theme .project-builder .quote-form-column .section { padding: 14px; }
   html .inova-theme .quick-heading { flex-direction: column; gap: 12px; }
   html .inova-theme .quick-heading h2 { font-size: 23px; }

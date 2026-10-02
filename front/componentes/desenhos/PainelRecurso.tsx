@@ -1,11 +1,33 @@
 'use client';
 
-import type { Feature, Piece } from '@inova/domain/technical';
+import { formatMeasure, rotate, type Feature, type ParteDaPeca, type Piece } from '@inova/domain/technical';
 import { CampoMedida } from './CampoMedida';
 import { RECURSOS_DE_BORDA, ROTULO_PERFIL, ROTULO_RECURSO } from './tipos';
 
-/** Propriedades de cuba, recorte, furo, rodabanca, saia ou acabamento de borda (posição e tamanho digitados). */
-export function PainelRecurso({ recurso, peca, nomePeca, aoMudar, aoExcluir }: { recurso: Feature; peca: Piece; nomePeca: string; aoMudar: (patch: Partial<Feature>) => void; aoExcluir: () => void }) {
+/** De qual ponta do lado a emenda é medida, como se vê na tela (o lado começa no vértice dele). */
+function pontaDoLado(peca: Piece, ladoId?: string) {
+  const indice = peca.contour.findIndex((vertice) => vertice.id === ladoId);
+  if (indice < 0) return 'do início do lado';
+  const a = peca.contour[indice], b = peca.contour[(indice + 1) % peca.contour.length];
+  const sentido = rotate({ x: b.x - a.x, y: b.y - a.y }, peca.rotationDeg);
+  return Math.abs(sentido.x) >= Math.abs(sentido.y) ? (sentido.x > 0 ? 'da ponta esquerda' : 'da ponta direita') : (sentido.y > 0 ? 'da ponta de baixo' : 'da ponta de cima');
+}
+
+/** Emenda: onde começa no lado e as pedras em que a peça fica dividida. */
+function PainelEmenda({ recurso, peca, nomePeca, pedras, aoMudar, aoExcluir }: { recurso: Feature; peca: Piece; nomePeca: string; pedras: ParteDaPeca[]; aoMudar: (patch: Partial<Feature>) => void; aoExcluir: () => void }) {
+  return <section className="tec-painel-secao" aria-label="Emenda">
+    <small className="tec-dica">Emenda em {nomePeca} · lado {peca.contour.findIndex((vertice) => vertice.id === recurso.edgeId) + 1}: corta a peça de lado a lado. O valor do orçamento não muda; as pedras saem na ordem de serviço, no fluxo e na entrega.</small>
+    <div className="tec-grade-campos">
+      <CampoMedida rotulo={`Distância ${pontaDoLado(peca, recurso.edgeId)}`} minimo={1} valorMm={recurso.startMm} onChange={(startMm) => aoMudar({ startMm })} />
+    </div>
+    <p className="tec-pedras" aria-label="Pedras da peça"><strong>{pedras.length} {pedras.length === 1 ? 'pedra' : 'pedras'}</strong>{pedras.map((pedra, indice) => <span key={indice}>{indice + 1}. {formatMeasure(pedra.comprimentoMm)} × {formatMeasure(pedra.larguraMm)}</span>)}</p>
+    <button type="button" className="botao-contorno tec-perigo" onClick={aoExcluir}>Excluir emenda</button>
+  </section>;
+}
+
+/** Propriedades de cuba, recorte, furo, rodabanca, saia ou acabamento de borda (posição e tamanho digitados); a emenda tem o painel dela. */
+export function PainelRecurso({ recurso, peca, nomePeca, pedras = [], aoMudar, aoExcluir }: { recurso: Feature; peca: Piece; nomePeca: string; pedras?: ParteDaPeca[]; aoMudar: (patch: Partial<Feature>) => void; aoExcluir: () => void }) {
+  if (recurso.type === 'SEAM') return <PainelEmenda recurso={recurso} peca={peca} nomePeca={nomePeca} pedras={pedras} aoMudar={aoMudar} aoExcluir={aoExcluir} />;
   const deBorda = RECURSOS_DE_BORDA.includes(recurso.type);
   const numero = (rotulo: string, valor: number, patch: (n: number) => Partial<Feature>, passo = 1) =>
     <label className="tec-campo">{rotulo}<input type="number" inputMode="decimal" step={passo} value={valor} onChange={(evento) => aoMudar(patch(Number(evento.target.value) || 0))} /></label>;
