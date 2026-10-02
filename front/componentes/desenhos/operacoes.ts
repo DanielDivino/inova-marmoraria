@@ -9,7 +9,7 @@ export const arredondar = (valor: number, passo = 10) => Math.round(valor / pass
 export function limitesDoDesenho(doc: TechnicalDocument) {
   const pontos = [
     ...doc.pieces.flatMap((peca) => sampleContour(peca.contour, 20).map((p) => localParaMundo(p, peca))),
-    ...doc.annotations.map((texto) => ({ x: texto.x, y: texto.y })),
+    ...doc.annotations.flatMap((texto) => [{ x: texto.x, y: texto.y }, ...(texto.lineEnd ? [texto.lineEnd] : [])]),
   ];
   return pontos.length ? bounds(pontos) : null;
 }

@@ -69,11 +69,11 @@ function limpar(pasta, relativo = '') {
   }
 }
 
-/** Copia o código da pasta de desenvolvimento: arquivos do git e novos ainda sem commit, respeitando o .gitignore. */
+/** Publica somente arquivos versionados, deixando rascunhos e planilhas locais fora da produção. */
 function copiarCodigo(destino) {
   fs.mkdirSync(destino, { recursive: true });
   limpar(destino);
-  const arquivos = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: raiz }).toString().split('\0')
+  const arquivos = execFileSync('git', ['ls-files', '-z', '--cached'], { cwd: raiz }).toString().split('\0')
     .filter((arquivo) => arquivo && !arquivo.startsWith('back/uploads/') && fs.existsSync(path.join(raiz, arquivo)));
   for (const arquivo of arquivos) {
     const alvo = path.join(destino, arquivo);

@@ -30,6 +30,7 @@ export function BarraFerramentas(props: Props) {
         <Botao rotulo="Desenhar peça" icone="✍" ativo={ferramenta === 'TRACO_PECA'} aoClicar={() => props.aoFerramenta('TRACO_PECA')} />
         <Botao rotulo="Desenhar recorte" icone="◌" ativo={ferramenta === 'TRACO_RECORTE'} desativado={!temPeca} aoClicar={() => props.aoFerramenta('TRACO_RECORTE')} />
       </>}
+      <Botao rotulo="Linha" icone="╱" ativo={ferramenta === 'LINHA'} aoClicar={() => props.aoFerramenta('LINHA')} />
       <Botao rotulo="Texto" icone="T" ativo={ferramenta === 'TEXTO'} aoClicar={() => props.aoFerramenta('TEXTO')} />
       <Botao rotulo="Cota livre" icone="↔" ativo={ferramenta === 'COTA'} desativado={!temPeca} aoClicar={() => props.aoFerramenta('COTA')} />
       <Botao rotulo="Seca / molhada" icone="💧" ativo={ferramenta === 'AREA'} desativado={!temPeca} aoClicar={() => props.aoFerramenta('AREA')} />

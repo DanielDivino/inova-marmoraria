@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { areasDaPeca, faixaDentroDaPeca, marcarArea, posicaoNoBalcao, tirarArea, trocarTipoArea } from './areas.js';
+import { areasDaPeca, faixaDentroDaPeca, geometriaDaArea, comprimentoDoBalcao, pecaNoEixoDaArea, marcarArea, posicaoNoBalcao, tirarArea, trocarTipoArea } from './areas.js';
 import { makePiece } from './geometry.js';
 import { centroDaPecaNoMundo, girarPeca } from './commands.js';
 import { emptyTechnicalDocument } from './schema.js';
@@ -58,5 +58,28 @@ describe('área seca e área molhada do balcão', () => {
       expect(girado.pieces[0].rotationDeg).toBe(((graus % 360) + 360) % 360);
     }
     expect(girarPeca({ ...doc, pieces: [{ ...doc.pieces[0], locked: true }] }, 'p', 90).pieces[0].rotationDeg).toBe(0);
+  });
+});
+
+
+describe('direções da marcação de áreas', () => {
+  it.each([0, 90, 180, -90, 45, -45, 135, -135])('preserva a direção %s° ao salvar e calcula a faixa no eixo escolhido', angleDeg => {
+    const peca = balcao();
+    const total = comprimentoDoBalcao(pecaNoEixoDaArea(peca, angleDeg));
+    const marcada = pieceSchema.parse({ ...peca, wetDryZones: marcarArea(peca, total * .75, total * .25, 'WET', angleDeg) });
+    const area = areasDaPeca(marcada)[0];
+    expect(area.comprimentoMm).toBeCloseTo(total / 2);
+    const pontos = geometriaDaArea(marcada, area).pontos;
+    expect(pontos).toHaveLength(4);
+    expect(pontos.every(p => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true);
+    const a = pontos[0], b = pontos[1];
+    expect(b.x - a.x).toBeCloseTo(Math.cos(angleDeg * Math.PI / 180) * total / 2);
+    expect(b.y - a.y).toBeCloseTo(-Math.sin(angleDeg * Math.PI / 180) * total / 2);
+  });
+  it('mantém a marcação mais recente por cima ao misturar direções', () => {
+    const peca = balcao([{ kind: 'DRY', startMm: 0, endMm: 2440 }]);
+    const zonas = marcarArea(peca, 0, 300, 'WET', 90);
+    expect(zonas.map(z => z.kind)).toEqual(['DRY', 'WET']);
+    expect(zonas[1].angleDeg).toBe(90);
   });
 });

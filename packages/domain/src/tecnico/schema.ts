@@ -38,7 +38,7 @@ export const pieceSchema = z.object({
    * Área seca e área molhada do balcão: trechos ao longo do comprimento (eixo x
    * da peça), em mm a partir da ponta esquerda. O que não foi marcado fica sem área.
    */
-  wetDryZones: z.preprocess(zonasDoFormatoAntigo, z.array(z.object({ kind: z.enum(['DRY', 'WET']), startMm: z.number().finite().min(0).max(1e6), endMm: z.number().finite().positive().max(1e6) }).strict()
+  wetDryZones: z.preprocess(zonasDoFormatoAntigo, z.array(z.object({ kind: z.enum(['DRY', 'WET']), angleDeg: n.optional(), startMm: z.number().finite().min(0).max(1e6), endMm: z.number().finite().positive().max(1e6) }).strict()
     .refine((zona) => zona.endMm > zona.startMm, 'A área termina antes de começar.')).max(20).default([])),
 }).strict();
 export const featureSchema = z.object({
@@ -57,7 +57,7 @@ export const technicalDocumentSchema = z.object({
   schemaVersion: z.literal(1), unit: z.literal('mm'), coordinateSystem: z.object({ x: z.literal('right'), y: z.literal('up'), rotation: z.literal('clockwise-degrees') }).strict(),
   assemblies: z.array(z.object({ id, name: z.string().min(1).max(120), pieceIds: z.array(id), locked: z.boolean().default(false) }).strict()).max(100),
   pieces: z.array(pieceSchema).max(500), features: z.array(featureSchema).max(1000), layers: z.array(layerSchema).max(50),
-  annotations: z.array(z.object({ id, text: z.string().min(1).max(2000), x: n, y: n, layerId: id.default('annotations'), fontSizeMm: z.number().positive().max(2000).optional() }).strict()).max(500),
+  annotations: z.array(z.object({ id, text: z.string().min(1).max(2000), x: n, y: n, layerId: id.default('annotations'), fontSizeMm: z.number().positive().max(2000).optional(), lineEnd: z.object({ x: n, y: n }).strict().optional() }).strict()).max(500),
   dimensions: z.array(z.object({ id, from: ref, to: ref, offsetMm: n.default(100), layerId: id.default('dimensions') }).strict()).max(1000).default([]),
   constraints: z.array(z.object({ id, pieceId: id, targetPieceId: id, dx: n, dy: n, rotationOffset: n.default(0) }).strict()).max(500).default([]),
   views: z.array(z.object({ id, name: z.string().min(1).max(80), mode: z.enum(['TOP','FRONT','SIDE','ISO']), x: n.default(0), y: n.default(0), width: z.number().positive().default(4000) }).strict()).max(50).default([]),

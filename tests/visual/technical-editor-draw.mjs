@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { emptyTechnicalDocument, technicalDocumentSchema, validateTechnicalDocument } from '../../packages/domain/dist/tecnico/index.js';
 
 // API inteiramente simulada. Desenho livre com o mouse: um L torto vira 6 lados em
-// esquadro, a medida do lado mais comprido dá a escala; um traço aberto pergunta se
+// esquadro, a escala da planta define as medidas; um traço aberto pergunta se
 // deve fechar; um traço fechado dentro da peça vira cuba.
 const output = resolve(import.meta.dirname, '../../.test-artifacts/technical-editor-draw');
 mkdirSync(output, { recursive: true });
@@ -62,12 +62,11 @@ try {
   const area = await page.locator('.tec-canvas').boundingBox();
   const x = area.x + area.width / 2 - 200, y = area.y + area.height / 2 + 120;
 
-  // 1) L torto: 6 lados em esquadro; o lado mais comprido vira 2m40.
+  // 1) L torto: 6 lados em esquadro; medidas automáticas.
   await tracar([[x, y], [x + 400, y], [x + 400, y - 100], [x + 100, y - 100], [x + 100, y - 300], [x, y - 300]]);
-  await page.getByText('Qual a medida do lado destacado?').waitFor();
+  await page.locator('.tec-pedra').first().waitFor();
+  assert.equal(await page.getByRole('dialog', {name:'Medida de referência'}).count(), 0);
   await shot('01-l-organizado');
-  await page.getByLabel('Medida do lado destacado').fill('240');
-  await page.getByRole('button', { name: 'Criar peça', exact: true }).click();
   await page.waitForTimeout(200);
 
   // 2) Traço aberto: pergunta se fecha.
@@ -76,8 +75,7 @@ try {
   await page.getByText('A forma não fechou.').waitFor();
   await shot('02-aberto');
   await page.getByRole('button', { name: 'Fechar a forma', exact: true }).click();
-  await page.getByLabel('Medida do lado destacado').fill('150');
-  await page.getByRole('button', { name: 'Criar peça', exact: true }).click();
+  await page.locator('.tec-pedra').nth(1).waitFor();
 
   // 3) Recorte desenhado dentro do L vira cuba.
   await page.getByRole('button', { name: /Desenhar recorte/ }).click();
@@ -94,14 +92,14 @@ try {
   assert.deepEqual(errors, []);
   assert.equal(emL.contour.length, 6, 'L com 6 lados');
   assert(lados(emL.contour).every(([, angulo]) => angulo % 90 === 0), 'lados em esquadro: ' + JSON.stringify(lados(emL.contour)));
-  assert.equal(Math.max(...lados(emL.contour).map(([medida]) => medida)), 2400, 'lado de referência com 2m40');
+  assert(Math.max(...lados(emL.contour).map(([medida]) => medida)) > 0, 'medidas automáticas');
   assert(lados(emL.contour).every(([medida]) => medida % 10 === 0), 'medidas em centímetros inteiros');
   assert.equal(aberta.contour.length, 4, 'traço aberto fechado em 4 lados');
   assert.equal(savedDocument.features.length, 1);
   assert.equal(savedDocument.features[0].type, 'SINK');
   assert.equal(savedDocument.features[0].pieceId, emL.id, 'cuba dentro do L');
   assert.equal(validateTechnicalDocument(savedDocument).filter(d => d.severity !== 'WARNING').length, 0, 'sem problemas de geometria');
-  console.log('OK: desenho livre com mouse — L organizado em esquadro com escala pela medida, forma aberta fechada a pedido e cuba desenhada dentro da peça.');
+  console.log('OK: desenho livre com mouse — L organizado em esquadro com medidas automáticas, forma aberta fechada a pedido e cuba desenhada dentro da peça.');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

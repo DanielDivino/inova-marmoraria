@@ -1,10 +1,10 @@
-import { areasDaPeca, cotasDaPeca, edgeLength, edgePoint, faixaDentroDaPeca, formatMeasure, linhaDaEmenda, NOME_AREA, sampleContour, type Feature, type Piece } from '@inova/domain/technical';
+import { geometriaDaArea, areasDaPeca, cotasDaPeca, edgeLength, edgePoint, faixaDentroDaPeca, formatMeasure, linhaDaEmenda, NOME_AREA, sampleContour, type Feature, type Piece } from '@inova/domain/technical';
 import { CotasPeca } from './CotasPeca';
 import { anguloLegivel, pontosSvg, Texto } from './svg';
 import { ROTULO_PERFIL, type Selecao } from './tipos';
 import { urlImagem } from './operacoes';
 
-type Props = { peca: Piece; recursos: Feature[]; escala: number; selecao: Selecao; destacarLados: boolean; mostrarVertices?: boolean; verticeMarcado?: string };
+type Props = { aoTocarLado: (pecaId: string, ladoId: string) => void; peca: Piece; recursos: Feature[]; escala: number; selecao: Selecao; destacarLados: boolean; mostrarVertices?: boolean; verticeMarcado?: string };
 
 /**
  * Alças nas quatro bordas da cuba/recorte selecionado: puxar uma borda muda o
@@ -40,7 +40,7 @@ const pontosDoLado = (peca: Piece, ladoId: string, inicio = 0, extensao = edgeLe
  * recortes e furos, áreas de toque dos lados e alças dos vértices.
  * Os atributos data-alvo dizem ao canvas o que foi tocado.
  */
-export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostrarVertices = false, verticeMarcado }: Props) {
+export function PecaSvg({ aoTocarLado, peca, recursos, escala, selecao, destacarLados, mostrarVertices = false, verticeMarcado }: Props) {
   const px = (valor: number) => valor / escala;
   const selecionada = (selecao?.tipo === 'peca' && selecao.id === peca.id) || (selecao?.tipo === 'vertice' && selecao.pecaId === peca.id)
     || (selecao?.tipo === 'recurso' && recursos.some((recurso) => recurso.id === selecao.id));
@@ -75,10 +75,7 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
     {areas.length > 0 && <g className="tec-areas-balcao" pointerEvents="none">
       <defs><clipPath id={`areas-${peca.id}`}><polygon points={contorno} /></clipPath></defs>
       <g clipPath={`url(#areas-${peca.id})`}>
-        {areas.map((area) => <rect key={area.indice} x={area.x0} y={caixa.minY} width={area.x1 - area.x0} height={caixa.maxY - caixa.minY} className={area.tipo === 'WET' ? 'tec-area-molhada' : 'tec-area-seca'} />)}
-        {/* Divisas nas duas pontas de cada área (menos nas pontas da peça). */}
-        {areas.flatMap((area) => [area.x0, area.x1]).filter((x, indice, lista) => x > caixa.minX + .5 && x < caixa.maxX - .5 && lista.indexOf(x) === indice)
-          .map((x) => <line key={`divisa-${x}`} x1={x} y1={caixa.minY} x2={x} y2={caixa.maxY} className="tec-area-divisa" strokeWidth={px(1.6)} strokeDasharray={`${px(6)} ${px(4)}`} />)}
+        {areas.map(area => <polygon key={area.indice} points={pontosSvg(geometriaDaArea(peca, area).pontos)} className={area.tipo === 'WET' ? 'tec-area-molhada' : 'tec-area-seca'} stroke="#638b97" strokeWidth={px(1.6)} strokeDasharray={`${px(6)} ${px(4)}`} />)}
       </g>
     </g>}
     <polygon points={contorno} className="tec-contorno" strokeWidth={px(selecionada ? 2.6 : 1.6)} pointerEvents="none" />
@@ -132,6 +129,7 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
     {/* Nome e tamanho de cada área, por cima dos componentes e no maior trecho da área sem cuba/recorte. */}
     {areas.length > 0 && <g className="tec-areas-rotulos" pointerEvents="none">
       {areas.map((area, indice) => {
+        if (peca.wetDryZones[area.indice]?.angleDeg) { const centro = geometriaDaArea(peca, area).centro; return <Texto key={indice} x={centro.x} y={centro.y} tamanho={px(10)} angulo={anguloTexto} className="tec-area-rotulo">{NOME_AREA[area.tipo]} · {formatMeasure(area.comprimentoMm)}</Texto>; }
         const ocupados = recursos.filter((recurso) => !recurso.edgeId).map((recurso) => {
           const meia = recurso.type === 'HOLE' ? recurso.diameterMm / 2 : Math.max(recurso.widthMm, recurso.lengthMm) / 2;
           return [recurso.x - meia, recurso.x + meia] as const;
@@ -165,14 +163,25 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
     })}
     {((selecionada && !peca.locked) || mostrarVertices) && peca.contour.map((vertice) => { const marcado = (selecao?.tipo === 'vertice' && selecao.verticeId === vertice.id) || verticeMarcado === vertice.id; return <circle key={vertice.id} cx={vertice.x} cy={vertice.y} r={px(marcado ? alca + 3 : alca)}
       className={`tec-vertice${marcado ? ' selecionado' : ''}`} strokeWidth={px(2)} data-alvo="vertice" data-peca={peca.id} data-vertice={vertice.id} />; })}
+    {!peca.locked && peca.contour.map((vertice, indice) => {
+      const meio = edgePoint(peca, vertice.id, edgeLength(peca, vertice.id) / 2), n = normais.get(vertice.id)!;
+      const faixa = Math.max(0, ...recursos.filter(recurso => recurso.edgeId === vertice.id && ['BACKSPLASH', 'SKIRT'].includes(recurso.type)).map(recurso => Math.max(recurso.thicknessMm, 15)));
+      const afastamento = faixa + px(60);
+      const x = meio.x + n.x * afastamento, y = meio.y + n.y * afastamento;
+      return <g key={`mais-${vertice.id}`} data-alvo="mais-lado" data-peca={peca.id} data-lado={vertice.id} className="tec-mais-lado" role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); aoTocarLado(peca.id, vertice.id); } }} aria-label={`Opções do lado ${indice + 1}`}>
+        <circle cx={x} cy={y} r={px(22)} fill="transparent" />
+        <circle cx={x} cy={y} r={px(13)} fill="white" stroke="#937444" strokeWidth={px(1.5)} />
+        <Texto x={x} y={y} tamanho={px(22)} angulo={anguloTexto} pointerEvents="none">+</Texto>
+      </g>;
+    })}
     {/* Bolinha de girar, presa em cima da peça selecionada (acima da medida de cima): segurar e arrastar gira em volta do centro. */}
     {girando && <g className="tec-girar">
-      <line x1={(caixa.minX + caixa.maxX) / 2} y1={caixa.maxY + px(36)} x2={(caixa.minX + caixa.maxX) / 2} y2={caixa.maxY + px(52)} strokeWidth={px(1.6)} pointerEvents="none" />
-      <circle cx={(caixa.minX + caixa.maxX) / 2} cy={caixa.maxY + px(64)} r={px(12)} strokeWidth={px(2)} className="tec-girar-bolinha" pointerEvents="none" />
-      <Texto x={(caixa.minX + caixa.maxX) / 2} y={caixa.maxY + px(64)} tamanho={px(15)} angulo={anguloTexto} className="tec-girar-icone" pointerEvents="none">↻</Texto>
-      <Texto x={(caixa.minX + caixa.maxX) / 2 + px(38)} y={caixa.maxY + px(64)} tamanho={px(12)} angulo={anguloTexto} className="tec-girar-graus" pointerEvents="none">{Math.round(peca.rotationDeg)}°</Texto>
+      <line x1={(caixa.minX + caixa.maxX) / 2} y1={caixa.maxY + px(82)} x2={(caixa.minX + caixa.maxX) / 2} y2={caixa.maxY + px(94)} strokeWidth={px(1.6)} pointerEvents="none" />
+      <circle cx={(caixa.minX + caixa.maxX) / 2} cy={caixa.maxY + px(106)} r={px(12)} strokeWidth={px(2)} className="tec-girar-bolinha" pointerEvents="none" />
+      <Texto x={(caixa.minX + caixa.maxX) / 2} y={caixa.maxY + px(106)} tamanho={px(15)} angulo={anguloTexto} className="tec-girar-icone" pointerEvents="none">↻</Texto>
+      <Texto x={(caixa.minX + caixa.maxX) / 2 + px(38)} y={caixa.maxY + px(106)} tamanho={px(12)} angulo={anguloTexto} className="tec-girar-graus" pointerEvents="none">{Math.round(peca.rotationDeg)}°</Texto>
       {/* Área de toque maior que a bolinha, para o dedo. */}
-      <circle cx={(caixa.minX + caixa.maxX) / 2} cy={caixa.maxY + px(64)} r={px(22)} className="tec-girar-toque" data-alvo="girar" data-peca={peca.id} role="button" aria-label={`Girar ${peca.name || 'a peça'}`} />
+      <circle cx={(caixa.minX + caixa.maxX) / 2} cy={caixa.maxY + px(106)} r={px(22)} className="tec-girar-toque" data-alvo="girar" data-peca={peca.id} role="button" aria-label={`Girar ${peca.name || 'a peça'}`} />
     </g>}
     {/* Alças da cuba/recorte selecionado por último: ficam acima das distâncias e dos lados da peça. */}
     {recursoAtivo && !peca.locked && <BordasDoRecurso recurso={recursoAtivo} giro={`rotate(${-recursoAtivo.rotationDeg} ${recursoAtivo.x} ${recursoAtivo.y})`} px={px} giroPeca={peca.rotationDeg} />}

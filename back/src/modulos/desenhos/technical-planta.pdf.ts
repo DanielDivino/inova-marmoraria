@@ -1,4 +1,4 @@
-import { areasDaPeca, cotasDaPeca, linhaDaEmenda, distanciasAteBordas, faixaDentroDaPeca, NOME_AREA, edgeLength, edgePoint, featureContour, formatMeasure, rotate, sampleContour, type CotaLado, type Feature, type Piece, type Point, type TechnicalDocument } from '@inova/domain/technical';
+import { geometriaDaArea, areasDaPeca, cotasDaPeca, linhaDaEmenda, distanciasAteBordas, faixaDentroDaPeca, NOME_AREA, edgeLength, edgePoint, featureContour, formatMeasure, rotate, sampleContour, type CotaLado, type Feature, type Piece, type Point, type TechnicalDocument } from '@inova/domain/technical';
 import { AREIA } from '../orcamentos/pdf-layout.js';
 
 type Pdf = PDFKit.PDFDocument;
@@ -22,7 +22,7 @@ const AREA_MOLHADA = { fundo: '#dbe8f4', traco: '#2f6fa8', texto: '#255a8a' };
 const AREA_SECA = { fundo: '#f3e7cc' };
 const LARGURA = 523;
 /** Espaço dentro do quadro, em volta do desenho, para as cotas dos lados. */
-const FOLGA = 44;
+const FOLGA = 52;
 /** Faixa da legenda e da escala, no pé do quadro. */
 const LEGENDA = 20;
 const PT_POR_MM = 72 / 25.4;
@@ -54,7 +54,7 @@ export function planejarPlanta(documento: TechnicalDocument, alturaMax: number):
   const pontos = [
     ...documento.pieces.flatMap((peca) => sampleContour(peca.contour, 2).map((vertice) => noMundo(vertice, peca))),
     ...documento.dimensions.flatMap((cota) => { const livre = cotaLivre(documento, cota); return livre ? [livre.a, livre.b, livre.a2, livre.b2] : []; }),
-    ...documento.annotations.map(({ x, y }) => ({ x, y })),
+    ...documento.annotations.flatMap(nota => [{ x: nota.x, y: nota.y }, ...(nota.lineEnd ? [nota.lineEnd] : [])]),
   ];
   const minX = Math.min(...pontos.map((p) => p.x)), maxX = Math.max(...pontos.map((p) => p.x));
   const minY = Math.min(...pontos.map((p) => p.y)), maxY = Math.max(...pontos.map((p) => p.y));
@@ -203,16 +203,17 @@ export function desenharPlanta(pdf: Pdf, documento: TechnicalDocument, planta: P
     const ys = sampleContour(peca.contour, 2).map((p) => p.y), [minY, maxY] = [Math.min(...ys), Math.max(...ys)];
     pdf.save();
     caminho(contorno).clip();
-    for (const area of areas) caminho([{ x: area.x0, y: minY }, { x: area.x1, y: minY }, { x: area.x1, y: maxY }, { x: area.x0, y: maxY }].map((p) => naPagina(p, peca))).fill(area.tipo === 'WET' ? AREA_MOLHADA.fundo : AREA_SECA.fundo);
+    for (const area of areas) caminho(geometriaDaArea(peca, area).pontos.map((p) => naPagina(p, peca))).fill(area.tipo === 'WET' ? AREA_MOLHADA.fundo : AREA_SECA.fundo);
     // Divisas nas duas pontas de cada área (menos nas pontas da peça).
     const xsPeca = sampleContour(peca.contour, 2).map((p) => p.x), [minXPeca, maxXPeca] = [Math.min(...xsPeca), Math.max(...xsPeca)];
-    for (const x of [...new Set(areas.flatMap((area) => [area.x0, area.x1]))].filter((x) => x > minXPeca + .5 && x < maxXPeca - .5)) {
+    for (const x of [...new Set(areas.filter(area => !peca.wetDryZones[area.indice]?.angleDeg).flatMap((area) => [area.x0, area.x1]))].filter((x) => x > minXPeca + .5 && x < maxXPeca - .5)) {
       const [a, b] = [naPagina({ x, y: minY }, peca), naPagina({ x, y: maxY }, peca)];
       pdf.save().dash(3, { space: 2 }).lineWidth(.7).moveTo(a.x, a.y).lineTo(b.x, b.y).stroke(AREA_MOLHADA.traco).undash().restore();
     }
     pdf.restore();
     caminho(contorno).lineWidth(1.2).stroke(COR.dourado);
     for (const area of areas) {
+      if (peca.wetDryZones[area.indice]?.angleDeg) { rotulosAreas.push({ texto: NOME_AREA[area.tipo], curto: NOME_AREA[area.tipo], molhada: area.tipo === 'WET', centro: naPagina(geometriaDaArea(peca, area).centro, peca), largura: area.comprimentoMm * escala }); continue; }
       const meioX = (area.x0 + area.x1) / 2, faixa = faixaDentroDaPeca(peca, meioX);
       if (!faixa) continue;
       const y = faixa.y0 + Math.min(9, (faixa.y1 - faixa.y0) * escala / 2) / escala;
@@ -297,6 +298,21 @@ export function desenharPlanta(pdf: Pdf, documento: TechnicalDocument, planta: P
     rotulo(pdf, cota.livre ? cota.texto : `arco ${cota.texto}`, { x: meio.x + n.x * 12, y: meio.y + n.y * 12 }, 0, estilo);
   }
 
+  // Convenções de acabamento: X sobre o trecho simples; 45° além da cota do lado.
+  for (const recurso of documento.features) {
+    if (!ehRecursoDeBorda(recurso) || !recurso.edgeId || !(recurso.profile === 'MITER45' || (recurso.type === 'EDGE_FINISH' && recurso.profile === 'SIMPLE'))) continue;
+    const peca = documento.pieces.find(entrada => entrada.id === recurso.pieceId);
+    const cota = peca && cotas.get(peca.id)?.find(entrada => entrada.ladoId === recurso.edgeId);
+    if (!peca || !cota) continue;
+    const inicio = Math.max(0, recurso.startMm), fim = Math.min(edgeLength(peca, recurso.edgeId), recurso.startMm + recurso.extentMm);
+    if (fim <= inicio) continue;
+    const meio = naPagina(edgePoint(peca, recurso.edgeId, (inicio + fim) / 2), peca);
+    const n = normalNaPagina(cota, peca);
+    const simples = recurso.profile === 'SIMPLE';
+    const centro = simples ? meio : { x: meio.x + n.x * 36, y: meio.y + n.y * 36 };
+    rotulo(pdf, simples ? 'X' : '45°', centro, 0, { fonte: 'Helvetica-Bold', tamanho: simples ? 9 : 8, cor: COR.tinta, fundo: true });
+  }
+
   // Cotas livres, textos e os nomes das áreas também ficam no caminho do nome das peças.
   const ocupados: Segmento[] = [];
   for (const rotuloArea of rotulosAreas) {
@@ -316,6 +332,7 @@ export function desenharPlanta(pdf: Pdf, documento: TechnicalDocument, planta: P
   }
   for (const nota of documento.annotations) {
     const p = P(nota);
+    if (nota.lineEnd) { const fim = P(nota.lineEnd); pdf.moveTo(p.x, p.y).lineTo(fim.x, fim.y).lineWidth(1).stroke(COR.tinta); }
     pdf.font('Helvetica-Oblique').fontSize(8);
     const largura = Math.min(180, pdf.widthOfString(nota.text) + 2), x = Math.min(Math.max(p.x, 44), 36 + LARGURA - 8 - largura);
     pdf.fillColor(COR.tinta).text(nota.text, x, p.y - 4, { width: largura });

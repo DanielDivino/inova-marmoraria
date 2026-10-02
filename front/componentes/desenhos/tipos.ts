@@ -15,7 +15,7 @@ export type MaterialVisual = { id: string; name: string; category: string; image
 /** Desenho livre (dedo, caneta, mouse) ou manual (formas prontas e medidas digitadas). */
 export type Modo = 'LIVRE' | 'MANUAL';
 /** AREA: marcar área seca/molhada no balcão (clicar, puxar e clicar). */
-export type Ferramenta = 'SELECIONAR' | 'TEXTO' | 'COTA' | 'TRACO_PECA' | 'TRACO_RECORTE' | 'AREA';
+export type Ferramenta = 'SELECIONAR' | 'TEXTO' | 'COTA' | 'TRACO_PECA' | 'TRACO_RECORTE' | 'AREA' | 'LINHA';
 export type TipoBorda = 'SKIRT' | 'BACKSPLASH' | 'EDGE_FINISH';
 /** O que se põe tocando num lado: saia, rodabanca, acabamento ou emenda (divisão da peça em pedras). */
 export type TipoNoLado = TipoBorda | 'SEAM';

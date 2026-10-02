@@ -53,7 +53,9 @@ export function useCamera(recipiente: RefObject<HTMLElement | null>) {
     const elemento = recipiente.current;
     const tela = elemento ? { largura: elemento.clientWidth, altura: elemento.clientHeight } : tamanho;
     // Folga para as cotas, que ficam do lado de fora das peças.
-    setCamera({ x: (caixa.minX + caixa.maxX) / 2, y: (caixa.minY + caixa.maxY) / 2, escala: limitar(Math.min(tela.largura / (largura * 1.35), tela.altura / (altura * 1.45))) });
+    const escala = limitar(Math.min(Math.max(80, tela.largura - 180) / (largura * 1.1), Math.max(24, tela.altura - 216) / (altura * 1.1)));
+    // A alça de giro pede mais folga acima do que o botão de lado abaixo.
+    setCamera({ x: (caixa.minX + caixa.maxX) / 2, y: (caixa.minY + caixa.maxY) / 2 + 14 / escala, escala });
   }, [recipiente, tamanho]);
 
   const { largura, altura } = tamanho;

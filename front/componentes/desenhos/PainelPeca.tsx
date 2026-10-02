@@ -2,6 +2,7 @@
 
 import { areasDaPeca, bounds, girarPeca, nomeDaPeca, bracosU, contornoDosParametros, edgeLength, formatMeasure, NOME_AREA, problemaParametros, tirarArea, trocarTipoArea, updatePiece, type Piece, type PieceParameters, type PieceShape, type TechnicalDocument } from '@inova/domain/technical';
 import { useState } from 'react';
+import { SeletorPedra } from './SeletorPedra';
 import { CampoMedida } from './CampoMedida';
 import type { MaterialVisual } from './tipos';
 
@@ -41,12 +42,9 @@ export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, a
   return <section className="tec-painel-secao" aria-label={`Peça ${nomeDaPeca(peca, documento.pieces)}`}>
     {peca.locked && <p className="tec-aviso">Peça travada. Destrave-a para alterar medidas ou posição.</p>}
     <label className="tec-campo">Nome<input value={peca.name} placeholder={`Sem nome (aparece como ${nomeDaPeca({ ...peca, name: '' }, documento.pieces)})`} onChange={(evento) => atualizar({ name: evento.target.value })} /></label>
-    <label className="tec-campo">Pedra (visual e estimativa)
-      <select value={peca.material?.id ?? ''} onChange={(evento) => {
-        const material = materiais.find((entrada) => entrada.id === evento.target.value);
-        atualizar({ material: material ? { id: material.id, name: material.name, imageUrl: material.imageUrl ?? undefined, textureScaleMm: 600, veinRotationDeg: 0, roughness: .25 } : undefined });
-      }}><option value="">Sem pedra</option>{materiais.map((material) => <option key={material.id} value={material.id}>{material.name}</option>)}</select>
-    </label>
+    <SeletorPedra materiais={materiais} id={peca.material?.id} nome={peca.material?.name} desativado={peca.locked} aoEscolher={material => {
+      atualizar({ material: material ? { id: material.id, name: material.name, imageUrl: material.imageUrl ?? undefined, textureScaleMm: 600, veinRotationDeg: 0, roughness: .25 } : undefined });
+    }} />
     <label className="tec-campo">Forma
       <select value={parametros?.shape ?? 'FREE'} onChange={(evento) => trocarForma(evento.target.value as PieceShape)}>
         {!parametros && <option value="FREE">Contorno livre (lados e vértices)</option>}
@@ -80,7 +78,7 @@ export function PainelPeca({ documento, peca, materiais, aoMudar, aoAbrirLado, a
     {!areas.length && <p className="tec-dica">Selecione 💧 Seca / molhada, clique no início da área no balcão, arraste até o fim e clique novamente. Em seguida, defina se a área é seca ou molhada.</p>}
     {areas.length > 0 && <ul className="tec-areas" aria-label="Áreas do balcão">
       {areas.map((area) => <li key={area.indice} className={`tec-area-linha ${area.tipo === 'WET' ? 'molhada' : 'seca'}`}>
-        <div><strong>{NOME_AREA[area.tipo]} · {formatMeasure(area.comprimentoMm)}</strong><small>de {formatMeasure(area.inicioMm)} a {formatMeasure(area.fimMm)} da ponta esquerda</small></div>
+        <div><strong>{NOME_AREA[area.tipo]} · {formatMeasure(area.comprimentoMm)}</strong><small>de {formatMeasure(area.inicioMm)} a {formatMeasure(area.fimMm)} {peca.wetDryZones[area.indice]?.angleDeg ? 'na direção escolhida' : 'da ponta esquerda'}</small></div>
         <button type="button" className="botao-contorno" onClick={() => mudarAreas(trocarTipoArea(peca, area.indice))}>Trocar para {area.tipo === 'WET' ? 'seca' : 'molhada'}</button>
         <button type="button" className="text-button" aria-label={`Tirar ${NOME_AREA[area.tipo].toLowerCase()} de ${formatMeasure(area.comprimentoMm)}`} onClick={() => mudarAreas(tirarArea(peca, area.indice))}>×</button>
       </li>)}

@@ -45,13 +45,13 @@ export function PainelMedidas({ documento, selecao, materiais, diagnosticos, aoM
       </div>
     </section>}
     {texto && <section className="tec-painel-secao" aria-label="Texto">
-      <label className="tec-campo">Texto<textarea rows={3} value={texto.text} autoFocus onChange={(evento) => aoMudar({ ...documento, annotations: documento.annotations.map((entrada) => entrada.id === texto.id ? { ...entrada, text: evento.target.value || ' ' } : entrada) })} /></label>
+      <label className="tec-campo">{texto.lineEnd ? 'Descrição da linha' : 'Texto'}<textarea maxLength={2000} rows={3} value={texto.text} autoFocus onChange={(evento) => aoMudar({ ...documento, annotations: documento.annotations.map((entrada) => entrada.id === texto.id ? { ...entrada, text: evento.target.value || ' ' } : entrada) })} /></label>
       <CampoMedida rotulo="Tamanho da letra" valorMm={texto.fontSizeMm ?? FONTE_TEXTO_PADRAO_MM} onChange={(fontSizeMm) => aoMudar({ ...documento, annotations: documento.annotations.map((entrada) => entrada.id === texto.id ? { ...entrada, fontSizeMm } : entrada) })} />
-      <small className="tec-dica">Arraste o texto no desenho para reposicioná-lo. A posição é mantida no PDF técnico.</small>
-      <button type="button" className="botao-contorno tec-perigo" onClick={() => { aoMudar({ ...documento, annotations: documento.annotations.filter((entrada) => entrada.id !== texto.id) }); aoSelecionar(null); }}>Excluir texto</button>
+      <small className="tec-dica">Arraste no desenho para reposicionar. Linhas e descrições são mantidas no PDF técnico.</small>
+      <button type="button" className="botao-contorno tec-perigo" onClick={() => { aoMudar({ ...documento, annotations: documento.annotations.filter((entrada) => entrada.id !== texto.id) }); aoSelecionar(null); }}>{texto.lineEnd ? 'Excluir linha' : 'Excluir texto'}</button>
     </section>}
     {!peca && !recurso && !vertice && !texto && <section className="tec-painel-secao">
-      <p className="tec-dica">Arraste um lado para aumentar ou reduzir a peça (os lados adjacentes acompanham). Toque em um lado ou em uma medida para informar outro valor; toque em uma cuba ou em um texto para editá-los. Com uma peça selecionada, a tecla Delete a exclui (Ctrl+Z desfaz).</p>
+      <p className="tec-dica">Arraste um lado para aumentar ou reduzir a peça (os lados adjacentes acompanham). Toque em um lado ou em uma medida para informar outro valor; toque em uma cuba ou em um texto para editá-los. Atalhos: V selecionar, L linha, T texto, A área, C cota. Setas movem a peça 1 cm; Shift + setas, 10 cm. Enter abre as propriedades, Delete exclui, Esc cancela e Ctrl+Z desfaz.</p>
       {documento.pieces.length > 0 && <div className="tec-lista-pecas">{documento.pieces.map((entrada) => <button type="button" key={entrada.id} className="botao-contorno" onClick={() => aoSelecionar({ tipo: 'peca', id: entrada.id })}>{entrada.locked ? '🔒 ' : ''}{nomeDaPeca(entrada, documento.pieces)}</button>)}</div>}
     </section>}
     {documento.dimensions.length > 0 && <section className="tec-painel-secao" aria-label="Cotas livres">

@@ -154,7 +154,7 @@ function redimensionar(peca: Piece, recursos: Feature[], comprimento: number, la
       recurso.y = Math.min(Math.max(recurso.y, limites.minY), limites.maxY);
     }
   }
-  peca.wetDryZones = peca.wetDryZones.filter((zona) => zona.startMm < comprimento).map((zona) => ({ ...zona, endMm: Math.min(zona.endMm, comprimento) }));
+  peca.wetDryZones = peca.wetDryZones.filter((zona) => zona.angleDeg || zona.startMm < comprimento).map((zona) => zona.angleDeg ? zona : ({ ...zona, endMm: Math.min(zona.endMm, comprimento) }));
 }
 
 export function sincronizarDesenho(doc: TechnicalDocument, projeto: ProjetoNoOrcamento, anterior: SincroniaDesenho | undefined, catalogo: CatalogoSincronia, novoId: () => string): ResultadoSincronia {
