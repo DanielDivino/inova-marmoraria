@@ -8,6 +8,7 @@ body { padding: 0; }
 .application-brand { display: flex; justify-content: center; align-items: center; margin: 0 0 18px; padding: 0 0 8px; }
 .application-brand img { width: 166px; height: 98px; object-fit: contain; }
 .application-sidebar nav { display: grid; gap: 4px; }
+.navigation-label { min-width: 0; font-weight: inherit; }
 .application-sidebar nav a { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 11px 14px; border-radius: 10px; color: #5f574c; font-size: 13px; line-height: 1.25; text-decoration: none; }
 .application-sidebar nav a span { display: grid; place-items: center; flex: 0 0 20px; width: 20px; min-height: 20px; text-align: center; font-size: 19px; line-height: 1; }
 .application-sidebar nav a:hover, .application-sidebar nav a.active { background: #f7efdf; color: #805715; }

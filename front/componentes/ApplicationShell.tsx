@@ -139,7 +139,7 @@ export function EstruturaAplicacao({ children }: { children: ReactNode }) {
     { href: '/historico', label: 'Histórico', icon: 'history' },
   ];
   const ativo = (link: typeof links[number]) => secaoDeOrigem ? link.href === secaoDeOrigem : link.href === '/' ? pathname === '/' : [link.href, ...(link.inclui ?? [])].some((prefixo) => pathname.startsWith(prefixo));
-  const navigation = <nav aria-label="Menu principal">{links.map((link) => { const selected = ativo(link); return <Link key={link.href} href={link.href} onClick={() => mobileMenu.current?.close()} className={selected ? 'active' : ''} aria-current={selected ? 'page' : undefined}><span aria-hidden="true"><NavigationIcon name={link.icon} /></span>{link.label}</Link>; })}</nav>;
+  const navigation = <nav aria-label="Menu principal">{links.map((link) => { const selected = ativo(link); return <Link key={link.href} href={link.href} title={link.label} onClick={() => mobileMenu.current?.close()} className={selected ? 'active' : ''} aria-current={selected ? 'page' : undefined}><span aria-hidden="true"><NavigationIcon name={link.icon} /></span><b className="navigation-label">{link.label}</b></Link>; })}</nav>;
   // Nome da tela principal, na barra de cima (o desenho técnico não está no menu).
   // No Novo orçamento a barra de cima já tem as abas dos atendimentos: sem título.
   const tituloDaTela = pathname === '/' ? null : links.find(ativo)?.label ?? (pathname.startsWith('/projetos/') ? 'Desenho técnico' : 'Inova Marmoraria');

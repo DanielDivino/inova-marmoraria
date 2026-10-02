@@ -26,7 +26,7 @@ function MenuAtendimento({ rotulo, destaque = false, gatilho, children }: { rotu
     return () => { document.removeEventListener('pointerdown', fora); document.removeEventListener('keydown', tecla); };
   }, [aberto]);
   return <div className="atendimento-menu" ref={caixa}>
-    <button ref={botao} type="button" className={`atendimento-chip${destaque ? ' destaque' : ''}`} aria-haspopup="menu" aria-expanded={aberto} aria-label={rotulo} onClick={() => setAberto((atual) => !atual)}>
+    <button ref={botao} type="button" className={`atendimento-chip${destaque ? ' destaque' : ''}`} aria-haspopup="menu" aria-expanded={aberto} aria-label={rotulo} title={rotulo} onClick={() => setAberto((atual) => !atual)}>
       {gatilho}<svg className="atendimento-chip-seta" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 6 5 5 5-5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
     </button>
     {aberto && <div className="atendimento-lista" role="menu" aria-label={rotulo}>{children(() => setAberto(false))}</div>}
@@ -66,6 +66,7 @@ export function BarraAtendimento({ clientes, clienteAtivo, clienteNome, projetos
       <span className="atendimento-chip-texto"><small>Cliente</small><strong>{clienteNome || 'Selecionar cliente'}</strong></span>
     </>}>
       {(fechar) => <>
+        {aoEditarCliente && <button type="button" role="menuitem" className="atendimento-acao-compacta" onClick={() => { fechar(); aoEditarCliente(); }}><Icone nome="lapis" tamanho={16} />Editar cliente</button>}
         {clientes.length > 1 && <>
           <p className="atendimento-lista-titulo">Clientes neste orçamento</p>
           {clientes.map((cliente, index) => <button type="button" role="menuitemradio" aria-checked={index === clienteAtivo} key={cliente.id} onClick={() => { fechar(); aoEscolherCliente(index); }}>
@@ -95,6 +96,7 @@ export function BarraAtendimento({ clientes, clienteAtivo, clienteNome, projetos
           <Icone nome="casa" tamanho={16} />{entrada.nome}{index === projetoAtivo && <Icone nome="marcado" tamanho={16} />}
         </button>)}
         <i className="atendimento-lista-divisor" aria-hidden="true" />
+        <button type="button" role="menuitem" className="atendimento-acao-compacta" onClick={() => { fechar(); aoAdicionarProjeto(); }}><Icone nome="mais" tamanho={16} />Adicionar projeto</button>
         <button type="button" role="menuitem" className="perigo" aria-label={`Excluir ${projeto?.nome ?? 'projeto'}`} onClick={() => { fechar(); aoExcluirProjeto(); }}><Icone nome="fechar" tamanho={16} />Excluir este projeto</button>
       </>}
     </MenuAtendimento>

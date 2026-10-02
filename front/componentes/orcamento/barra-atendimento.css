@@ -4,7 +4,7 @@
 .inova-theme .atendimento-barra .atendimento-chip { display: inline-flex; align-items: center; gap: 12px; min-width: 0; max-width: 300px; min-height: 52px; padding: 7px 14px 7px 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .inova-theme .atendimento-barra .atendimento-chip:hover, .inova-theme .atendimento-barra .atendimento-chip[aria-expanded='true'] { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
 .inova-theme .atendimento-barra .atendimento-chip.destaque { border-color: color-mix(in srgb, var(--green) 70%, var(--line)); background: color-mix(in srgb, var(--green) 7%, var(--surface, #fff)); }
-.atendimento-chip-texto { display: grid; min-width: 0; line-height: 1.15; }
+.atendimento-chip-texto { display: grid; flex: 1; min-width: 0; line-height: 1.15; }
 .atendimento-chip-texto small { color: var(--muted); font-size: 11px; }
 .atendimento-chip-texto strong { overflow: hidden; color: var(--ink); font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .atendimento-chip-seta { flex: none; color: var(--muted); }
@@ -28,6 +28,7 @@
 .inova-theme .atendimento-lista button[aria-checked='true'] > svg:last-child { margin-left: auto; color: var(--green); }
 .inova-theme .atendimento-lista button.perigo { color: #b4493d; }
 .inova-theme .atendimento-lista button.perigo > svg { color: currentColor; }
+.inova-theme .atendimento-lista .atendimento-acao-compacta { display: none; }
 html.inova-dark .inova-theme .atendimento-lista button.perigo { color: #e39488; }
 
 .project-edit-title { margin: 0 0 4px; font: 600 24px/1.2 Georgia, serif; color: var(--ink); }
@@ -46,6 +47,15 @@ html.inova-dark .inova-theme .atendimento-lista button.perigo { color: #e39488; 
 }
 
 /* No computador a barra fica na barra de cima da aplicação, na linha do sino e da conta. */
-.application-header-tabs .atendimento-barra { flex-wrap: nowrap; gap: 10px 12px; }
-.application-header-tabs .atendimento-menu { flex: 0 1 auto; }
+.application-header-tabs .atendimento-barra { width: 100%; flex-wrap: wrap; gap: 10px 12px; }
+.application-header-tabs .atendimento-menu { flex: 1 1 180px; }
+.inova-theme .application-header-tabs .atendimento-chip { width: 100%; max-width: none; }
+.inova-theme .application-header-tabs .atendimento-link { flex: none; white-space: nowrap; }
 .project-builder .project-topbar.barra-no-topo { padding: 18px 0 0; }
+
+/* Computador em janela menor: os atalhos continuam dentro dos respectivos menus. */
+@media screen and (min-width: 761px) and (max-width: 1400px) {
+  .inova-theme .application-header-tabs .atendimento-link { display: none; }
+  .inova-theme .application-header-tabs .atendimento-lista .atendimento-acao-compacta { display: flex; }
+  .application-header-tabs .atendimento-menu:last-of-type .atendimento-lista { left: auto; right: 0; }
+}
