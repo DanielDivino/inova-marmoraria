@@ -167,54 +167,73 @@ describe('Desenho técnico dentro do Novo orçamento', () => {
     expect((await request('GET', `/quotes/${desviado.id}/items/${desviado.items[0].id}/technical-pdf`, vendedor)).json()).toMatchObject({ error: 'NO_TECHNICAL_DESIGN' });
   });
 
-  it('Exportar junta orçamento, desenhos e desenho técnico no mesmo PDF, só com as partes marcadas', async () => {
+  it('Exportar: orçamento e ordem de serviço no mesmo PDF — a planta do desenho técnico no projeto que tem, as peças do orçamento no que não tem', async () => {
     const texto = (resposta: { rawPayload: Buffer }) => execFileSync('pdftotext', ['-layout', '-', '-'], { input: resposta.rawPayload, encoding: 'utf8' });
     const tamanhos = (resposta: { rawPayload: Buffer }) => execFileSync('pdfinfo', ['-f', '1', '-l', '99', '-'], { input: resposta.rawPayload, encoding: 'utf8' }).match(/Page +\d+ size: +[\d.]+ x [\d.]+/g)!.map((linha) => linha.includes('595.') ? 'A4' : 'carta');
-    const salvarDesenho = async (designId: string, auth: Auth) => {
-      const atual = (await request('GET', `/designs/${designId}/draft`, auth)).json().draft;
-      expect((await request('PUT', `/designs/${designId}/draft`, auth, { baseVersion: atual.version, document: cozinha() })).statusCode).toBe(200);
-    };
     const designId = (await request('POST', `/customers/${cliente.id}/designs`, vendedor, { name: 'Cozinha exportada' })).json().designId;
-    await salvarDesenho(designId, vendedor);
+    const atual = (await request('GET', `/designs/${designId}/draft`, vendedor)).json().draft;
+    expect((await request('PUT', `/designs/${designId}/draft`, vendedor, { baseVersion: atual.version, document: cozinha() })).statusCode).toBe(200);
     const vinculo = { designId, nome: 'Cozinha exportada', versao: 2, total: 1, aceitoEm: new Date().toISOString() };
     const cozinhaProjeto = rascunhoParaEntradaItem(projetoDoDesenho(estimarDesenho(cozinha(), catalogo).item, { id: 'exportado', projectName: 'Cozinha', productTypeId: produto, m2Fechado: false, vinculo }));
     const avulso = { projectName: 'Lavabo', productTypeId: produto, materialId: catalogo.materials.find((material) => material.name === 'Branco Dallas')!.id, components: [{ label: 'Tampo', componentType: 'TOP', orientation: 'HORIZONTAL', lengthMm: 1000, widthMm: 500, quantity: 1 }] };
     const orcamento = (await request('POST', '/quotes', vendedor, { customerId: cliente.id, items: [cozinhaProjeto, avulso] })).json();
     const [cozinhaItem, lavabo] = orcamento.items;
     const exportar = (caminho: string, partes: string) => request('GET', `/quotes/${orcamento.id}${caminho}?${partes}`, vendedor);
-    expect((await request('GET', `/quotes/${orcamento.id}/desenhos-tecnicos`, vendedor)).json()).toEqual({ projetos: [cozinhaItem.id] });
 
-    // Projeto: orçamento + desenho técnico, na mesma folha de cálculo de páginas do desenho (só as dele).
-    const completo = await exportar(`/items/${cozinhaItem.id}/pdf`, 'commercial=true&drawings=true&technical=true');
+    // Projeto com desenho técnico: o orçamento (carta) e a planta dele na OS (A4).
+    const completo = await exportar(`/items/${cozinhaItem.id}/pdf`, 'commercial=true&drawings=true');
     expect(completo.statusCode, completo.body).toBe(200);
     const paginas = texto(completo).split('\f').filter((pagina) => pagina.trim());
     expect(paginas[0]).toContain('TOTAL DO PROJETO');
     expect(paginas[0]).not.toContain('LAVABO');
-    expect(paginas[1]).toContain('Desenho técnico · Cozinha');
     expect(paginas[1]).toMatch(/Versão 2 · Página 1 de \d/);
     expect(tamanhos(completo)).toEqual(['carta', ...paginas.slice(1).map(() => 'A4')]);
+    // Só a OS: começa em A4, sem a folha do orçamento.
+    const soOs = await exportar(`/items/${cozinhaItem.id}/pdf`, 'commercial=false&drawings=true');
+    expect(texto(soOs)).not.toContain('TOTAL DO PROJETO');
+    expect(new Set(tamanhos(soOs))).toEqual(new Set(['A4']));
+    // Projeto sem desenho técnico: a OS sai com as peças do orçamento.
+    const osLavabo = texto(await exportar(`/items/${lavabo.id}/pdf`, 'commercial=false&drawings=true'));
+    expect(osLavabo).toContain('Lavabo');
+    expect(osLavabo).not.toMatch(/Versão \d+ · Página/);
+    // Nada marcado: avisa, sem PDF.
+    expect((await exportar('/pdf', 'commercial=false&drawings=false')).json()).toMatchObject({ error: 'NOTHING_TO_EXPORT' });
+    // Orçamento todo: a planta da cozinha e a folha do lavabo; sem a OS, só o orçamento.
+    const geral = texto(await exportar('/pdf', 'commercial=true&drawings=true'));
+    expect(geral.match(/Versão \d+ · Página 1 de/g)).toHaveLength(1);
+    expect(geral).toContain('LAVABO');
+    expect(texto(await exportar('/pdf', 'commercial=true&drawings=false'))).not.toMatch(/Versão \d+ · Página/);
+  });
 
-    // Só o desenho técnico: sem a folha do orçamento, em A4.
-    const soTecnico = await exportar(`/items/${cozinhaItem.id}/pdf`, 'commercial=false&drawings=false&technical=true');
-    expect(soTecnico.statusCode, soTecnico.body).toBe(200);
-    expect(texto(soTecnico)).toContain('Desenho técnico · Cozinha');
-    expect(texto(soTecnico)).not.toContain('TOTAL DO PROJETO');
-    expect(new Set(tamanhos(soTecnico))).toEqual(new Set(['A4']));
-
-    // Só o desenho técnico de um projeto que não tem: avisa, sem PDF.
-    expect((await exportar(`/items/${lavabo.id}/pdf`, 'commercial=false&drawings=false&technical=true')).json()).toMatchObject({ error: 'NOTHING_TO_EXPORT' });
-
-    // Orçamento todo: o desenho técnico de cada projeto, um depois do outro.
-    const doLavabo = await request('POST', `/quotes/${orcamento.id}/items/${lavabo.id}/technical-design`, admin, {});
-    expect(doLavabo.statusCode, doLavabo.body).toBe(201);
-    await salvarDesenho(doLavabo.json().designId, admin);
-    expect((await request('GET', `/quotes/${orcamento.id}/desenhos-tecnicos`, vendedor)).json()).toEqual({ projetos: [cozinhaItem.id, lavabo.id] });
-    const geral = await exportar('/pdf', 'commercial=true&drawings=false&technical=true');
-    expect(geral.statusCode, geral.body).toBe(200);
-    expect(texto(geral).match(/Versão \d+ · Página 1 de/g)).toHaveLength(2);
-    expect(texto(geral)).toContain('LAVABO');
-    // Sem desenho técnico marcado, o PDF do orçamento continua como antes.
-    expect(texto(await exportar('/pdf', 'commercial=true&drawings=true&technical=false'))).not.toContain('Desenho técnico ·');
+  it('Emenda: as pedras do desenho técnico saem na OS, no fluxo e na nota de entrega; o valor não muda', async () => {
+    const texto = (resposta: { rawPayload: Buffer }) => execFileSync('pdftotext', ['-layout', '-', '-'], { input: resposta.rawPayload, encoding: 'utf8' });
+    // Bancada em U dividida no lado de cima a 1m30: duas pedras de 1m30 × 1m50.
+    const documento = cozinha();
+    documento.features.push(recurso({ id: 'emenda', type: 'SEAM', pieceId: 'u', edgeId: 'u-v6', startMm: 1300 }));
+    const designId = (await request('POST', `/customers/${cliente.id}/designs`, admin, { name: 'Cozinha com emenda' })).json().designId;
+    const atual = (await request('GET', `/designs/${designId}/draft`, admin)).json().draft;
+    expect((await request('PUT', `/designs/${designId}/draft`, admin, { baseVersion: atual.version, document: documento })).statusCode).toBe(200);
+    expect(estimarDesenho(documento, catalogo).total).toBe(estimarDesenho(cozinha(), catalogo).total);
+    const vinculo = { designId, nome: 'Cozinha com emenda', versao: 2, total: 1, aceitoEm: new Date().toISOString() };
+    const projeto = rascunhoParaEntradaItem(projetoDoDesenho(estimarDesenho(documento, catalogo).item, { id: 'emendado', projectName: 'Cozinha', productTypeId: produto, m2Fechado: false, vinculo }));
+    const orcamento = (await request('POST', '/quotes', admin, { customerId: cliente.id, items: [projeto] })).json();
+    for (const corpo of [{ status: 'APPROVED' }, { status: 'APPROVED', executionStatus: 'IN_PROGRESS' }]) {
+      const mudou = await request('PATCH', `/quotes/${orcamento.id}/status`, admin, corpo);
+      expect(mudou.statusCode, mudou.body).toBe(200);
+    }
+    // Fluxo: as pedras do desenho (duas partes, soleira, saia e rodabanca), não as linhas do orçamento.
+    const [cartao] = (await request('GET', '/workflow/projects', admin)).json().filter((entrada: any) => entrada.quote.id === orcamento.id);
+    expect(cartao.totalPieces).toBe(5);
+    expect(cartao.pieceList.map((peca: any) => [peca.name, peca.lengthMm, peca.widthMm])).toEqual([
+      ['Bancada · parte 1', 1300, 1500], ['Bancada · parte 2', 1300, 1500], ['Saia · Bancada', 1500, 45], ['Rodabanca · Bancada', 2600, 75], ['Soleira', 837, 143],
+    ]);
+    // Entregas: as mesmas pedras para conferir.
+    const entregas = (await request('GET', `/quotes/${orcamento.id}/entregas`, admin)).json();
+    expect(entregas.projects[0].pieces.map((peca: any) => peca.key)).toEqual(['u:1', 'u:2', 'saia', 'roda', 's']);
+    // OS: a planta com a emenda e a tabela das pedras.
+    const os = texto(await request('GET', `/quotes/${orcamento.id}/pdf?commercial=false&drawings=true`, admin));
+    expect(os).toContain('Divisão em pedras (emendas)');
+    expect(os.match(/1m30 × 1m50/g)).toHaveLength(2);
   });
 
   describe('cada projeto do orçamento tem o seu desenho técnico', () => {

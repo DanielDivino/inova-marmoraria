@@ -1,7 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { EditorComponentes } from '../componentes/orcamento/ComponentEditor';
 import { DesenhoTecnico } from '../componentes/orcamento/TechnicalDrawing';
 import { descricaoProducaoRascunho } from './manufacturing-description';
 import type { DraftComponent } from '../componentes/orcamento/types';
@@ -15,7 +14,8 @@ const component: DraftComponent = { id: 'top', label: 'Bancada', componentType: 
   { side: 'FRONT', serviceId: 'miter', quantity: 1 },
 ] };
 
-describe('Vista no formulário e desenho', () => {
+// Saia e vista lançadas como acabamento (orçamentos antigos) continuam no desenho das peças e na OS.
+describe('Saia e vista antigas (acabamento) no desenho das peças', () => {
   it('usa 7,5 cm nas cotas e deixa as medidas laterais acima das faixas', () => {
     const piece = { ...component, lengthCm: '120', widthCm: '7,5', edges: (['LEFT', 'RIGHT'] as const).flatMap((side) => [
       { side, serviceId: 'skirt', heightCm: '7,5', quantity: 1 }, { side, serviceId: 'miter', quantity: 1 },
@@ -27,17 +27,6 @@ describe('Vista no formulário e desenho', () => {
     expect(sideLabels).toHaveLength(2);
     expect(sideLabels.every((tag) => !tag.includes('rotate'))).toBe(true);
     expect(html.match(/class="drawing-miter-detail"/g)).toHaveLength(2);
-  });
-  it('mostra acabamentos compactos com medidas acessíveis e sem fórmulas', () => {
-    const html = renderToStaticMarkup(React.createElement(EditorComponentes, { components: [component], linearServices: services, onChange: vi.fn(), onRemove: vi.fn() }));
-    expect(html).toContain('>Vista</span>');
-    expect(html).toContain('Largura da vista (cm)');
-    expect(html).toContain('Altura da saia (cm)');
-    expect(html).toContain('aria-label="Comprimento aplicado (cm)"');
-    expect(html.match(/class="edge-finish"/g)).toHaveLength(3);
-    expect(html).not.toContain('calculada pela pedra');
-    expect(html).not.toContain('Comprimento × largura × preço da pedra por m²');
-    expect(html).not.toContain('Comprimento aplicado × preço por metro linear');
   });
   it.each([['BACK', 'Superior'], ['FRONT', 'Inferior'], ['LEFT', 'Esquerdo'], ['RIGHT', 'Direito']] as const)('desenha a vista no lado %s com descrição completa', (side, label) => {
     const piece = { ...component, edges: [{ ...component.edges[0], side, lengthCm: '50' }] };

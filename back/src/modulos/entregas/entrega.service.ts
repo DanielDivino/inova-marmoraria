@@ -4,6 +4,8 @@ import { alocarEntrega, conferirSelecaoPecas, distribuirPecas, nomeProjeto, nume
 import { escopoOrcamentos } from '../../compartilhado/acesso.js';
 import { AppError, type AuthUser } from '../../compartilhado/http.js';
 import { entregarOrcamentoSeCompleto, entregarPecas, mapaPecasSchema, ordemDosCartoes, selectPecas } from '../fluxo/workflow.service.js';
+import type { TechnicalDocument } from '@inova/domain/technical';
+import { desenhosParaPecas } from '../desenhos/desenho-tecnico-do-orcamento.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -18,8 +20,8 @@ const selectProjetoEntrega = { ...selectPecas, workflowCards: { select: { id: tr
 type ProjetoEntrega = Prisma.QuoteItemGetPayload<{ select: typeof selectProjetoEntrega }>;
 type CartaoComPecas = { id: string; status: ProjetoEntrega['workflowCards'][number]['status']; position: number; mapa: MapaPecas };
 
-function cartoesComPecas(projeto: ProjetoEntrega) {
-  const pecas = pecasDoProjeto(projeto);
+function cartoesComPecas(projeto: ProjetoEntrega, desenho?: TechnicalDocument) {
+  const pecas = pecasDoProjeto(projeto, desenho);
   const porCartao = distribuirPecas(pecas, projeto.workflowCards);
   const cartoes: CartaoComPecas[] = projeto.workflowCards.map((cartao) => ({ id: cartao.id, status: cartao.status, position: cartao.position, mapa: porCartao.get(cartao.id) ?? {} }));
   return { pecas, cartoes };
@@ -46,8 +48,9 @@ export async function listarEntregas(tx: Tx, quoteId: string, user: AuthUser) {
   } });
   if (!quote) throw new AppError(404, 'Orçamento não encontrado.', 'NOT_FOUND');
   const reason = motivoSemEntrega(quote);
+  const desenhos = await desenhosParaPecas(tx, quote.items);
   return { canDeliver: !reason, reason, projects: quote.items.map((projeto) => {
-    const { pecas, cartoes } = cartoesComPecas(projeto);
+    const { pecas, cartoes } = cartoesComPecas(projeto, desenhos.get(projeto.id));
     return {
       id: projeto.id, name: nomeProjeto(projeto),
       pieces: situacaoDasPecas(pecas, cartoes).map((peca) => ({ key: peca.chave, name: peca.nome, material: peca.material, lengthMm: peca.lengthMm, widthMm: peca.widthMm, quantity: peca.quantidade, delivered: peca.entregues, ready: peca.prontas, inProduction: peca.emProducao })),
@@ -71,14 +74,15 @@ export async function registrarEntrega(tx: Tx, quoteId: string, quoteItemId: str
   if (reason) throw new AppError(409, reason, 'DELIVERY_UNAVAILABLE');
   const projeto = await tx.quoteItem.findFirst({ where: { id: quoteItemId, quoteId }, select: selectProjetoEntrega });
   if (!projeto) throw new AppError(404, 'Projeto não encontrado.', 'NOT_FOUND');
-  const { pecas, cartoes } = cartoesComPecas(projeto);
+  const desenho = (await desenhosParaPecas(tx, [projeto])).get(projeto.id);
+  const { pecas, cartoes } = cartoesComPecas(projeto, desenho);
   const conferida = conferirSelecaoPecas(somaDosCartoes(cartoes, false), input.pieces);
   if ('erro' in conferida) throw new AppError(422, conferida.erro, 'INVALID_PIECES');
   const alocacao = alocarEntrega(cartoes, conferida.selecao);
   if (!alocacao) throw new AppError(409, 'O quadro foi alterado em outra sessão. Recarregue e tente de novo.', 'WORKFLOW_CONFLICT');
   await entregarPecas(tx, projeto.id, alocacao);
 
-  const depois = cartoesComPecas(await tx.quoteItem.findUniqueOrThrow({ where: { id: projeto.id }, select: selectProjetoEntrega }));
+  const depois = cartoesComPecas(await tx.quoteItem.findUniqueOrThrow({ where: { id: projeto.id }, select: selectProjetoEntrega }), desenho);
   const document: DocumentoNotaEntrega = {
     projectName: nomeProjeto(projeto),
     delivered: linhasDaNota(pecas, conferida.selecao),

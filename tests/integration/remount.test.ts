@@ -29,7 +29,8 @@ describe('Remontagem persistida e independente', () => {
     expect((await request('GET', `${path}/delivery-pdf`, undefined, {})).statusCode).toBe(401);
     expect((await request('GET', '/quotes/cm00000000000000000000000/remontagem')).statusCode).toBe(404);
     expect((await request('GET', `${path}/pdf`)).statusCode).toBe(404);
-    for (const patch of [{ assembly: -1 }, { disassembly: -1 }, { cardOverride: -1 }, { pixPercent: 7 }, { assembly: 2.345 }, { itemNotes: { invalid: 'Órfão' } }]) expect((await request('PUT', path, { ...body(), ...patch })).statusCode).toBe(422);
+    // (Valor com mais de duas casas, como 2,345, é arredondado para 2,35, não recusado.)
+    for (const patch of [{ assembly: -1 }, { disassembly: -1 }, { cardOverride: -1 }, { pixPercent: 7 }, { itemNotes: { invalid: 'Órfão' } }]) expect((await request('PUT', path, { ...body(), ...patch })).statusCode).toBe(422);
     for (const patch of [{ lengthMm: 0 }, { widthMm: -1 }, { quantity: 0 }, { quantity: 1.5 }]) {
       const payload = body(); Object.assign(payload.items[0].components[0], patch);
       expect((await request('PUT', path, payload)).statusCode).toBe(422);

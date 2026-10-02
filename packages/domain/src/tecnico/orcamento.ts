@@ -147,7 +147,7 @@ function trechosNasPartes(a: Point, b: Point, partes: Retangulo[]): Trecho[] {
   return trechos;
 }
 
-const ROTULO: Record<Feature['type'], string> = { SINK: 'Cuba', SCULPTED_SINK: 'Cuba esculpida', CUTOUT: 'Recorte / cooktop', HOLE: 'Furo', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', EDGE_FINISH: 'Acabamento de borda' };
+const ROTULO: Record<Feature['type'], string> = { SINK: 'Cuba', SCULPTED_SINK: 'Cuba esculpida', CUTOUT: 'Recorte / cooktop', HOLE: 'Furo', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', EDGE_FINISH: 'Acabamento de borda', SEAM: 'Emenda' };
 /** Nome do componente no orçamento: o dado no desenho ou, sem nome, o tipo ("Saia", "Cuba"). */
 export const nomeDoRecurso = (recurso: Pick<Feature, 'type' | 'name'>) => recurso.name?.trim() && recurso.name.trim() !== 'Componente' ? recurso.name.trim() : ROTULO[recurso.type];
 const normalizar = (nome: string) => nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR').trim();
@@ -229,7 +229,8 @@ export function desenhoParaOrcamento(doc: TechnicalDocument, servicos: ServicoPa
     }
 
     // Cuba, cooktop e furo: na parte onde está o centro (ou na mais próxima), com a posição a partir do canto de cima à esquerda.
-    for (const recurso of recursos.filter((entrada) => !BORDA.includes(entrada.type))) {
+    // (A emenda só divide a peça em pedras para produzir: não muda o orçamento.)
+    for (const recurso of recursos.filter((entrada) => !BORDA.includes(entrada.type) && entrada.type !== 'SEAM')) {
       const distancia = (r: Retangulo) => Math.hypot(Math.max(r.x0 - recurso.x, 0, recurso.x - r.x1), Math.max(r.y0 - recurso.y, 0, recurso.y - r.y1));
       const indice = retangulos.reduce((melhor, r, i) => distancia(r) < distancia(retangulos[melhor]) ? i : melhor, 0);
       const r = retangulos[indice];

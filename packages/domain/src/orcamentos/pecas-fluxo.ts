@@ -2,10 +2,13 @@ import { nomeExibicaoComponente, nomeProjeto } from './component-details.js';
 import { planoDeProducao } from './production-plan.js';
 import type { ProjectWorkflowStatus } from './fluxo.js';
 import { numeroDocumentoRemontagem } from './remontagem.js';
+import { pecasFisicasDoDesenho } from '../tecnico/divisao.js';
+import type { TechnicalDocument } from '../tecnico/schema.js';
 
 /**
- * Peça física de um projeto, a mesma da OS: as do plano de produção quando o
- * projeto foi detalhado; senão, os componentes; sem componentes (área manual),
+ * Peça física de um projeto, a mesma da OS: com desenho técnico ligado, as pedras do desenho (cada
+ * parte entre emendas, rodabancas e saias); senão, as do plano de produção dos projetos antigos
+ * (feito no extinto "Com desenho"); senão, as peças do Orçamento Rápido; sem peças (área manual),
  * o próprio projeto.
  */
 export type PecaProjeto = { chave: string; nome: string; material: string | null; lengthMm: number | null; widthMm: number | null; quantidade: number };
@@ -18,9 +21,27 @@ export type ProjetoComPecas = { projectName?: string | null; quantity: number; m
 /** Chave da única "peça" de um projeto sem componentes (área manual). */
 export const CHAVE_PROJETO_INTEIRO = 'projeto';
 
-export function pecasDoProjeto(projeto: ProjetoComPecas): PecaProjeto[] {
+export function pecasDoProjeto(projeto: ProjetoComPecas, desenho?: TechnicalDocument | null): PecaProjeto[] {
   const componentes = projeto.components ?? [];
   const materialDoProjeto = projeto.materialNameSnapshot ?? null;
+  const daLinha = (componente: ComponenteComPeca): PecaProjeto => ({ chave: componente.id, nome: nomeExibicaoComponente(componente), lengthMm: componente.lengthMm, widthMm: componente.widthMm,
+    quantidade: componente.quantity, material: componente.materialNameSnapshot ?? materialDoProjeto });
+  if (desenho?.pieces.length) {
+    // Linha do orçamento → peça (ou rodabanca/saia) do desenho: a quantidade da linha vale para as pedras dela.
+    const origens = (projeto.drawingData as { desenhoTecnico?: { sincronia?: { pecas?: Record<string, { pecaId: string; recursoId?: string }> } } } | null)?.desenhoTecnico?.sincronia?.pecas;
+    const linhaDa = new Map<string, ComponenteComPeca>();
+    for (const componente of componentes) {
+      const origem = origens?.[componente.id];
+      if (origem && !linhaDa.has(origem.recursoId ?? origem.pecaId)) linhaDa.set(origem.recursoId ?? origem.pecaId, componente);
+    }
+    const pedras = pecasFisicasDoDesenho(desenho).map((peca) => {
+      const linha = linhaDa.get(peca.recursoId ?? peca.pecaId);
+      return { chave: peca.chave, nome: peca.nome, lengthMm: peca.lengthMm, widthMm: peca.widthMm, quantidade: Math.max(1, linha?.quantity ?? 1), material: peca.material ?? linha?.materialNameSnapshot ?? materialDoProjeto };
+    });
+    // Linhas que ainda não foram para o desenho (entram nele quando ele for aberto pelo orçamento).
+    const fora = origens ? componentes.filter((componente) => componente.quantity > 0 && !origens[componente.id]).map(daLinha) : [];
+    return [...pedras, ...fora];
+  }
   const plano = planoDeProducao(projeto.drawingData);
   if (plano?.pieces.length) {
     return plano.pieces.filter((peca) => peca.quantity > 0).map((peca) => ({
@@ -28,12 +49,7 @@ export function pecasDoProjeto(projeto: ProjetoComPecas): PecaProjeto[] {
       material: componentes.find((componente) => componente.id === peca.sourceComponentId)?.materialNameSnapshot ?? materialDoProjeto,
     }));
   }
-  if (componentes.length) {
-    return componentes.filter((componente) => componente.quantity > 0).map((componente) => ({
-      chave: componente.id, nome: nomeExibicaoComponente(componente), lengthMm: componente.lengthMm, widthMm: componente.widthMm,
-      quantidade: componente.quantity, material: componente.materialNameSnapshot ?? materialDoProjeto,
-    }));
-  }
+  if (componentes.length) return componentes.filter((componente) => componente.quantity > 0).map(daLinha);
   return [{ chave: CHAVE_PROJETO_INTEIRO, nome: nomeProjeto(projeto), material: materialDoProjeto, lengthMm: null, widthMm: null, quantidade: Math.max(1, projeto.quantity) }];
 }
 

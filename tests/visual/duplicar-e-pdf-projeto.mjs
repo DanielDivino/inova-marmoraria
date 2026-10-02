@@ -171,27 +171,25 @@ try {
   const opcoes = page.getByRole('region', { name: 'Opções do PDF' });
   const caixinha = rotulo => opcoes.getByLabel(rotulo, { exact: true });
   const gerar = async () => { const [popup] = await Promise.all([context.waitForEvent('page'), opcoes.getByRole('button', { name: 'Gerar PDF' }).click()]); await popup.close(); };
-  // Cozinha não tem desenho técnico: opção apagada e, ao lado do Exportar, o botão para adicioná-lo.
+  // Cozinha não tem desenho técnico: ao lado do Exportar, o botão para adicioná-lo; a OS sai mesmo assim (com as peças).
   await expect(cartao('Cozinha').getByRole('button', { name: 'Adicionar desenho técnico' })).toBeVisible();
   await expect(cartao('Banheiro social').getByRole('button', { name: 'Adicionar desenho técnico' })).toHaveCount(0);
   await cartao('Cozinha').getByRole('button', { name: 'Exportar Cozinha' }).click();
-  await expect(caixinha('Incluir desenho técnico')).toBeDisabled();
+  await expect(caixinha('Incluir ordem de serviço')).toBeEnabled();
   await page.mouse.click(5, 5);
   await expect(opcoes).toHaveCount(0);
 
-  // Banheiro social: só os desenhos (OS) e o desenho técnico, sem a folha do orçamento.
+  // Banheiro social: só a ordem de serviço (a planta do desenho técnico), sem a folha do orçamento.
   await cartao('Banheiro social').getByRole('button', { name: 'Exportar Banheiro social' }).click();
-  assert.deepEqual(await opcoes.locator('label').allInnerTexts(), ['Incluir orçamento', 'Exibir valores individuais', 'Incluir desenhos em ordem de serviço', 'Incluir desenho técnico']);
+  assert.deepEqual(await opcoes.locator('label').allInnerTexts(), ['Incluir orçamento', 'Exibir valores individuais', 'Incluir ordem de serviço']);
   assert.equal(await opcoes.locator('small').count(), 0, 'sem textos explicativos');
   await caixinha('Incluir orçamento').uncheck();
   await expect(caixinha('Exibir valores individuais')).toBeDisabled();
-  await caixinha('Incluir desenho técnico').check();
   await cartao('Banheiro social').screenshot({ path: resolve(output, '04-exportar-do-projeto.png') });
   await page.screenshot({ path: resolve(output, '05-exportar-do-projeto-tela.png') });
   await gerar();
   // Nada marcado, nada para gerar.
-  await caixinha('Incluir desenhos em ordem de serviço').uncheck();
-  await caixinha('Incluir desenho técnico').uncheck();
+  await caixinha('Incluir ordem de serviço').uncheck();
   await expect(opcoes.getByRole('button', { name: 'Gerar PDF' })).toBeDisabled();
   await page.keyboard.press('Escape');
   await expect(opcoes).toHaveCount(0);
@@ -200,12 +198,11 @@ try {
   await page.locator('.orcamento-topo-acoes').getByRole('button', { name: 'Exportar', exact: true }).click();
   assert.equal(await opcoes.locator('small').count(), 0, 'sem textos explicativos');
   await caixinha('Exibir valores individuais').check();
-  await caixinha('Incluir desenho técnico').check();
   await page.screenshot({ path: resolve(output, '06-exportar-geral.png') });
   await gerar();
   assert.deepEqual(pdfsPedidos, [
-    '/api/quotes/q1/items/i2/pdf?commercial=false&individualPrices=false&drawings=true&technical=true',
-    '/api/quotes/q1/pdf?commercial=true&individualPrices=true&drawings=true&technical=true',
+    '/api/quotes/q1/items/i2/pdf?commercial=false&individualPrices=false&drawings=true',
+    '/api/quotes/q1/pdf?commercial=true&individualPrices=true&drawings=true',
   ]);
 
   // 8) Com um projeto só, o Exportar do projeto também aparece; sem desenho técnico, o botão para adicioná-lo.
@@ -241,7 +238,7 @@ try {
   assert(new URL(page.url()).searchParams.get('orcamento') === 'q1', 'o desenho volta para o orçamento');
 
   assert.deepEqual(errors, []);
-  console.log('OK: Duplicar projeto (janela com o nome, sem repetir nome; cópia fiel, logo depois do original, independente e com ids próprios; no celular ao lado do M² fechado) e Exportar do orçamento e de cada projeto com caixinhas independentes (orçamento, valores, desenhos em OS e desenho técnico) num PDF só.');
+  console.log('OK: Duplicar projeto (janela com o nome, sem repetir nome; cópia fiel, logo depois do original, independente e com ids próprios; no celular ao lado do M² fechado) e Exportar do orçamento e de cada projeto com caixinhas independentes (orçamento, valores e ordem de serviço) num PDF só.');
 } catch (error) {
   console.error('FALHA:', error);
   await shot('erro');

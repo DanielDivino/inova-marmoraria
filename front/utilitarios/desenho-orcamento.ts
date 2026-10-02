@@ -1,4 +1,4 @@
-import { centimetrosParaMilimetros, dadosEntradaProjeto } from '@inova/domain';
+import { centimetrosParaMilimetros } from '@inova/domain';
 import type { ItemDoDesenho, ProjetoNoOrcamento, SincroniaDesenho } from '@inova/domain/technical';
 import type { DraftComponent, DraftCutout, DraftItem } from '../componentes/orcamento/types';
 import { criarId } from './id';
@@ -87,5 +87,5 @@ export function projetoDoDesenho(item: ItemDoDesenho, dados: { id: string; proje
     recortes: Object.fromEntries(item.recortes.map((recorte, indice) => [idsRecortes[indice], recorte.recursoId])),
     base: projetoParaDesenho(projeto),
   };
-  return { ...projeto, drawingData: { ...dadosEntradaProjeto(undefined, 'QUICK'), desenhoTecnico: { ...dados.vinculo, sincronia } } };
+  return { ...projeto, drawingData: { desenhoTecnico: { ...dados.vinculo, sincronia } } };
 }

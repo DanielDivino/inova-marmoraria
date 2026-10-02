@@ -1,27 +1,7 @@
+/**
+ * Marcas antigas do drawingData do projeto: o modo (Rápido ou o extinto "Com desenho") e se o
+ * desenho do detalhamento foi concluído. Não têm mais efeito — o Orçamento Rápido é o único modo e
+ * a ordem de serviço sai sempre — mas os projetos salvos ainda as trazem, então continuam aceitas.
+ */
 export const QUOTE_ENTRY_MODES = ['QUICK', 'DETAILED'] as const;
 export const DETAILING_STATUSES = ['PENDING', 'COMPLETED'] as const;
-export type QuoteEntryMode = typeof QUOTE_ENTRY_MODES[number];
-
-function metadata(data: unknown): Record<string, unknown> {
-  return data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {};
-}
-
-export function modoEntradaOrcamento(data: unknown): QuoteEntryMode {
-  return metadata(data).entryMode === 'QUICK' ? 'QUICK' : 'DETAILED';
-}
-
-/** Existing detailed projects retain their drawings. Quick projects require an explicit review. */
-export function projetoTemDesenho(data: unknown): boolean {
-  const value = metadata(data);
-  return value.detailingStatus === 'COMPLETED' || (value.detailingStatus !== 'PENDING' && value.entryMode !== 'QUICK');
-}
-
-/** Dados do projeto depois de uma alteração: mexer no Orçamento Rápido deixa o desenho pendente. */
-export function dadosEntradaProjeto(data: unknown, entryMode: QuoteEntryMode): Record<string, unknown> {
-  return { ...metadata(data), entryMode, detailingStatus: projetoTemDesenho(data) && entryMode === 'DETAILED' ? 'COMPLETED' : 'PENDING' };
-}
-
-/** Só trocar entre Rápido e Detalhado não mexe no desenho: "adicionado" continua até o Orçamento Rápido ser alterado. */
-export function trocarModoEntrada(data: unknown, entryMode: QuoteEntryMode): Record<string, unknown> {
-  return { ...metadata(data), entryMode, detailingStatus: projetoTemDesenho(data) ? 'COMPLETED' : 'PENDING' };
-}

@@ -20,6 +20,8 @@ page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push('console.error: ' + m.text()); });
 
 let savedDocument = emptyTechnicalDocument();
+/** Espera o salvamento automático (2 s depois da mudança) mostrar a mudança no desenho salvo. */
+const salvo = async (condicao, mensagem) => { for (let tentativa = 0; tentativa < 60 && !condicao(); tentativa++) await new Promise(fim => setTimeout(fim, 100)); assert(condicao(), mensagem); };
 let version = 1;
 await page.route('**/api/**', async route => {
   const path = new URL(route.request().url()).pathname;
@@ -100,7 +102,7 @@ try {
   await tracar([[px - 40, py + 15], [px + 40, py + 15], [px + 40, py - 15], [px - 40, py - 15]]);
   await page.getByText(/^Recorte (retangular|oval)/).waitFor();
   await page.getByRole('button', { name: 'É uma cuba', exact: true }).tap();
-  await page.waitForTimeout(2600); // salvamento automático
+  await salvo(() => savedDocument.features.some(recurso => recurso.type === 'SINK'), 'cuba salva automaticamente');
   await shot('02-peca-e-cuba');
 
   const [peca] = savedDocument.pieces;
@@ -130,7 +132,7 @@ try {
   assert.equal((await page.locator('.tec-canvas').boundingBox()).y, topoAntes, 'o desenho não sai do lugar sob o dedo enquanto gira');
   await toque('touchEnd', []);
   await page.getByText('Peça girada para 90°. Use Ctrl+Z para desfazer.').waitFor();
-  await page.waitForTimeout(2600); // salvamento automático
+  await salvo(() => savedDocument.pieces[0]?.rotationDeg === 90, 'giro salvo automaticamente');
   await shot('03-girada-com-o-dedo');
   assert.equal(savedDocument.pieces[0].rotationDeg, 90, 'girada com o dedo');
   console.log('OK: desenho com o dedo no celular — traço organizado em esquadro, escala pela medida, dois dedos cancelam o traço, pinça aproxima, cuba desenhada dentro da peça e peça girada pela bolinha com o dedo; contorno salvo conferido.');

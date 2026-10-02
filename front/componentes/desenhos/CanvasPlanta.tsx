@@ -9,11 +9,11 @@ import { PecaSvg } from './PecaSvg';
 import { Texto, pontosSvg } from './svg';
 import { arredondar, limitesDoDesenho, mundoParaLocal } from './operacoes';
 import { useCamera } from './useCamera';
-import { FONTE_TEXTO_PADRAO_MM, type Ferramenta, type Selecao, type TipoBorda } from './tipos';
+import { FONTE_TEXTO_PADRAO_MM, type Ferramenta, type Selecao, type TipoNoLado } from './tipos';
 
 export type TracoPendente = { pontos: Point[]; fechado: boolean; ladoReferencia: number | null } | null;
 type Props = {
-  documento: TechnicalDocument; selecao: Selecao; ferramenta: Ferramenta; pendenteBorda: TipoBorda | null; tracoPendente: TracoPendente;
+  documento: TechnicalDocument; selecao: Selecao; ferramenta: Ferramenta; pendenteBorda: TipoNoLado | null; tracoPendente: TracoPendente;
   pedidoEnquadrar: number;
   aoSelecionar: (selecao: Selecao) => void;
   aoTocarLado: (pecaId: string, ladoId: string) => void;

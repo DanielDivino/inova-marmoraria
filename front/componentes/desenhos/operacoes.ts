@@ -43,6 +43,13 @@ export function novoRecursoBorda(peca: Piece, ladoId: string, tipo: TipoBorda, i
   });
 }
 
+/** Emenda no meio de um lado reto: divide a peça em pedras (a distância muda no painel). Lado curvo não recebe. */
+export function novaEmenda(peca: Piece, ladoId: string, id: string): Feature | null {
+  const vertice = peca.contour.find((entrada) => entrada.id === ladoId);
+  if (!vertice || Math.abs(vertice.bulge) > 1e-6) return null;
+  return featureSchema.parse({ id, type: 'SEAM', pieceId: peca.id, name: ROTULO_RECURSO.SEAM, x: 0, y: 0, edgeId: ladoId, startMm: Math.round(edgeLength(peca, ladoId) / 2) });
+}
+
 /** Peça (em mm do mundo) que contém o ponto, a de cima primeiro. */
 export function pecaNoPonto(doc: TechnicalDocument, p: Point): Piece | undefined {
   for (const peca of [...doc.pieces].reverse()) {

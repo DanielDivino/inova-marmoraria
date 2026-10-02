@@ -2,15 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { SavedQuoteItem } from '@inova/domain';
-import { projetoTemDesenho } from '@inova/domain';
 import { api } from '../../utilitarios/api';
 import { itemSalvoParaRascunho } from '../../utilitarios/saved-quote';
+import { vinculoDesenho } from '../../utilitarios/desenho-orcamento';
 import { lerPlanoDeProducao, planoParaDesenho } from '../../utilitarios/production-plan';
 import { ESPACO_ENTRE_PROJETOS, organizarProjetos } from '../../utilitarios/organizar-projetos';
 import { DesenhoTecnico } from './TechnicalDrawing';
 
+/**
+ * Desenho do projeto como sai na ordem de serviço: com desenho técnico, a planta dele (aqui, o aviso);
+ * sem ele, as peças do orçamento (ou as do plano de produção dos projetos antigos).
+ */
 export function SavedItemDrawing({ item, notes }: { item: SavedQuoteItem; notes?: string | null }) {
-  if (!projetoTemDesenho(item.drawingData)) return <small>Desenho pendente — orçamento calculado.</small>;
+  const desenhoTecnico = vinculoDesenho({ drawingData: item.drawingData as Record<string, unknown> | undefined });
+  if (desenhoTecnico) return <small className="desenho-do-projeto-aviso">Desenho técnico “{desenhoTecnico.nome}”: a ordem de serviço sai com a planta dele.</small>;
   const draft = itemSalvoParaRascunho(item);
   const plan = lerPlanoDeProducao(item.drawingData);
   // Orçamentos detalhados com peças de produção mostram o desenho pelas peças

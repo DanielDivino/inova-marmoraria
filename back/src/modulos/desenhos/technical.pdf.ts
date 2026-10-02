@@ -1,5 +1,5 @@
 import { dataAtualEmpresa } from '@inova/domain';
-import { areasDaPeca, contourArea, nomeDaPeca, distanciasAteBordas, edgeLength, formatMeasure, NOME_AREA, rotate, sampleContour, type Feature, type Piece, type TechnicalDocument } from '@inova/domain/technical';
+import { areasDaPeca, contourArea, emendasDaPeca, nomeDaPeca, partesDaPeca, distanciasAteBordas, edgeLength, formatMeasure, NOME_AREA, rotate, sampleContour, type Feature, type Piece, type TechnicalDocument } from '@inova/domain/technical';
 import { cabecalhoEmpresaPdf, cabecalhoOrdemServicoPdf, CNPJ_EMPRESA, normalizarNomeMaterial, pdfDate } from '../orcamentos/pdf-layout.js';
 import { COR, ROTULO_RECURSO, centimetros, desenharPlanta, ehRecursoDeBorda, planejarPlanta } from './technical-planta.pdf.js';
 
@@ -110,7 +110,7 @@ export function renderizarPdfTecnico(pdf: PDFKit.PDFDocument, documento: Technic
     pdf.lineWidth(.8).roundedRect(36, y, 523, 56, 4).fillAndStroke(COR.creme, COR.borda);
     pdf.font('Helvetica').fontSize(10).fillColor(COR.rotulo).text('Nenhuma peça foi adicionada a esta revisão.', 36, y + 23, { width: 523, align: 'center', lineBreak: false });
   } else {
-    const recortes = documento.features.filter((recurso) => !ehRecursoDeBorda(recurso));
+    const recortes = documento.features.filter((recurso) => !ehRecursoDeBorda(recurso) && recurso.type !== 'SEAM');
     const bordas = documento.features.filter(ehRecursoDeBorda);
     const quantos = (tipos: Feature['type'][]) => documento.features.filter((recurso) => tipos.includes(recurso.type)).length;
 
@@ -119,7 +119,7 @@ export function renderizarPdfTecnico(pdf: PDFKit.PDFDocument, documento: Technic
       const resumo = ` — ${emLista([
         ...contagem(pecas.length, 'peça', 'peças'), ...contagem(quantos(['SINK', 'SCULPTED_SINK']), 'cuba', 'cubas'), ...contagem(quantos(['CUTOUT']), 'recorte', 'recortes'),
         ...contagem(quantos(['HOLE']), 'furo', 'furos'), ...contagem(quantos(['SKIRT']), 'saia', 'saias'), ...contagem(quantos(['BACKSPLASH']), 'rodabanca', 'rodabancas'),
-        ...contagem(quantos(['EDGE_FINISH']), 'acabamento de borda', 'acabamentos de borda'),
+        ...contagem(quantos(['EDGE_FINISH']), 'acabamento de borda', 'acabamentos de borda'), ...contagem(quantos(['SEAM']), 'emenda', 'emendas'),
       ])}. Medidas em metros: 2m44 = 2,44 m; espessuras em centímetros.`;
       pdf.font('Helvetica').fontSize(9);
       const alturaResumo = pdf.heightOfString(revisao + resumo, { width: 499 }) + 14;
@@ -185,6 +185,14 @@ export function renderizarPdfTecnico(pdf: PDFKit.PDFDocument, documento: Technic
     y += planta.altura + 18;
 
     tabela('Peças', colunasPecas, linhasPecas, totalPecas);
+
+    // Peças com emenda: cada pedra que se corta, com a medida dela (a mesma do fluxo e da entrega).
+    const divididas = pecas.flatMap((peca, indice) => {
+      const partes = partesDaPeca(peca, emendasDaPeca(documento, peca.id));
+      return partes.length > 1 ? partes.map((parte, numero) => [`${String(indice + 1).padStart(2, '0')}.${numero + 1}`, nomeDaPeca(peca, pecas), `Pedra ${numero + 1} de ${partes.length}`,
+        `${formatMeasure(parte.comprimentoMm)} × ${formatMeasure(parte.larguraMm)}`, metrosQuadrados(parte.areaMm2 / 1e6)] as Celula[]) : [];
+    });
+    if (divididas.length) tabela('Divisão em pedras (emendas)', [{ rotulo: 'Item', w: 40 }, { rotulo: 'Peça', w: 150 }, { rotulo: 'Pedra', w: 110 }, { rotulo: 'Medidas', w: 128 }, { rotulo: 'Área', w: 95, alinhar: 'right' }], divididas);
 
     if (recortes.length) tabela('Cubas, recortes e furos', [{ rotulo: 'Item', w: 34 }, { rotulo: 'Tipo', w: 110 }, { rotulo: 'Peça', w: 100 }, { rotulo: 'Medidas', w: 115 }, { rotulo: 'Distância até as bordas', w: 164 }],
       recortes.map((recurso, indice) => {

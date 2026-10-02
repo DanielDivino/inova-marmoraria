@@ -178,17 +178,7 @@
   .inova-theme .project-tab.active { border-color: #dcded2; border-bottom-color: #fff; box-shadow: inset 0 3px #839174; }
   .inova-theme .project-tab.active [role=tab] { color: #3e5549; }
   .inova-theme .compact-customer { color: #717668; }
-  .inova-theme .quote-mode-switch { padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: #eeeee7; gap: 8px; }
-  .inova-theme .quote-mode-switch button { border-radius: 8px; border-color: transparent; background: transparent; color: #717365; padding: 9px 14px; }
-  .inova-theme .quote-mode-switch button[aria-pressed=true] { background: #fff; color: #3e5549; border-color: #dce0d3; box-shadow: 0 2px 5px #303a3108; }
   .inova-theme .project-builder .quote-form-column .section { padding: 16px; margin-bottom: 14px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
-  .inova-theme .project-builder .project-stage-heading { margin-bottom: 14px; }
-  .inova-theme .project-builder .project-stage-heading h2 { font: 400 23px/1.2 Georgia, serif; color: #303a31; }
-  .inova-theme .project-builder .project-stage-heading p { font-family: inherit; color: #7a7e72; font-size: 12px; }
-  .inova-theme .project-stage-heading .stage-badge { background: #ede8db; color: #806943; width: 34px; height: 34px; flex-basis: 34px; }
-  .inova-theme .project-builder .project-step.current .project-step-number, .inova-theme .project-builder .project-step.completed .project-step-number { background: #607453; }
-  .inova-theme .project-builder .project-step.current .project-step-number { box-shadow: 0 0 0 3px var(--canvas), 0 0 0 4px #b6c0a9; }
-  .inova-theme .project-builder .component-card { border-color: #e3e5db; border-radius: 11px; background: #fcfcf9; }
   .inova-theme .project-builder .selected-stone-card { border: 1px solid #e0e1d6; background: #f6f5ef; border-radius: 11px; padding-bottom: 10px; }
   .inova-theme .project-builder .selected-stone-image-frame { aspect-ratio: 2 / 1; max-height: 180px; }
   .inova-theme .project-builder .selected-stone-card > strong { padding-top: 8px; font-size: 12px; }
@@ -197,10 +187,7 @@
   .inova-theme .project-builder .component-material-picker .picker-summary { min-height: 40px; border-radius: 9px; }
   .inova-theme .project-builder :is(.secondary-button, .primary-compact-button) { border-radius: 8px; min-height: 38px; padding: 8px 12px; font-size: 12px; }
   .inova-theme .project-builder .primary-compact-button { background: #3e5549; border-color: #3e5549; }
-  .inova-theme .project-builder .map-side { border-radius: 7px; background: #f0f1e9; }
-  .inova-theme .project-builder .map-side.has-finishes { background: #ece8dc; color: #6a6147; }
-  .inova-theme .project-builder .map-side[aria-expanded=true] { border-color: #9b9b7f; }
-  .inova-theme .project-builder :is(.compact-menu, .edge-menu, .partial, .quote-values-total) { background: #f3f4ec; border-radius: 9px; }
+  .inova-theme .project-builder :is(.compact-menu, .partial, .quote-values-total) { background: #f3f4ec; border-radius: 9px; }
   .inova-theme .project-builder .quote-summary-card { background: #fff; border: 1px solid #dce1d2; border-radius: 14px; box-shadow: var(--shadow); padding: 20px; gap: 14px; }
   .inova-theme .project-builder .quote-summary-card > strong { font: 400 23px/1.3 Georgia, serif; color: #303a31; }
   .inova-theme .project-builder .quote-summary-card .summary-grand-total { background: #edf1e7; color: #3c523b; padding: 16px 12px; border-radius: 9px; margin: 6px 0; align-items: center; }
@@ -313,8 +300,6 @@
   .inova-theme .project-builder .quote-form-column .section, .inova-theme .project-builder .quote-summary-card { padding: 16px; border-radius: 12px; }
   .inova-theme .project-builder .quote-summary-card { position: static; max-height: none; }
   .inova-theme .project-builder .quote-visual-card { margin: -16px -16px 0; }
-  .inova-theme .project-builder .project-stage-heading h2 { font-size: 21px; }
-  .inova-theme .quote-mode-switch { flex-wrap: wrap; }
   .inova-theme .customer-toolbar { grid-template-columns: minmax(0, 1fr); }
   .inova-theme .customer-toolbar .primary-button { justify-self: start; }
   .inova-theme .admin-tabs button { padding: 9px 12px; font-size: 12px; }

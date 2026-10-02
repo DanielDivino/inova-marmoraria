@@ -49,7 +49,6 @@ const rowMaterial = async (numero, name) => {
   await opcoes.locator('.quick-material-override .picker-summary').click();
   await page.getByRole('dialog', { name: 'Escolher material' }).getByRole('button').filter({ hasText: name }).click();
 };
-const step = number => page.locator('.project-step').nth(number - 1).getByRole('button').click();
 // Barra do atendimento: menus "Cliente ▾" e "Projeto ▾" (substituíram as abas).
 const selecionarCliente = async () => { await page.getByRole('button', { name: /^Cliente:/ }).click(); await page.getByRole('menuitem', { name: 'Selecionar cliente existente', exact: true }).click(); };
 const menuProjeto = async () => { await page.getByRole('button', { name: /^Projeto:/ }).click(); await expect(page.getByRole('menu')).toBeVisible(); };
@@ -59,10 +58,9 @@ const excluirProjeto = async name => { await escolherProjeto(name); await menuPr
 const projetoAtivo = name => expect(page.getByRole('button', { name: /^Projeto:/ })).toHaveAccessibleName(`Projeto: ${name}`);
 try {
   await page.goto((process.env.INOVA_VISUAL_URL ?? 'http://127.0.0.1:3001') + '/');
-  // Um projeto novo começa em "Orçamento Rápido" — é onde todo dado comercial
-  // (material, medidas, acabamentos, rodabanca) é sempre criado; "Detalhado" só
-  // divide as peças já orçadas em produção, nunca recalcula o valor.
-  await expect(page.getByRole('button', { name: 'Orçamento Rápido' })).toHaveAttribute('aria-pressed', 'true');
+  // Um projeto novo começa no Orçamento Rápido — é onde todo dado comercial
+  // (material, medidas, acabamentos, rodabanca) é criado; o desenho é o técnico.
+  await expect(page.getByRole('heading', { name: 'Orçamento Rápido' })).toBeVisible();
   await expect(page.locator('dialog[open]')).toHaveCount(0);
   assert.equal(await contarProjetos(), 1);
   await selecionarCliente();
@@ -100,12 +98,6 @@ try {
   await page.getByLabel('Largura da peça 4 (m)', { exact: true }).fill('0,10');
   await rowMaterial(4, 'Branco Itaúnas');
   await expect(page.locator('.summary-grand-total')).toContainText('1.070,00');
-  await page.getByRole('button', { name: 'Adicionar desenhos', exact: true }).click();
-  await step(2);
-  await expect(page.locator('.technical-drawing .drawing-description')).toHaveCount(4);
-  await expect(page.locator('.technical-drawing')).toContainText('Branco Itaúnas');
-  await expect(page.locator('.manufacturing-description')).toContainText('100 × 10 cm');
-  await step(1);
   await page.getByRole('button', { name: 'Adicionar projeto', exact: true }).click();
   assert.equal(await contarProjetos(), 2);
   await projetoAtivo('Projeto 2');
@@ -121,12 +113,7 @@ try {
   await page.getByLabel('Comprimento da peça 1 (m)', { exact: true }).fill('1,00');
   await page.getByLabel('Largura da peça 1 (m)', { exact: true }).fill('0,10');
   await escolherProjeto('Cozinha');
-  // Cozinha já está em Detalhado (produção) desde o passo anterior — a etapa 1
-  // agora mostra as peças de produção (medidas em metros, como no Orçamento
-  // Rápido), não mais o Orçamento Rápido; o valor comercial continua o mesmo, definido lá.
-  await step(1);
-  const root = index => page.locator('.component-editor > .component-card').nth(index);
-  await expect(root(0).getByLabel('Comprimento (m)', { exact: true })).toHaveValue('2,00');
+  await expect(page.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('2,00');
   await expect(page.locator('.summary-grand-total')).toContainText('1.070,00');
   await excluirProjeto('Janela');
   await page.getByRole('alertdialog', { name: 'Excluir Janela?' }).getByRole('button', { name: 'Excluir projeto', exact: true }).click();
@@ -138,21 +125,13 @@ try {
   await escolherProjeto('Cozinha');
   await page.reload();
   assert.equal(await contarProjetos(), 2);
-  await step(1);
-  await expect(root(0).getByLabel('Comprimento (m)', { exact: true })).toHaveValue('2,00');
-  // O material por peça (definido no Orçamento Rápido) aparece na legenda do
-  // desenho de cada peça de produção — a divisão nunca o altera.
-  await expect(root(1).locator('.map-caption').first()).toContainText('Branco Itaúnas');
+  await expect(page.getByLabel('Comprimento da peça 1 (m)', { exact: true })).toHaveValue('2,00');
   mkdirSync('.test-artifacts/projeto-compacto', { recursive: true });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.screenshot({ path: `.test-artifacts/projeto-compacto/componentes-${width}.png`, fullPage: true });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   }
-  await expect(page.locator('#project-step-1')).toBeVisible();
-  await step(2);
-  await expect(page.locator('#project-step-2')).toBeVisible();
-  // Com desenho, o salvar fica nas ações da etapa (não no resumo do orçamento rápido).
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('button', { name: 'Salvar orçamento', exact: true }).first().click();
   await page.waitForURL('**/orcamentos/saved');
@@ -164,5 +143,5 @@ try {
   assert.equal(saved.items[0].environment, null);
   assert.equal(saved.customerId, 'customer');
   assert.deepEqual(errors, []);
-  console.log('OK: cliente compacto, abas independentes, exclusão condicional, materiais e preços por peça, vista no Tipo/descrição presa à soleira, rodabanca, desenho por peça, rascunho e envio pelo Orçamento Rápido.');
+  console.log('OK: cliente compacto, abas independentes, exclusão condicional, materiais e preços por peça, vista no Tipo/descrição presa à soleira, rodabanca, rascunho e envio pelo Orçamento Rápido.');
 } finally { await browser.close(); }

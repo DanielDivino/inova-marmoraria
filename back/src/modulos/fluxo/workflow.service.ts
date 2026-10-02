@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { conferirSelecaoPecas, dataCalendario, dataConclusaoAoMover, distribuirPecas, EXECUCOES_FORA_DO_FLUXO, faseOrcamentoFluxo, mapaPecasSalvo, nomeProjeto, pecasDoProjeto, posicaoEntre, prazoEfetivo, PROJECT_WORKFLOW_STATUSES, somarPecas, subtrairPecas, totalPecas, type MapaPecas } from '@inova/domain';
 import { escopoOrcamentos } from '../../compartilhado/acesso.js';
 import { AppError, type AuthUser } from '../../compartilhado/http.js';
+import type { TechnicalDocument } from '@inova/domain/technical';
+import { desenhosParaPecas } from '../desenhos/desenho-tecnico-do-orcamento.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -45,15 +47,17 @@ const selectCartao = {
 } satisfies Prisma.WorkflowCardSelect;
 type CartaoSalvo = Prisma.WorkflowCardGetPayload<{ select: typeof selectCartao }>;
 
+/** Desenho técnico de cada projeto que tem um (as peças físicas saem dele). */
+type Desenhos = Map<string, TechnicalDocument>;
 /** Peças de cada cartão do projeto: o principal fica com o que não está nos outros. */
-function pecasDosCartoes(projeto: CartaoSalvo['quoteItem']) {
-  const pecas = pecasDoProjeto(projeto);
+function pecasDosCartoes(projeto: CartaoSalvo['quoteItem'], desenhos: Desenhos) {
+  const pecas = pecasDoProjeto(projeto, desenhos.get(projeto.id));
   return { pecas, porCartao: distribuirPecas(pecas, projeto.workflowCards) };
 }
 
-function paraCartao(cartao: CartaoSalvo) {
+function paraCartao(cartao: CartaoSalvo, desenhos: Desenhos) {
   const projeto = cartao.quoteItem;
-  const { pecas, porCartao } = pecasDosCartoes(projeto);
+  const { pecas, porCartao } = pecasDosCartoes(projeto, desenhos);
   const mapa = porCartao.get(cartao.id) ?? {};
   const prazo = prazoEfetivo(projeto.quote);
   const responsavel = projeto.quote.workerAssignments[0]?.worker;
@@ -78,16 +82,19 @@ function paraCartao(cartao: CartaoSalvo) {
 }
 
 /** Cartão sem peças (o principal, quando as partes ficaram com tudo após uma edição) não aparece no quadro. */
-const cartoesVisiveis = (cartoes: CartaoSalvo[]) => cartoes.map((cartao) => ({ cartao, dados: paraCartao(cartao) }))
-  .filter(({ cartao, dados }) => dados.pieces > 0 || cartao.quoteItem.workflowCards.length === 1).map(({ dados }) => dados);
+async function cartoesVisiveis(tx: Tx, cartoes: CartaoSalvo[]) {
+  const desenhos = await desenhosParaPecas(tx, cartoes.map((cartao) => cartao.quoteItem));
+  return cartoes.map((cartao) => ({ cartao, dados: paraCartao(cartao, desenhos) }))
+    .filter(({ cartao, dados }) => dados.pieces > 0 || cartao.quoteItem.workflowCards.length === 1).map(({ dados }) => dados);
+}
 
 export async function listarProjetosFluxo(tx: Tx, user: AuthUser) {
   const cartoes = await tx.workflowCard.findMany({ where: { quoteItem: escopoListagem(user) }, select: selectCartao, orderBy: [{ position: 'asc' }, { id: 'asc' }] });
-  return cartoesVisiveis(cartoes);
+  return cartoesVisiveis(tx, cartoes);
 }
 
 async function cartoesDoProjeto(tx: Tx, quoteItemId: string) {
-  return cartoesVisiveis(await tx.workflowCard.findMany({ where: { quoteItemId }, select: selectCartao, orderBy: [{ position: 'asc' }, { id: 'asc' }] }));
+  return cartoesVisiveis(tx, await tx.workflowCard.findMany({ where: { quoteItemId }, select: selectCartao, orderBy: [{ position: 'asc' }, { id: 'asc' }] }));
 }
 
 /**
@@ -147,7 +154,7 @@ async function juntarNaColuna(tx: Tx, quoteItemId: string, status: ProjectWorkfl
  * que ficou com as peças movidas, já juntado ao que o projeto tinha no destino.
  */
 async function moverPecas(tx: Tx, cartao: CartaoSalvo, status: ProjectWorkflowStatus, selecao?: MapaPecas, afterId?: string | null, beforeId?: string | null) {
-  const disponivel = pecasDosCartoes(cartao.quoteItem).porCartao.get(cartao.id) ?? {};
+  const disponivel = pecasDosCartoes(cartao.quoteItem, await desenhosParaPecas(tx, [cartao.quoteItem])).porCartao.get(cartao.id) ?? {};
   let parcial: MapaPecas | undefined;
   if (selecao) {
     const conferida = conferirSelecaoPecas(disponivel, selecao);
@@ -198,7 +205,7 @@ export async function marcarFaltaMaterial(tx: Tx, cardId: string, input: z.infer
   const cartao = await tx.workflowCard.findFirst({ where: { id: cardId, quoteItem: escopoListagem(user) }, select: { materialMissing: true } });
   if (!cartao) throw new AppError(404, 'Projeto não encontrado no fluxo de trabalho.', 'NOT_FOUND');
   const updated = await tx.workflowCard.update({ where: { id: cardId }, data: { materialMissing: input.faltaMaterial }, select: selectCartao });
-  return { card: paraCartao(updated), previous: cartao.materialMissing };
+  return { card: paraCartao(updated, await desenhosParaPecas(tx, [updated.quoteItem])), previous: cartao.materialMissing };
 }
 
 /**
@@ -207,8 +214,9 @@ export async function marcarFaltaMaterial(tx: Tx, cardId: string, input: z.infer
  */
 export async function entregarOrcamentoSeCompleto(tx: Tx, quote: { id: string; status: string; executionStatus: string; completedAt: Date | null }, user: AuthUser) {
   const projetos = await tx.quoteItem.findMany({ where: { quoteId: quote.id, declinedAt: null }, select: { ...selectPecas, workflowCards: { select: { id: true, pieces: true, status: true }, orderBy: ordemDosCartoes } } });
+  const desenhos = await desenhosParaPecas(tx, projetos);
   const faltaEntregar = projetos.some((projeto) => {
-    const porCartao = distribuirPecas(pecasDoProjeto(projeto), projeto.workflowCards);
+    const porCartao = distribuirPecas(pecasDoProjeto(projeto, desenhos.get(projeto.id)), projeto.workflowCards);
     return projeto.workflowCards.some((cartao) => cartao.status !== 'DELIVERED' && totalPecas(porCartao.get(cartao.id) ?? {}) > 0);
   });
   if (faltaEntregar) return false;

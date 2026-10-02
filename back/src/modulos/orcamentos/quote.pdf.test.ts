@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import PDFDocument from 'pdfkit';
-import { renderizarPdfOrcamento, renderizarPdfDesenhoProjeto } from './quote.pdf.js';
+import { renderizarPdfOrcamento, renderizarExportacao } from './quote.pdf.js';
 import { montarLinhasPdf } from './quote.pdf-lines.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type { QuotePdfOptions } from './quote.pdf-options.js';
@@ -46,20 +46,15 @@ describe('Opções e agrupamento comercial do PDF', () => {
     expect(texts).toContain('R$ 1.500,00');
   });
 
-  it('usa o mesmo orçamento comercial para projetos rápidos e só inclui desenhos concluídos', async () => {
+  it('a ordem de serviço sai para todo projeto, com as peças do Orçamento Rápido (sem "desenho pendente")', async () => {
     const quick = { ...item, projectName: 'Cozinha rápida', drawingData: { entryMode: 'QUICK', detailingStatus: 'PENDING' }, components: [{ id: 'top', label: 'Bancada', lengthMm: 2400, widthMm: 600, quantity: 1, billableArea: 1.44, edges: [] }] };
     const result = await render(1008, [quick], 'orcamento-rapido');
     const texts = result.calls.map(([text]) => text);
     expect(texts).toContain('VALOR DO ORÇAMENTO À VISTA');
     expect(texts).toContain('VALOR DO ORÇAMENTO TOTAL NO CARTÃO');
-    expect(texts).not.toContain('OS');
-    expect(result.pages).toBe(0);
-    const detailed = { ...quick, projectName: 'Banheiro detalhado', drawingData: { entryMode: 'DETAILED', detailingStatus: 'COMPLETED' } };
-    const mixed = await render(2016, [quick, detailed]);
-    const start = mixed.calls.findIndex(([text]) => text === 'OS');
+    const start = result.calls.findIndex(([text]) => text === 'OS');
     expect(start).toBeGreaterThan(0);
-    expect(mixed.calls.slice(start).some(([text]) => text.includes('Cozinha rápida'))).toBe(false);
-    expect(mixed.calls.slice(start).some(([text]) => text.includes('Banheiro detalhado'))).toBe(true);
+    expect(result.calls.slice(start).some(([text]) => text.includes('Cozinha rápida'))).toBe(true);
   });
   it.each(['Verde Ubatuba', 'Verde\nUbatuba'])('mantém %s em uma linha efetivamente renderizada no comercial e nos desenhos', async (materialNameSnapshot) => {
     const component = { id: 'top', label: 'Bancada', lengthMm: 2000, widthMm: 600, quantity: 1, billableArea: 1.2, edges: [] };
@@ -293,19 +288,19 @@ describe('Valores do orçamento no PDF', () => {
   });
 });
 
-describe('Desenho de um único projeto', () => {
+describe('Ordem de serviço de um projeto (Exportar do projeto, só a OS)', () => {
+  const soOs = { orcamento: false, valoresIndividuais: false, ordemServico: true, tecnicos: new Map() };
   it('imprime só as folhas de OS do projeto escolhido, com o número da OS completa', async () => {
-    const detalhado = { drawingData: { entryMode: 'DETAILED', detailingStatus: 'COMPLETED' } };
     const component = { id: 'top', label: 'Bancada', lengthMm: 2000, widthMm: 600, quantity: 1, billableArea: 1.2, edges: [] };
     const items = [
-      { ...item, ...detalhado, id: 'cozinha', projectName: 'Cozinha', components: [component] },
-      { ...item, ...detalhado, id: 'banheiro', projectName: 'Banheiro', components: [component] },
+      { ...item, id: 'cozinha', projectName: 'Cozinha', components: [component] },
+      { ...item, id: 'banheiro', projectName: 'Banheiro', components: [component] },
     ];
     const pdf = new PDFDocument({ margin: 36 });
     const printed = vi.spyOn(pdf, 'text');
     const pages = vi.spyOn(pdf, 'addPage');
     const finished = new Promise<void>((resolve) => { pdf.on('data', () => undefined); pdf.on('end', resolve); });
-    renderizarPdfDesenhoProjeto(pdf, { number: 'OS-1', customerNameSnapshot: 'Cliente', items }, 'banheiro');
+    renderizarExportacao(pdf, { number: 'OS-1', customerNameSnapshot: 'Cliente', items }, soOs, 'banheiro');
     pdf.end();
     await finished;
     const texts = printed.mock.calls.map(([text]) => String(text));
@@ -317,12 +312,11 @@ describe('Desenho de um único projeto', () => {
   });
   it('não imprime o tipo de produto interno ("Bancada") em projeto que só tem soleira', async () => {
     const soleira = { id: 'soleira', label: '', componentType: 'THRESHOLD', lengthMm: 1250, widthMm: 150, quantity: 3, billableArea: .5625, edges: [] };
-    const detalhado = { drawingData: { entryMode: 'DETAILED', detailingStatus: 'COMPLETED' } };
     for (const projectName of ['SOLEIRAS', '']) {
       const pdf = new PDFDocument({ margin: 36 });
       const printed = vi.spyOn(pdf, 'text');
       const finished = new Promise<void>((resolve) => { pdf.on('data', () => undefined); pdf.on('end', resolve); });
-      renderizarPdfDesenhoProjeto(pdf, { number: 'SET-1', customerNameSnapshot: 'Cliente', items: [{ ...item, ...detalhado, id: 'soleiras', projectName, components: [soleira] }] }, 'soleiras');
+      renderizarExportacao(pdf, { number: 'SET-1', customerNameSnapshot: 'Cliente', items: [{ ...item, id: 'soleiras', projectName, components: [soleira] }] }, soOs, 'soleiras');
       pdf.end();
       await finished;
       const texts = printed.mock.calls.map(([text]) => String(text));

@@ -17,6 +17,8 @@ export type Modo = 'LIVRE' | 'MANUAL';
 /** AREA: marcar área seca/molhada no balcão (clicar, puxar e clicar). */
 export type Ferramenta = 'SELECIONAR' | 'TEXTO' | 'COTA' | 'TRACO_PECA' | 'TRACO_RECORTE' | 'AREA';
 export type TipoBorda = 'SKIRT' | 'BACKSPLASH' | 'EDGE_FINISH';
+/** O que se põe tocando num lado: saia, rodabanca, acabamento ou emenda (divisão da peça em pedras). */
+export type TipoNoLado = TipoBorda | 'SEAM';
 export type TipoCorpo = 'SINK' | 'SCULPTED_SINK' | 'CUTOUT' | 'HOLE';
 export type Selecao =
   | { tipo: 'peca'; id: string }
@@ -27,7 +29,7 @@ export type Selecao =
 /** Lado aberto para digitar a medida (toque no lado ou na cota). */
 export type LadoEmEdicao = { pecaId: string; ladoId: string } | null;
 
-export const ROTULO_RECURSO: Record<Feature['type'], string> = { SINK: 'Cuba', SCULPTED_SINK: 'Cuba esculpida', CUTOUT: 'Recorte / cooktop', HOLE: 'Furo', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', EDGE_FINISH: 'Acabamento de borda' };
+export const ROTULO_RECURSO: Record<Feature['type'], string> = { SINK: 'Cuba', SCULPTED_SINK: 'Cuba esculpida', CUTOUT: 'Recorte / cooktop', HOLE: 'Furo', SKIRT: 'Saia', BACKSPLASH: 'Rodabanca', EDGE_FINISH: 'Acabamento de borda', SEAM: 'Emenda' };
 export const ROTULO_PERFIL: Record<Feature['profile'], string> = { SIMPLE: 'Simples', MITER45: 'Meia-esquadria 45°', BEVEL: 'Chanfro', ROUND: 'Boleado' };
 export const ROTULO_REVISAO: Record<Revisao['status'], string> = { IN_REVIEW: 'Em conferência', APPROVED: 'Aprovada', RETURNED: 'Devolvida', RELEASED: 'Liberada', SUPERSEDED: 'Substituída' };
 export const RECURSOS_DE_BORDA: Feature['type'][] = ['SKIRT', 'BACKSPLASH', 'EDGE_FINISH'];

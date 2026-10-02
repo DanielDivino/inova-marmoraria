@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { comPlanoDeProducao, dadosEntradaProjeto, planoDeProducao } from '@inova/domain';
+import { comPlanoDeProducao, planoDeProducao } from '@inova/domain';
 import { duplicarProjeto } from './duplicar-projeto';
 import { reconciliarPlano } from './production-plan';
 import type { DraftItem } from '../componentes/orcamento/types';
@@ -13,7 +13,7 @@ const projeto = (): DraftItem => {
     ],
     cutouts: [{ id: 'r1', componentIndex: 0, cutoutType: 'SINK', label: 'Cuba', quantity: 1 }],
     serviceIds: ['instalacao'], serviceQuantities: { instalacao: '1' }, serviceAppliedValues: { instalacao: '200' },
-    drawingData: { ...dadosEntradaProjeto(undefined, 'QUICK'), desenhoTecnico: { designId: 'd1', nome: 'Cozinha', versao: 2, total: 1700, aceitoEm: '2026-09-29' } },
+    drawingData: { desenhoTecnico: { designId: 'd1', nome: 'Cozinha', versao: 2, total: 1700, aceitoEm: '2026-09-29' } },
   };
   return { ...item, drawingData: comPlanoDeProducao(item.drawingData, reconciliarPlano(item, undefined)) };
 };
@@ -65,6 +65,5 @@ describe('duplicar projeto', () => {
   it('continua no Orçamento Rápido, mas sem o vínculo com o desenho técnico', () => {
     const copia = duplicarProjeto(projeto(), 'Cozinha (cópia)', novoId);
     expect(copia.drawingData).not.toHaveProperty('desenhoTecnico');
-    expect(copia.drawingData).toMatchObject(dadosEntradaProjeto(undefined, 'QUICK'));
   });
 });

@@ -83,7 +83,8 @@ export function estimarDesenho(doc: TechnicalDocument, catalogo: CatalogoEstimat
       quantidade: arredondarArea(partes.reduce((soma, parte) => soma + areaCobradaComponenteM2(parte, m2Fechado), 0)), unidade: 'm²', ...(detalhe ? { detalhe } : {}),
       ...('material' in pedra ? { precoUnitario: pedra.preco, subtotal: calcularTotalOrcamento(partes.map((parte) => valorDaPedra(parte, pedra.preco))) } : { precoUnitario: null, subtotal: null, semPreco: pedra.semPreco }) });
 
-    for (const recurso of doc.features.filter((entrada) => entrada.pieceId === peca.id)) {
+    // A emenda divide a peça em pedras para produzir; o valor (pela área) não muda.
+    for (const recurso of doc.features.filter((entrada) => entrada.pieceId === peca.id && entrada.type !== 'SEAM')) {
       const base = { id: recurso.id, pieceId: peca.id, grupo: 'SERVICO' as const };
       if (ehPecaNoLado(recurso.type)) {
         const faixa = item.componentes.find((componente) => componente.recursoId === recurso.id);

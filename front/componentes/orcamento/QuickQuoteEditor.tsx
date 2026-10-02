@@ -14,6 +14,7 @@ import { servicoDeRecorte } from '../../utilitarios/service-groups';
 import { SeletorTipoDescricao } from './TypeDescriptionSelector';
 import { aplicarMaterialProjeto, criarComponenteRapido, escolherPedraDaPeca } from '../../utilitarios/quick-quote';
 import { CampoMetros } from './CampoMetros';
+import { OpcoesPeitoril, peitorilComLargura } from './OpcoesPeitoril';
 
 type Service = { id: string; name: string; category: string; billingUnit: 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED'; currentPrice: number };
 type Props = { item: DraftItem; materials: ComponentMaterial[]; material?: ComponentMaterial; services: Service[];
@@ -211,7 +212,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
         <tr data-quick-row={component.id} role="row">
           <td role="cell" className="quick-description">{alca(true)}<span className="quick-mobile-label">Peça {index + 1} · Tipo / descrição</span><button type="button" className="quick-collapse-toggle" aria-expanded={mobileExpanded.has(component.id)} aria-controls={`quick-fields-${component.id}`} onClick={() => toggleMobileRow(component.id)}><span>Peça {index + 1} · {component.label.trim() || componentTypeLabels[component.componentType]}</span><span aria-hidden="true">{mobileExpanded.has(component.id) ? '⌃' : '⌄'}</span></button><SeletorTipoDescricao component={component} descriptions={item.components.map((entry) => entry.label)} ariaLabel={`Tipo da peça ${index + 1}`} onChange={(patch) => update(component.id, patch)} />{!tipoPresoAoLado(component.componentType) && component.parentComponentId && <small>↳ {item.components.find(parent => parent.id === component.parentComponentId)?.label || 'Peça principal'}{component.parentSide ? ` · ${rotuloLadoBorda(component.parentSide)}` : ''}</small>}</td>
           <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-length`}>Comprimento (m)</label><CampoMetros id={`quick-${component.id}-length`} label={`Comprimento da peça ${index + 1} (m)`} value={component.lengthCm} onChange={lengthCm => update(component.id, { lengthCm })} onKeyDown={event => enter(event, index, 'length')} /></td>
-          <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-width`}>Largura (m)</label><CampoMetros id={`quick-${component.id}-width`} label={`Largura da peça ${index + 1} (m)`} value={component.widthCm} onChange={widthCm => update(component.id, { widthCm })} onKeyDown={event => enter(event, index, 'width')} /></td>
+          <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-width`}>Largura (m)</label><CampoMetros id={`quick-${component.id}-width`} label={`Largura da peça ${index + 1} (m)`} value={component.widthCm} onChange={widthCm => update(component.id, peitorilComLargura(component, widthCm))} onKeyDown={event => enter(event, index, 'width')} /></td>
           <td role="cell"><label className="quick-mobile-label" htmlFor={`quick-${component.id}-quantity`}>Quantidade</label><input id={`quick-${component.id}-quantity`} aria-label={`Quantidade da peça ${index + 1}`} inputMode="numeric" enterKeyHint="next" type="number" min="1" step="1" value={component.quantity || ''} onChange={event => update(component.id, { quantity: Number(event.target.value) })} onKeyDown={event => enter(event, index, 'quantity')} /></td>
           <td role="cell" className="quick-number quick-area"><span className="quick-mobile-label">Área (m²)</span><span>{area(component).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</span></td>
           <td role="cell" className="quick-number quick-item-total"><span className="quick-mobile-label">Valor</span><strong>{formatarMoeda(value(component))}</strong>{component.appliedTotal !== undefined && <small>Valor ajustado</small>}</td>
@@ -233,6 +234,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
               <button type="button" className="quick-add-acabamento" onClick={() => setServiceModalComponentId(component.id)}><Icone nome="mais" />Adicionar acabamento</button>
             </div>
           </div>
+          {component.componentType === 'SILL' && <OpcoesPeitoril component={component} onChange={patch => update(component.id, patch)} />}
           <div className="quick-piece-finishes">
             {/* Um acabamento por linha: nome · lado · (altura, se saia/vista) · Qtd · ×. */}
             {component.edges.length > 0 || component.raioCantosCm !== undefined ? <ul className="quick-acabamentos">

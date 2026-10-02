@@ -1,4 +1,4 @@
-import { areasDaPeca, cotasDaPeca, edgeLength, edgePoint, faixaDentroDaPeca, formatMeasure, NOME_AREA, sampleContour, type Feature, type Piece } from '@inova/domain/technical';
+import { areasDaPeca, cotasDaPeca, edgeLength, edgePoint, faixaDentroDaPeca, formatMeasure, linhaDaEmenda, NOME_AREA, sampleContour, type Feature, type Piece } from '@inova/domain/technical';
 import { CotasPeca } from './CotasPeca';
 import { anguloLegivel, pontosSvg, Texto } from './svg';
 import { ROTULO_PERFIL, type Selecao } from './tipos';
@@ -107,6 +107,16 @@ export function PecaSvg({ peca, recursos, escala, selecao, destacarLados, mostra
         return <g key={recurso.id} className={classe} {...dados}>
           <polygon points={pontosSvg([...trecho, ...fora])} strokeWidth={px(1.2)} strokeDasharray={recurso.type === 'SKIRT' ? `${px(5)} ${px(3)}` : undefined} {...dados} />
           <Texto x={meio.x + n.x * px(9)} y={meio.y + n.y * px(9)} tamanho={px(9.5)} angulo={angulo} className="tec-recurso-rotulo" pointerEvents="none">{recurso.name} {Math.round(recurso.heightMm / 10)}cm</Texto>
+        </g>;
+      }
+      // Emenda: linha de corte tracejada de lado a lado (a de baixo, larga e invisível, é para tocar).
+      if (recurso.type === 'SEAM') {
+        const linha = linhaDaEmenda(peca, recurso);
+        if (!linha) return null;
+        const { a, b } = linha;
+        return <g key={recurso.id} className={classe} {...dados}>
+          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tec-emenda-toque" strokeWidth={px(16)} {...dados} />
+          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tec-emenda" strokeWidth={px(ativo ? 3.2 : 2.2)} strokeDasharray={`${px(9)} ${px(5)}`} {...dados} />
         </g>;
       }
       if (recurso.type === 'HOLE') return <circle key={recurso.id} cx={recurso.x} cy={recurso.y} r={recurso.diameterMm / 2} className={classe} strokeWidth={px(1.4)} {...dados} />;
