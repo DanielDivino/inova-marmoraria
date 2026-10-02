@@ -601,8 +601,12 @@ body,
 /* Projetos do orçamento: blocos compactos em tons pastel, que abrem para os detalhes. */
 .projetos-orcamento { display: grid; gap: 12px; margin-bottom: 16px; }
 .projetos-orcamento-topo { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-.projetos-orcamento-topo h2 { display: flex; align-items: baseline; gap: 8px; margin: 0; font: 600 16px/1.2 Georgia, serif; color: var(--ink); }
-.projetos-orcamento-topo h2 small { font: 600 12px system-ui, sans-serif; color: var(--muted); }
+.projetos-orcamento-situacao { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.projetos-orcamento-situacao h2 { display: flex; flex: none; align-items: baseline; gap: 7px; margin: 0; color: var(--ink); font: 600 16px/1.2 Georgia, serif; white-space: nowrap; }
+.projetos-orcamento-situacao h2 small { color: var(--muted); font: 600 12px system-ui, sans-serif; }
+.projetos-orcamento-situacao > .abas-filtro { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; margin: 0 0 0 auto; padding-bottom: 3px; scrollbar-width: none; }
+.projetos-orcamento-situacao > .abas-filtro::-webkit-scrollbar { display: none; }
+.projetos-orcamento-situacao .abas-filtro-grupo { flex-wrap: nowrap; }
 .projetos-orcamento-topo .painel-filtros { flex: 1 1 100%; width: 100%; margin: 0; padding: 12px; }
 .projetos-orcamento-topo .painel-filtros-campos { gap: 10px; }
 .projeto-acompanhamento-resumo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 2px 0 12px; color: var(--muted); font-size: 12px; }

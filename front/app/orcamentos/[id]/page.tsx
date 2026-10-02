@@ -282,18 +282,20 @@ export default function QuoteDetailPage() {
     {projetoFuncionario && <JanelaFuncionarioProjeto projeto={nomeProjeto(projetoFuncionario)} funcionarios={workers} selecionado={funcionarioDoProjeto(projetoFuncionario)?.id ?? ''} ocupada={salvandoFuncionario} aoFechar={() => setProjetoFuncionario(null)} aoSalvar={(workerId) => void salvarFuncionarioProjeto(projetoFuncionario, workerId)} />}
     <section className="projetos-orcamento" aria-label="Projetos do orçamento">
       <header className="projetos-orcamento-topo">
-        <h2>Projetos <small>{itensVisiveis.length} de {quote.items.length}</small></h2>
         <PainelFiltros rotulo="Filtrar projetos deste orçamento" ativos={filtrosAtivos} aoLimpar={() => { setBuscaProjeto(''); setFiltroProjetos('todos'); setFiltroPrazo('todos'); setFiltroFuncionario(''); }}>
           <CampoFiltro rotulo="Buscar projeto" icone="buscar"><input type="search" value={buscaProjeto} onChange={(event) => setBuscaProjeto(event.target.value)} placeholder="Nome do projeto ou ambiente" /></CampoFiltro>
           <CampoFiltro rotulo="Prazo" icone="prazo"><select value={filtroPrazo} onChange={(event) => setFiltroPrazo(event.target.value as typeof filtroPrazo)}><option value="todos">Todos os prazos</option><option value="com-prazo">Com prazo</option><option value="sem-prazo">Sem prazo</option></select></CampoFiltro>
           {canTeam && <CampoFiltro rotulo="Funcionário" icone="equipe"><select value={filtroFuncionario} onChange={(event) => setFiltroFuncionario(event.target.value)}><option value="">Todos os funcionários</option>{workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select></CampoFiltro>}
         </PainelFiltros>
       </header>
+      <div className="projetos-orcamento-situacao">
+        <h2>Projetos <small>{itensVisiveis.length} de {quote.items.length}</small></h2>
       <AbasFiltro rotulo="Situação dos projetos" valor={filtroProjetos} aoEscolher={setFiltroProjetos} grupos={[{ opcoes: [
         { valor: 'todos', rotulo: 'Todos', icone: 'documento', total: quote.items.length },
         { valor: 'aprovados', rotulo: 'Aprovados', icone: 'aprovado', total: quote.items.length - recusados.length },
         { valor: 'nao-aprovados', rotulo: 'Não aprovados', icone: 'recusado', total: recusados.length },
       ] }]} />
+      </div>
       <div className="projetos-blocos">{itensVisiveis.length ? itensVisiveis.map(({ item, indice }) => <BlocoProjeto key={item.id} id={`projeto-${item.id}`} tom={indice}
         nome={nomeProjeto(item)} valor={formatarMoeda(item.total)} aberto={abertos.has(item.id)}
         resumo={[[...new Set(item.components.length ? item.components.map(component => component.materialNameSnapshot ?? item.materialNameSnapshot) : [item.materialNameSnapshot])].join(' · '), `${item.billedQuantity.toLocaleString('pt-BR')} m²`, item.components.length ? `${item.components.length} ${item.components.length === 1 ? 'peça' : 'peças'}` : ''].filter(Boolean).join(' · ')}
