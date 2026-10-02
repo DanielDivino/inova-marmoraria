@@ -19,6 +19,7 @@ import { JanelaNomes } from '../../../componentes/orcamento/JanelaNomes';
 import { JanelaNaoAprovado, type EscolhaNaoAprovado } from '../../../componentes/orcamento/JanelaNaoAprovado';
 import { Icone, type NomeIcone } from '../../../componentes/filtros/Filtros';
 import { MenuAcoes, type AcaoMenu } from '../../../componentes/MenuAcoes';
+import { SecaoRecolhivel } from '../../../componentes/SecaoRecolhivel';
 import { EditarContato } from '../../../componentes/clientes/EditarContato';
 import { HistoricoOrcamento } from '../../../componentes/orcamento/HistoricoOrcamento';
 import { Caminho } from '../../../componentes/Caminho';
@@ -272,8 +273,7 @@ export default function QuoteDetailPage() {
     {error && <p role="alert" className="form-error">{error}</p>}
     {editandoContato && <EditarContato clienteId={quote.customerId} aoFechar={() => setEditandoContato(false)} aoSalvar={async (dados) => { setQuote(await api<Quote>(`/quotes/${id}/contact`, { method: 'PATCH', body: JSON.stringify(dados) })); }} />}
     {(quote.parentQuote || Boolean(quote.complements?.length)) && <section className="detail-card"><span>PROJETOS VINCULADOS</span>{quote.parentQuote && <Link href={enderecoOrcamento(quote.parentQuote.id, origem)}>Complemento de {quote.parentQuote.number}</Link>}{quote.complements?.map((complement) => <Link href={enderecoOrcamento(complement.id, origem)} key={complement.id}>{complement.number} · {formatarMoeda(Number(complement.netTotal))}</Link>)}<small>Os valores dos complementos são contabilizados separadamente do orçamento original.</small></section>}
-    <section className="quote-workbench" aria-label="Acompanhamento do serviço">
-      <h2 className="quote-workbench-titulo"><Icone nome="equipe" tamanho={16} />{canTeam ? 'Equipe, prazo e observação' : 'Prazo e observação'}</h2>
+    <SecaoRecolhivel className="quote-workbench" rotulo="Acompanhamento do serviço" icone="equipe" titulo={canTeam ? 'Equipe, prazo e observação' : 'Prazo e observação'}>
       {/* Equipe, prazos e observações do orçamento (as do PDF): salvos juntos. Fica montada ao trocar de aba, sem perder o que foi digitado. */}
       <form key={formVersao} className="quote-workbench-aba" onSubmit={salvarAba} onInput={marcarAlterado} onChange={marcarAlterado}>
         <div className={`quote-workbench-work${canTeam ? '' : ' sem-equipe'}`}>
@@ -298,7 +298,7 @@ export default function QuoteDetailPage() {
           <div>{trackingSaved && <span role="status">Salvo ✓</span>}<button type="button" className="botao-contorno" disabled={!alterado || savingTracking} onClick={descartar}>Descartar</button><button className="botao-principal" disabled={!alterado || savingTracking}>{savingTracking ? 'Salvando…' : 'Salvar alterações'}</button></div>
         </footer>
       </form>
-    </section>
+    </SecaoRecolhivel>
     <section className="projetos-orcamento" aria-label="Projetos do orçamento">
       <header className="projetos-orcamento-topo">
         <h2>Projetos <small>{quote.items.length}</small></h2>

@@ -110,7 +110,7 @@ html.inova-dark .inova-theme .catalogo-valor.valor-alto { color: #17130e; }
 .catalogo-ligar { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
 .catalogo-ligar select { min-height: 42px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 14px; }
 
-@media (max-width: 760px) {
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   .catalogo-formulario { grid-template-columns: 1fr; }
   .catalogo-notas > div { grid-template-columns: 1fr; gap: 6px; }
   .catalogo-familias, .catalogo-grade-acabamentos { grid-template-columns: 1fr; }

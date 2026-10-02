@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Icone, type NomeIcone } from './filtros/Filtros';
+import { Icone, useCelular, type NomeIcone } from './filtros/Filtros';
+import { Janela } from './Janela';
 
 export type AcaoMenu = { rotulo: string; icone: NomeIcone; href?: string; aoEscolher?: () => void; perigo?: boolean; desabilitada?: boolean };
 
@@ -12,6 +13,7 @@ export type AcaoMenu = { rotulo: string; icone: NomeIcone; href?: string; aoEsco
  */
 export function MenuAcoes({ rotulo, titulo, grupos }: { rotulo: string; titulo?: string; grupos: AcaoMenu[][] }) {
   const [aberto, setAberto] = useState(false);
+  const celular = useCelular();
   const caixa = useRef<HTMLDivElement>(null);
   const botao = useRef<HTMLButtonElement>(null);
   const visiveis = grupos.filter((grupo) => grupo.length);
@@ -30,13 +32,11 @@ export function MenuAcoes({ rotulo, titulo, grupos }: { rotulo: string; titulo?:
     document.addEventListener('keydown', tecla);
     itens()[0]?.focus();
     return () => { document.removeEventListener('pointerdown', fora); document.removeEventListener('keydown', tecla); };
-  }, [aberto]);
+  }, [aberto, celular]);
   if (!visiveis.length) return null;
   const fechar = () => setAberto(false);
-  return <div className="menu-acoes" ref={caixa}>
-    <button ref={botao} type="button" className="botao-contorno menu-acoes-botao" aria-haspopup="menu" aria-expanded={aberto} aria-label={rotulo} title={rotulo} onClick={() => setAberto((atual) => !atual)}><Icone nome="opcoes" /></button>
-    {aberto && <div className="menu-acoes-lista" role="menu" aria-label={rotulo}>
-      {titulo && <p className="menu-acoes-titulo" aria-hidden="true">{titulo}</p>}
+  const lista = <div className="menu-acoes-lista" role="menu" aria-label={rotulo}>
+      {titulo && !celular && <p className="menu-acoes-titulo" aria-hidden="true">{titulo}</p>}
       {visiveis.map((grupo, indice) => <Fragment key={indice}>
         {indice > 0 && <i className="menu-acoes-divisor" aria-hidden="true" />}
         {grupo.map((acao) => {
@@ -47,6 +47,11 @@ export function MenuAcoes({ rotulo, titulo, grupos }: { rotulo: string; titulo?:
             : <button key={acao.rotulo} type="button" role="menuitem" className={classe} aria-disabled={acao.desabilitada || undefined} disabled={acao.desabilitada} onClick={() => { fechar(); acao.aoEscolher?.(); }}>{conteudo}</button>;
         })}
       </Fragment>)}
-    </div>}
+    </div>;
+  return <div className="menu-acoes" ref={caixa}>
+    <button ref={botao} type="button" className="botao-contorno menu-acoes-botao" aria-haspopup={celular ? 'dialog' : 'menu'} aria-expanded={aberto} aria-label={rotulo} title={rotulo} onClick={() => setAberto((atual) => !atual)}><Icone nome="opcoes" /></button>
+    {aberto && (celular
+      ? <Janela aberta aoFechar={fechar} titulo={titulo ?? rotulo} className="janela-menu-acoes" largura="pequena">{lista}</Janela>
+      : lista)}
   </div>;
 }

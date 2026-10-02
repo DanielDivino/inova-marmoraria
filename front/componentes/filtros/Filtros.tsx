@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Janela } from '../Janela';
+import { CONSULTA_CELULAR } from '../../utilitarios/tela';
 import './filtros.css';
 
 /** Ícones de traço usados nas abas, nos campos e nos botões das listas. */
@@ -119,7 +120,7 @@ export function CampoFiltro({ rotulo, icone, grupo, children }: { rotulo: string
 export function useCelular() {
   const [celular, setCelular] = useState(false);
   useEffect(() => {
-    const consulta = window.matchMedia('(max-width: 760px)');
+    const consulta = window.matchMedia(CONSULTA_CELULAR);
     const atualizar = () => setCelular(consulta.matches);
     atualizar();
     consulta.addEventListener('change', atualizar);
@@ -186,8 +187,7 @@ export function ModalFiltros({ aberto, aoFechar, titulo, children, rodape, rotul
 
 /** Atalhos no cabeçalho das páginas de cadastro. */
 export function AtalhosCabecalho() {
-  // No computador ficam na barra de cima, ao lado do nome da tela (a página não perde uma faixa só
-  // para eles); no celular, no topo da página.
+  // No celular os atalhos ficam na navegação inferior e no menu de telas.
   const celular = useCelular();
   const [alvo, setAlvo] = useState<HTMLElement | null>(null);
   useEffect(() => { setAlvo(document.getElementById('application-header-tabs')); }, []);
@@ -195,5 +195,6 @@ export function AtalhosCabecalho() {
     <Link className="botao-contorno" href="/mostruario"><Icone nome="camadas" />Mostruário</Link>
     <Link className="botao-contorno botao-contorno-destaque" href="/"><Icone nome="mais" />Novo orçamento</Link>
   </div>;
-  return !celular && alvo ? createPortal(atalhos, alvo) : atalhos;
+  if (celular) return null;
+  return alvo ? createPortal(atalhos, alvo) : atalhos;
 }

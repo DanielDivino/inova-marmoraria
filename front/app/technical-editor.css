@@ -127,7 +127,7 @@ html.inova-dark .inova-theme .tec-aviso { background: #3c3219; color: #f1d58a; }
 }
 
 /* Celular: desenho ocupando a tela, ferramentas embaixo e painéis como folhas que sobem. */
-@media (max-width: 760px), (max-width: 1024px) and (max-height: 500px) {
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   /* Coluna na altura da tela (menos a barra do app): o desenho fica com o espaço que sobrar, acima das barras fixas. */
   .tec-editor { --tec-altura-ferramentas: calc(78px + env(safe-area-inset-bottom)); --tec-altura-estimativa: 48px; display: flex; flex-direction: column; box-sizing: border-box; height: calc(100dvh - 64px); padding: 0 0 calc(var(--tec-altura-ferramentas) + var(--tec-altura-estimativa)); }
   .tec-cabecalho { padding: 8px 12px 0; align-items: center; }
@@ -166,7 +166,7 @@ html.inova-dark .inova-theme .tec-conferencia .ok { color: #9fd8b4; }
 .tec-folha-traco p { margin: 0; color: var(--muted); font-size: 13px; }
 .tec-referencia { display: flex; gap: 8px; }
 .tec-referencia input { flex: 1; min-width: 0; min-height: 46px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #fff); color: var(--ink); font: inherit; font-size: 17px; }
-@media (max-width: 760px), (max-width: 1024px) and (max-height: 500px) { .tec-modos { order: -1; width: 100%; } .tec-modos button { flex: 1; min-height: 44px; } .tec-folha-traco { left: 8px; right: 8px; bottom: 8px; } }
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) { .tec-modos { order: -1; width: 100%; } .tec-modos button { flex: 1; min-height: 44px; } .tec-folha-traco { left: 8px; right: 8px; bottom: 8px; } }
 .tec-folha-traco > * { min-width: 0; }
 .tec-referencia input { width: 100%; }
 .tec-referencia .botao-destaque { flex: none; }
@@ -176,7 +176,7 @@ html.inova-dark .inova-theme .tec-conferencia .ok { color: #9fd8b4; }
 .tec-3d canvas { display: block; }
 .tec-3d-vazio { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--muted); font-size: 14px; pointer-events: none; }
 .tec-3d-enquadrar { position: absolute; top: 10px; right: 10px; min-height: 40px !important; }
-@media (max-width: 760px), (max-width: 1024px) and (max-height: 500px) { .tec-vista-abas { flex: 1; } .tec-vista-abas button { flex: 1; min-height: 42px; } }
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) { .tec-vista-abas { flex: 1; } .tec-vista-abas button { flex: 1; min-height: 42px; } }
 
 /* Estimativa */
 .tec-lateral { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
@@ -206,7 +206,7 @@ html.inova-dark .inova-theme .tec-conferencia .ok { color: #9fd8b4; }
 .tec-totais div:first-child dd { color: var(--green); font-size: 17px; }
 html.inova-dark .inova-theme :is(.tec-estimativa li.sem-preco > strong, .tec-estimativa li .tec-motivo) { color: #f0a097; }
 html.inova-dark .inova-theme .tec-resumo-estimativa small { background: #3c3219; color: #f1d58a; }
-@media (max-width: 760px), (max-width: 1024px) and (max-height: 500px) {
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   .tec-barra-estimativa { position: fixed; z-index: 30; left: 0; right: 0; bottom: var(--tec-altura-ferramentas); border-top: 1px solid var(--line); background: var(--soft); }
   .tec-barra-estimativa .tec-resumo-estimativa { min-height: var(--tec-altura-estimativa); }
   /* O painel lateral do desktop (display: flex, acima) no celular só aparece como folha. */
@@ -285,7 +285,7 @@ html.inova-dark .inova-theme .tec-area-rotulo.seca { fill: #e0c48d; }
 /* Celular: controles discretos e desenho em toda a área disponível. */
 .tec-controles-desktop { display: contents; }
 .tec-navegacao-compacta { display: none; }
-@media (max-width: 760px), (max-width: 1024px) and (max-height: 500px) {
+@media (max-width: 760px), (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   .tec-editor { position: fixed; inset: 0; z-index: 80; width: 100%; max-width: none; height: 100dvh; margin: 0; padding-top: env(safe-area-inset-top); background: var(--tec-papel); }
   .tec-controles-desktop { display: none; }
   .tec-navegacao-compacta { display: flex; align-items: center; gap: 2px; flex: 0 0 44px; padding: 0 max(6px, env(safe-area-inset-right)) 0 max(6px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); }
@@ -344,7 +344,7 @@ html.inova-dark .inova-theme .tec-janela-lado, html.inova-dark .tec-janela-lado 
 .tec-recurso-seta { flex: none; color: var(--muted); transition: transform .15s; }
 .tec-recurso-cabeca[aria-expanded="false"] .tec-recurso-seta { transform: rotate(180deg); }
 .tec-recurso-campos { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 0 12px 12px; border: 0; }
-.tec-recurso-medidas { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+.tec-recurso-medidas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .tec-ajuste-recurso { display: grid; gap: 4px; min-width: 0; }
 .tec-ajuste-linha { --altura-campo: 38px; position: relative; min-width: 0; }
 .tec-ajuste-linha .tec-campo { min-width: 0; margin: 0; font-size: 11.5px; white-space: nowrap; }
@@ -366,7 +366,7 @@ html.inova-dark .inova-theme .tec-janela-lado, html.inova-dark .tec-janela-lado 
 html.inova-dark .tec-trava.ativo { color: #17201b; }
 .tec-dica-lado { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; }
 .tec-dica-lado svg { flex: none; margin-top: 1px; }
-@media (max-width: 760px) {
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   .tec-lado-colunas { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .tec-lado-base { grid-template-columns: 1fr; }
   .tec-trava { width: 100%; }

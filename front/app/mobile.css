@@ -8,7 +8,7 @@
   body:has(.mobile-navigation-dialog[open]) { overflow: hidden; }
 }
 
-@media screen and (max-width: 760px) {
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   html { scroll-padding-block: 16px 100px; }
   html .inova-theme { -webkit-text-size-adjust: 100%; }
   html .inova-theme :is(button, a, summary, input, select, textarea) { touch-action: manipulation; }

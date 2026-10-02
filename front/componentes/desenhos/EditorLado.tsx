@@ -89,17 +89,16 @@ export function EditorLado({ peca, ladoId, aoFechar, aoMudarMedida, aoMudarTexto
               </button>
               {expandido && <fieldset id={`recurso-${recurso.id}`} disabled={peca!.locked} className="tec-recurso-campos" aria-label={titulo}>
                 <div className="tec-recurso-medidas">
-                  {medida(recurso.type === 'SEAM' ? 'Posição da emenda' : 'Início no lado', 'startMm', recurso.type === 'SEAM' ? 1 : 0, recurso.type === 'SEAM' ? tamanho - 1 : tamanho - recurso.extentMm)}
-                  {recurso.type !== 'SEAM' && <>
-                    {medida('Comprimento aplicado', 'extentMm', 1, tamanho - recurso.startMm)}
-                    {recurso.type !== 'EDGE_FINISH' && medida('Altura', 'heightMm', 1, 10000)}
-                    {medida('Espessura', 'thicknessMm', 1, 1000)}
-                  </>}
+                  {recurso.type === 'SEAM'
+                    ? medida('Posição da emenda', 'startMm', 1, tamanho - 1)
+                    : <>
+                      {medida('Comprimento', 'extentMm', 1, tamanho - recurso.startMm)}
+                      {recurso.type === 'EDGE_FINISH'
+                        ? medida('Largura', 'thicknessMm', 1, 1000)
+                        : medida('Largura', 'heightMm', 1, 10000)}
+                    </>}
                 </div>
                 <div className="tec-recurso-perfil">
-                  {recurso.type !== 'SEAM' && <label className="tec-campo">Perfil<select value={recurso.profile} onChange={(e) => aoMudarRecurso(recurso.id, { profile: e.target.value as Feature['profile'] })}>
-                    {Object.entries(ROTULO_PERFIL).map(([perfil, rotulo]) => <option key={perfil} value={perfil}>{rotulo}</option>)}
-                  </select></label>}
                   <button type="button" className="tec-remover-recurso" aria-label={`Remover ${nome}`} onClick={() => aoExcluirRecurso(recurso.id)}><Icone nome="lixeira" tamanho={16} />Remover</button>
                 </div>
               </fieldset>}

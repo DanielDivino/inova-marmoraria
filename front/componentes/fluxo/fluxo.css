@@ -123,7 +123,7 @@
 .fluxo-lista li:has(> .fluxo-mover) > .fluxo-cartao { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 
 /* Celular: o título fica só no cabeçalho do app, filtros recolhidos, barra fixa de etapas e uma etapa por vez. */
-@media (max-width: 760px) {
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   .application-content .list-page.fluxo-page { padding-left: 16px; padding-right: 16px; }
   .fluxo-barra { gap: 10px; margin-bottom: 12px; }
   .fluxo-page .fluxo-barra .abas-filtro { flex: 1 1 100%; overflow: visible; padding: 4px; }
@@ -171,4 +171,4 @@ html.inova-dark .inova-theme .fluxo-falta-material { color: #eb9a8f; }
 .fluxo-material-botao:hover { border-color: #d65a4a; color: #b4493d; }
 .fluxo-material-botao.ativo { border-color: #d65a4a; background: color-mix(in srgb, #d65a4a 16%, var(--surface, #fff)); color: #b4493d; }
 html.inova-dark .inova-theme .fluxo-material-botao.ativo, html.inova-dark .inova-theme .fluxo-material-botao:hover { color: #eb9a8f; }
-@media (max-width: 760px) { .fluxo-material-botao { width: 36px; height: 36px; } .fluxo-cartao-caixa .fluxo-prazo { padding-right: 42px; } }
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) { .fluxo-material-botao { width: 36px; height: 36px; } .fluxo-cartao-caixa .fluxo-prazo { padding-right: 42px; } }

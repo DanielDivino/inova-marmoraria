@@ -6,7 +6,9 @@ import { useSearchParams } from 'next/navigation';
 import { useFiltrosNaUrl } from '../../componentes/useFiltrosNaUrl';
 import { nomeProjeto } from '@inova/domain';
 import { api } from '../../utilitarios/api';
-import { AbasFiltro, AtalhosCabecalho, Icone } from '../../componentes/filtros/Filtros';
+import { AbasFiltro, AtalhosCabecalho, Icone, useCelular } from '../../componentes/filtros/Filtros';
+import { Janela } from '../../componentes/Janela';
+import { MenuAcoes } from '../../componentes/MenuAcoes';
 import { confirmar } from '../../componentes/Confirmacao';
 import { OpcaoSemCadastro, contatoCliente, payloadCliente } from '../../componentes/clientes/SemCadastro';
 
@@ -23,6 +25,7 @@ const situacaoDo = (customer: Customer): Exclude<Situacao, 'todos'> => customer.
 const SELO: Record<Exclude<Situacao, 'todos'>, [string, string]> = { ativos: ['active', 'Ativo'], incompletos: ['incomplete', 'Cadastro incompleto'], inativos: ['inactive', 'Inativo'] };
 
 function ListaClientes() {
+  const celular = useCelular();
   const parametros = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
   // Busca e situação ficam no endereço: ao voltar de um cliente, a lista reabre igual.
@@ -40,6 +43,7 @@ function ListaClientes() {
   const [editandoRapido, setEditandoRapido] = useState(false);
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
+  const [salvando, setSalvando] = useState(false);
   type Lista = { data: Customer[]; counts?: Contagem };
   const url = () => `/customers?search=${encodeURIComponent(search)}&limit=100&situacao=${situacao}`;
   const receber = (result: Lista) => { setCustomers(result.data); if (result.counts) setContagem(result.counts); };
@@ -55,7 +59,7 @@ function ListaClientes() {
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [search, situacao]); // eslint-disable-line react-hooks/exhaustive-deps
   const edit = (customer: Customer) => { setEditing(customer.id); setRapido(false); setEditandoRapido(!!customer.isQuick); setForm({ ...empty, ...customer, phone: customer.phone ?? '', document: customer.document ?? '', email: customer.email ?? '', address: customer.address ?? '' }); setOpenForm(true); };
-  async function submit(event: FormEvent) { event.preventDefault(); setError(''); try { const payload = payloadCliente(form, rapido && !editing); if (editing) await api(`/customers/${editing}`, { method: 'PATCH', body: JSON.stringify(payload) }); else await api('/customers', { method: 'POST', body: JSON.stringify(payload) }); setEditing(null); setRapido(false); setEditandoRapido(false); setForm(empty); setOpenForm(false); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o cliente.'); } }
+  async function submit(event: FormEvent) { event.preventDefault(); if (salvando) return; setSalvando(true); setError(''); try { const payload = payloadCliente(form, rapido && !editing); if (editing) await api(`/customers/${editing}`, { method: 'PATCH', body: JSON.stringify(payload) }); else await api('/customers', { method: 'POST', body: JSON.stringify(payload) }); setEditing(null); setRapido(false); setEditandoRapido(false); setForm(empty); setOpenForm(false); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o cliente.'); } finally { setSalvando(false); } }
   /** Arquivar (com confirmação) ou reativar: o arquivado sai da busca do Novo orçamento; os orçamentos dele continuam. */
   async function arquivar(customer: Customer, arquivado: boolean) {
     if (arquivado && !await confirmar({ titulo: `Arquivar ${customer.name}?`, mensagem: 'O cliente sai da busca do Novo orçamento e fica em “Inativos”. Os orçamentos dele continuam, e dá para reativar quando quiser.', confirmar: 'Arquivar cliente' })) return;
@@ -83,8 +87,27 @@ function ListaClientes() {
         <button type="button" className="botao-destaque" onClick={novoCliente}><Icone nome="mais" />Novo cliente</button>
       </div>
     </div>
-    {openForm && <form className="inline-form customer-form" onSubmit={submit}><strong>{editing ? 'Editar cliente' : 'Novo cliente'}</strong>{!editing && <OpcaoSemCadastro ativo={rapido} aoMudar={setRapido} />}{editandoRapido && <p className="cliente-rapido-aviso">Cliente sem cadastro: informe o telefone para concluir o cadastro.</p>}<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder={rapido ? 'Nome (opcional)' : 'Nome'} aria-label="Nome" required={!rapido} /><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder={rapido || editandoRapido ? 'Telefone (opcional)' : 'Telefone'} aria-label="Telefone" required={!rapido && !editandoRapido} />{!rapido && <><input value={form.document} onChange={(event) => setForm({ ...form, document: event.target.value })} placeholder="CPF (opcional)" /><input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="E-mail" /><input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Endereço" /><input value={form.neighborhood} onChange={(event) => setForm({ ...form, neighborhood: event.target.value })} placeholder="Bairro" /><input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} placeholder="Cidade" /><input value={form.postalCode} onChange={(event) => setForm({ ...form, postalCode: event.target.value })} placeholder="CEP" /><input value={form.complement} onChange={(event) => setForm({ ...form, complement: event.target.value })} placeholder="Complemento" /><textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Observações" /></>}<button className="primary-button">{rapido ? 'Criar sem cadastro' : 'Salvar'}</button></form>}
-    {error && <p className="form-error" role="alert">{error}</p>}
+    <Janela aberta={openForm} aoFechar={() => setOpenForm(false)} ocupada={salvando} titulo={editing ? 'Editar cliente' : 'Novo cliente'} icone="pessoa" aoEnviar={submit}
+      rodape={<><button type="button" className="botao-contorno" disabled={salvando} onClick={() => setOpenForm(false)}>Cancelar</button><button type="submit" className="botao-principal" disabled={salvando}>{salvando ? 'Salvando…' : rapido ? 'Criar sem cadastro' : 'Salvar'}</button></>}>
+      <div className="customer-form customer-registration">
+        {!editing && <OpcaoSemCadastro ativo={rapido} aoMudar={setRapido} />}
+        {editandoRapido && <p className="cliente-rapido-aviso">Informe o telefone para concluir o cadastro.</p>}
+        <label>Nome{rapido ? ' (opcional)' : ''}<input autoComplete="name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder={rapido ? 'Nome (opcional)' : 'Nome'} aria-label="Nome" required={!rapido} /></label>
+        <label>Telefone{rapido || editandoRapido ? ' (opcional)' : ''}<input type="tel" autoComplete="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Telefone" aria-label="Telefone" required={!rapido && !editandoRapido} /></label>
+        {!rapido && <details><summary>Endereço e outros dados</summary><div className="customer-extra-fields">
+          <label>CPF (opcional)<input inputMode="numeric" value={form.document} onChange={(event) => setForm({ ...form, document: event.target.value })} placeholder="CPF (opcional)" /></label>
+          <label>E-mail<input type="email" autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="E-mail" /></label>
+          <label>Endereço<input autoComplete="street-address" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Endereço" /></label>
+          <label>Bairro<input autoComplete="address-level3" value={form.neighborhood} onChange={(event) => setForm({ ...form, neighborhood: event.target.value })} placeholder="Bairro" /></label>
+          <label>Cidade<input autoComplete="address-level2" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} placeholder="Cidade" /></label>
+          <label>CEP<input inputMode="numeric" autoComplete="postal-code" value={form.postalCode} onChange={(event) => setForm({ ...form, postalCode: event.target.value })} placeholder="CEP" /></label>
+          <label>Complemento<input value={form.complement} onChange={(event) => setForm({ ...form, complement: event.target.value })} placeholder="Complemento" /></label>
+          <label>Observações<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Observações" /></label>
+        </div></details>}
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </Janela>
+    {error && !openForm && <p className="form-error" role="alert">{error}</p>}
     {aviso && <p className="catalog-notice" role="status">{aviso}</p>}
     <div className="admin-rows clientes-linhas">{customers.map((customer) => {
       const last = customer.quotes?.[0]; const lastItem = last?.items?.[0];
@@ -92,9 +115,12 @@ function ListaClientes() {
       return <article key={customer.id}>
         <div><Link className="quote-link" href={`/clientes/${customer.id}`}><strong>{customer.name}</strong></Link><small>{contatoCliente(customer)}</small><small>{last && lastItem ? `Último serviço: ${nomeProjeto(lastItem)} · ${lastItem.materialNameSnapshot} · ${new Date(last.createdAt).toLocaleDateString('pt-BR')}` : 'Sem orçamento registrado'}</small></div>
         <span className={`worker-status-badge worker-status-badge-${classe}`}><i aria-hidden="true" />{rotulo}</span>
-        <Link className="text-button" href={`/clientes/${customer.id}`}>Detalhes</Link>
+        {celular ? <MenuAcoes rotulo={`Ações de ${customer.name}`} titulo={customer.name} grupos={[
+          [{ rotulo: 'Ver detalhes', icone: 'pessoa', href: `/clientes/${customer.id}` }, { rotulo: 'Novo orçamento', icone: 'mais', href: `/?cliente=${customer.id}` }, { rotulo: 'Editar cliente', icone: 'lapis', aoEscolher: () => edit(customer) }],
+          [{ rotulo: customer.archivedAt ? 'Reativar cliente' : 'Arquivar cliente', icone: customer.archivedAt ? 'refazer' : 'camadas', aoEscolher: () => void arquivar(customer, !customer.archivedAt) }],
+        ]} /> : <><Link className="text-button" href={`/clientes/${customer.id}`}>Detalhes</Link>
         <button className="text-button" onClick={() => edit(customer)}>Editar</button>
-        <button className="text-button" onClick={() => void arquivar(customer, !customer.archivedAt)}>{customer.archivedAt ? 'Reativar' : 'Arquivar'}</button>
+        <button className="text-button" onClick={() => void arquivar(customer, !customer.archivedAt)}>{customer.archivedAt ? 'Reativar' : 'Arquivar'}</button></>}
       </article>;
     })}</div>
     {!customers.length && <p className="empty">{situacao === 'inativos' ? 'Nenhum cliente arquivado.' : situacao === 'incompletos' ? 'Nenhum cliente com cadastro incompleto.' : 'Nenhum cliente encontrado.'}</p>}

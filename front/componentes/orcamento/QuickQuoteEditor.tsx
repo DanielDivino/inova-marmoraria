@@ -1,5 +1,7 @@
 'use client';
 
+import { CONSULTA_CELULAR } from '../../utilitarios/tela';
+
 import { useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { closestCenter, DndContext, KeyboardSensor, MouseSensor, pointerWithin, TouchSensor, useSensor, useSensors, type CollisionDetection, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -109,7 +111,7 @@ export function EditorOrcamentoRapido({ item, materials, material, services, onC
     { title: 'Acabamento 45° · metro linear', services: miterServices },
     { title: 'Outros acabamentos · metro linear', services: otherLinearServices },
   ];
-  useEffect(() => { if (focusRow) { document.getElementById(`quick-${focusRow}-length`)?.focus({ preventScroll: !window.matchMedia('(max-width: 760px)').matches }); setFocusRow(null); } }, [item.components, focusRow]);
+  useEffect(() => { if (focusRow) { document.getElementById(`quick-${focusRow}-length`)?.focus({ preventScroll: !window.matchMedia(CONSULTA_CELULAR).matches }); setFocusRow(null); } }, [item.components, focusRow]);
   useEffect(() => { setMobileExpanded(new Set(item.components.slice(-1).map(component => component.id))); setExpandedOptions(new Set()); }, [item.id]);
   const update = (id: string, patch: Partial<DraftComponent>) => onChange({ components: item.components.map(component => component.id === id ? { ...component, ...patch,
     ...((patch.lengthCm !== undefined || patch.widthCm !== undefined) ? { edges: component.edges.map(edge => edge.side === 'CUSTOM' ? edge : { ...edge, lengthCm: undefined }) } : {}),

@@ -1,5 +1,7 @@
 'use client';
 
+import { CONSULTA_CELULAR } from '../../utilitarios/tela';
+
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -53,7 +55,7 @@ export default function EditorTecnico({ designId, noOrcamento, voltar: voltarPar
   const [compacto, setCompacto] = useState(false);
   const [opcoesAbertas, setOpcoesAbertas] = useState(false);
   useEffect(() => {
-    const consulta = window.matchMedia('(max-width: 760px), (max-width: 1024px) and (max-height: 500px)');
+    const consulta = window.matchMedia(CONSULTA_CELULAR);
     const atualizar = () => { setCompacto(consulta.matches); setOpcoesAbertas(false); };
     atualizar(); consulta.addEventListener('change', atualizar);
     return () => consulta.removeEventListener('change', atualizar);

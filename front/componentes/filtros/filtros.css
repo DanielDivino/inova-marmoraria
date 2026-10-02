@@ -40,7 +40,7 @@
 .painel-filtros-acoes { display: flex; flex: 0 0 auto; gap: 10px; margin-left: auto; }
 
 /* Celular: abas roláveis numa linha e o painel recolhido atrás do botão "Filtros". */
-@media (max-width: 760px) {
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   .abas-filtro, .abas-filtro-grupo { flex-wrap: nowrap; }
   .abas-filtro { overflow-x: auto; padding-bottom: 4px; }
   .abas-filtro button { flex: none; min-height: 40px; padding: 0 12px; }
@@ -69,7 +69,7 @@
 .etiqueta-destaque { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 12px; border-radius: 10px; background: var(--accent-soft, #f1eade); color: var(--green); font-size: 14px; font-weight: 700; text-decoration: none; }
 a.etiqueta-destaque:hover { text-decoration: underline; }
 .cabecalho-pagina-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-@media (max-width: 760px) {
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   .cabecalho-pagina-icone { width: 48px; height: 48px; border-radius: 12px; }
   .cabecalho-pagina-titulo h1 { font-size: 24px; }
   .cabecalho-pagina-acoes { width: 100%; }
@@ -82,18 +82,18 @@ a.etiqueta-destaque:hover { text-decoration: underline; }
 .faixa-abas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin: 0 0 18px; }
 .inova-theme .faixa-abas > .admin-tabs { margin: 0; }
 .faixa-abas > .barra-lista { margin: 0 0 0 auto; }
-@media (max-width: 760px) { .faixa-abas > .barra-lista { width: 100%; margin: 0; } }
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) { .faixa-abas > .barra-lista { width: 100%; margin: 0; } }
 /* Atalhos (Mostruário, Novo orçamento) na barra de cima do computador, antes do sino. */
 .application-header-tabs > .atalhos-cabecalho { display: flex; flex: none; gap: 10px; margin-left: auto; }
 html .inova-theme .application-header-tabs > .atalhos-cabecalho a.botao-contorno { min-height: 40px; margin: 0; padding: 0 14px; color: var(--ink); font-size: 14px; font-weight: 700; }
 html .inova-theme .application-header-tabs > .atalhos-cabecalho a.botao-contorno-destaque { color: var(--green); }
-@media (max-width: 760px) { .barra-lista > .botao-destaque { flex: 1 1 auto; } }
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) { .barra-lista > .botao-destaque { flex: 1 1 auto; } }
 
 /* Atalhos do cabeçalho (Mostruário e Novo orçamento): com aparência de botão, não de link do cabeçalho. */
 .inova-theme .list-header > .atalhos-cabecalho { order: 0; display: flex; flex: none; flex-wrap: wrap; gap: 10px; margin-left: auto; }
 html .inova-theme .list-header .atalhos-cabecalho a.botao-contorno { min-height: 44px; margin: 0; color: var(--ink); font-size: 14px; font-weight: 700; }
 html .inova-theme .list-header .atalhos-cabecalho a.botao-contorno-destaque { color: var(--green); }
-@media (max-width: 760px) {
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   .inova-theme .list-header > .atalhos-cabecalho { width: 100%; }
   .atalhos-cabecalho > a { flex: 1 1 0; }
 }
@@ -192,7 +192,7 @@ html .inova-theme .list-header .atalhos-cabecalho a.botao-contorno-destaque { co
 /* Linhas no tamanho do conteúdo: quem rola sozinho (abas) não é espremido quando a janela rola. */
 .modal-filtros .campo-filtro-grupo { flex: none; }
 
-@media (max-width: 760px) {
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
         .barra-filtros { gap: 10px; padding: 10px; }
   .barra-filtros-busca { flex-basis: 100%; }
   .barra-filtros:has(> .barra-filtros-abas) > .barra-filtros-busca { flex-basis: 100%; }
@@ -275,7 +275,7 @@ html.inova-dark .inova-theme .barra-selecao .botao-nao-aprovado { border-color: 
  * no topo, cliente em destaque, situação e prazo lado a lado e, embaixo, equipe e
  * emissão com rótulo.
  */
-@media (max-width: 760px) {
+@media screen and (max-width: 760px), screen and (max-width: 1024px) and (max-height: 600px) and (pointer: coarse) {
   .tabela-orcamentos { overflow: visible; border: 0; background: transparent; }
   .tabela-orcamentos :is(table, tbody, tr, td) { display: block; width: 100%; }
   .tabela-orcamentos thead { display: none; }

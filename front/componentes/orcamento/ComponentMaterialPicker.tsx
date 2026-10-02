@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { CONSULTA_CELULAR } from '../../utilitarios/tela';
 import './component-material-picker.css';
 
 export type ComponentMaterial = { id: string; name: string; category: string; billingUnit: 'SQUARE_METER' | 'LINEAR_METER' | 'UNIT' | 'FIXED'; currentPrice: number; images?: { url: string; isPrimary: boolean }[] };
@@ -30,7 +31,7 @@ export function SeletorMaterialComponente({ materials, selected, onSelect, emJan
   return <><div className="component-material-field">
     <span className="component-material-label" id={labelId}>Material</span>
     <details ref={details} className="material-picker component-material-picker">
-    <summary ref={trigger} className={`picker-summary${selected ? ' has-selection' : ''}`} aria-labelledby={`${labelId} ${selectionId}`} onClick={event => { if (emJanela || window.matchMedia('(max-width: 760px)').matches) { event.preventDefault(); setSearch(''); setModalOpen(true); } }}>
+    <summary ref={trigger} className={`picker-summary${selected ? ' has-selection' : ''}`} aria-labelledby={`${labelId} ${selectionId}`} onClick={event => { if (emJanela || window.matchMedia(CONSULTA_CELULAR).matches) { event.preventDefault(); setSearch(''); setModalOpen(true); } }}>
       {materialImageSrc(componentMaterialImage(selected)) && <img className="material-sample-image material-thumbnail" src={materialImageSrc(componentMaterialImage(selected))} alt="" />}
       <span className="material-selection-text" id={selectionId}>{selected?.name || 'Escolher material'}</span>
       <svg className="material-picker-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 6 5 5 5-5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
